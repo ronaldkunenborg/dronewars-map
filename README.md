@@ -16,7 +16,7 @@ The project currently includes:
 
 The project does **not** yet include the full intended production-grade terrain pipeline. In particular:
 
-- `forests` and `wetlands` are currently empty in the public fallback layer set
+- the current public fallback terrain layers are generated from public OSM/Overpass and WorldCover-backed sources rather than the intended final local ingest pipeline
 - the current debug panel is still a temporary diagnostic tool
 - the future overlays are scaffolded but not populated with real data yet
 
@@ -45,7 +45,7 @@ With the current fallback processed data, the app should show:
 
 - a terrain/reference map of Ukraine
 - operational hex cells
-- water, roads, railways, settlements, theater boundary, and oblast boundaries
+- water, forests, wetlands, roads, railways, settlements, theater boundary, and oblast boundaries
 - sidebar controls for visibility and presets
 - a cell inspector in the top-left after clicking a hex
 - a hex debug panel in the top-right
@@ -56,14 +56,11 @@ At the moment, the fallback processed layers provide:
 - oblast boundaries
 - rivers
 - water bodies
+- forests
+- wetlands
 - roads
 - railways
 - settlements
-
-Fallback-empty layers:
-
-- forests
-- wetlands
 
 ## Data Workflow
 
@@ -82,7 +79,12 @@ This downloads public Ukraine boundary and Natural Earth layers and writes:
 - `data/processed/layers.json`
 - `data/processed/layers/*.geojson`
 
-This is what the app currently uses for visible thematic content.
+This is what the app currently uses for visible thematic content. The public builder now combines:
+
+- GeoBoundaries for national and oblast boundaries
+- Natural Earth for rivers, lakes, roads, and railways
+- OSM Overpass for settlements, forests, and wetlands
+- ESA WorldCover raster fallback for landcover visualization in the map shell
 
 ### 2. Full Intended Pipeline
 
@@ -195,7 +197,6 @@ Not yet complete:
 
 ## Known Limitations
 
-- fallback `forests` and `wetlands` are empty
 - the debug panel is still temporary and too noisy
 - the fallback layer builder uses public reference data rather than the intended richer local pipeline
 - overlay slots exist but are not populated with operational data yet

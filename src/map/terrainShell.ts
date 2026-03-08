@@ -36,6 +36,9 @@ function buildGeoJsonSource(data: string): GeoJSONSourceSpecification {
 
 type SourceData = string | HexPolygonGeoJson | HexEdgeGeoJson;
 
+const worldCoverWmsUrl =
+  "https://services.terrascope.be/wms/v2?service=WMS&version=1.1.1&request=GetMap&layers=WORLDCOVER_2021_MAP&styles=&format=image/png&transparent=true&srs=EPSG:3857&bbox={bbox-epsg-3857}&width=256&height=256";
+
 function addSourceIfMissing(
   map: Map,
   sourceId: string,
@@ -45,6 +48,30 @@ function addSourceIfMissing(
     map.addSource(sourceId, {
       type: "geojson",
       data,
+    });
+  }
+}
+
+function mountFallbackLandcoverLayer(map: Map) {
+  if (!map.getSource("fallback-worldcover")) {
+    map.addSource("fallback-worldcover", {
+      type: "raster",
+      tiles: [worldCoverWmsUrl],
+      tileSize: 256,
+      attribution: "© ESA WorldCover 2021",
+    });
+  }
+
+  if (!map.getLayer("fallback-worldcover-raster")) {
+    map.addLayer({
+      id: "fallback-worldcover-raster",
+      type: "raster",
+      source: "fallback-worldcover",
+      paint: {
+        "raster-opacity": 0.34,
+        "raster-saturation": -0.08,
+        "raster-contrast": 0.06,
+      },
     });
   }
 }
@@ -142,6 +169,8 @@ export function mountTerrainShell(
 ) {
   const { layers, hexSourceUrl, hexGeoJson, hexEdgeGeoJson } = processedData;
   const orderedRegistry = getOrderedLayerRegistry();
+
+  mountFallbackLandcoverLayer(map);
 
   for (const definition of orderedRegistry) {
     if (definition.id === "terrain-wash") {

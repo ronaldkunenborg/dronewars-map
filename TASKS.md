@@ -44,4 +44,8 @@
 
 22. [done] Clean up the hex debug panel so it focuses on the true generated center, click position, delta to true center in pixels and kilometers, and removes the noisier derived-centroid fields.
 
-Note: the current public fallback layer set leaves `forests` and `wetlands` empty. Full generation of those layers still needs the intended landcover/OSM processing pipeline.
+23. [done] Add actual cities, towns, villages, and other populated places to the map with their names shown in Ukrainian.
+
+24. [done] Add real forest, swamp, wetland, and related landcover layers so those terrain types are visibly rendered on the map instead of remaining fallback-empty.
+
+25. [done] Replace the current placeholder terrain assumptions in the hex analytics by deriving each hex's attributes from the real terrain and landcover layers so mobility, defensibility, and related fields reflect actual terrain.
