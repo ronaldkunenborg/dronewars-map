@@ -49,3 +49,11 @@
 24. [done] Add real forest, swamp, wetland, and related landcover layers so those terrain types are visibly rendered on the map instead of remaining fallback-empty.
 
 25. [done] Replace the current placeholder terrain assumptions in the hex analytics by deriving each hex's attributes from the real terrain and landcover layers so mobility, defensibility, and related fields reflect actual terrain.
+
+26. [pending] Add caching for public geospatial source retrieval so stable downloads are stored locally and reruns only fetch missing or explicitly refreshed source data instead of requerying everything.
+
+27. [pending] Complete the sea-layer integration by generating and publishing `data/processed/layers/seas.geojson`, updating `layers.json`, rerunning analytics, and republishing the live hex dataset.
+
+28. [pending] Update the map and inspector verification for the new sea terrain class so the Black Sea renders in a sea color and maritime hexes report `sea` instead of `open`.
+
+29. [pending] Update `README.md` to document the geospatial caching behavior, cache locations, refresh expectations, and the new sea terrain handling.

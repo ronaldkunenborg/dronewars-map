@@ -8,6 +8,7 @@ export type HexInspectorData = {
   trueCenterLngLat: LngLat | null;
   terrainSummary: {
     dominantTerrain: string;
+    seaCoverage: number | null;
     forestCoverage: number | null;
     wetlandCoverage: number | null;
     openTerrainCoverage: number | null;
@@ -28,6 +29,7 @@ export type HexInspectorData = {
 
 type HexInspectorProps = {
   selectedHex: HexInspectorData | null;
+  title?: string;
 };
 
 function formatNumber(value: number | null, digits = 0) {
@@ -62,19 +64,22 @@ function formatLngLat(value: LngLat | null) {
   return `${value[0].toFixed(6)}, ${value[1].toFixed(6)}`;
 }
 
-export function HexInspector({ selectedHex }: HexInspectorProps) {
+export function HexInspector({
+  selectedHex,
+  title = "Cell Inspector",
+}: HexInspectorProps) {
   if (!selectedHex) {
     return (
-      <aside className="hex-inspector hex-inspector--empty">
-        <h2>Cell Inspector</h2>
+      <div className="hex-inspector hex-inspector--empty">
+        <h2>{title}</h2>
         <p>Click a hex to inspect terrain, infrastructure, and capacity analytics.</p>
-      </aside>
+      </div>
     );
   }
 
   return (
-    <aside className="hex-inspector">
-      <h2>Cell Inspector</h2>
+    <div className="hex-inspector">
+      <h2>{title}</h2>
       <p><strong>Hex:</strong> {selectedHex.hexId}</p>
       <p><strong>Region:</strong> {selectedHex.parentRegionName}</p>
       <p><strong>Area:</strong> {formatNumber(selectedHex.areaKm2, 1)} km²</p>
@@ -90,6 +95,7 @@ export function HexInspector({ selectedHex }: HexInspectorProps) {
 
       <h3>Terrain</h3>
       <p><strong>Dominant terrain:</strong> {selectedHex.terrainSummary?.dominantTerrain ?? "n/a"}</p>
+      <p><strong>Sea coverage:</strong> {formatPercent(selectedHex.terrainSummary?.seaCoverage ?? null)}</p>
       <p><strong>Forest coverage:</strong> {formatPercent(selectedHex.terrainSummary?.forestCoverage ?? null)}</p>
       <p><strong>Wetland coverage:</strong> {formatPercent(selectedHex.terrainSummary?.wetlandCoverage ?? null)}</p>
       <p><strong>Open terrain:</strong> {formatPercent(selectedHex.terrainSummary?.openTerrainCoverage ?? null)}</p>
@@ -106,6 +112,6 @@ export function HexInspector({ selectedHex }: HexInspectorProps) {
         {formatBoolean(selectedHex.infrastructureSummary?.railPresence ?? null, "Present", "Absent")}
       </p>
       <p><strong>Settlement score:</strong> {formatNumber(selectedHex.infrastructureSummary?.settlementScore ?? null)}</p>
-    </aside>
+    </div>
   );
 }

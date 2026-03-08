@@ -25,6 +25,8 @@ const sources = {
     "https://raw.githubusercontent.com/nvkelso/natural-earth-vector/master/geojson/ne_10m_rivers_lake_centerlines.geojson",
   lakes:
     "https://raw.githubusercontent.com/nvkelso/natural-earth-vector/master/geojson/ne_10m_lakes.geojson",
+  seas:
+    "https://d2ad6b4ur7yvpq.cloudfront.net/naturalearth-3.3.0/ne_10m_geography_marine_polys.geojson",
   roads:
     "https://raw.githubusercontent.com/nvkelso/natural-earth-vector/master/geojson/ne_10m_roads.geojson",
   railways:
@@ -577,6 +579,7 @@ async function main() {
     oblastBoundaries,
     rivers,
     lakes,
+    seas,
     roads,
     railways,
   ] = await Promise.all([
@@ -584,6 +587,7 @@ async function main() {
     fetchJson(adm1Url),
     fetchJson(sources.rivers),
     fetchJson(sources.lakes),
+    fetchJson(sources.seas),
     fetchJson(sources.roads),
     fetchJson(sources.railways),
   ]);
@@ -615,6 +619,7 @@ async function main() {
     "layers/oblast-boundaries.geojson": oblastBoundaries,
     "layers/rivers.geojson": filterFeatureCollectionToBbox(rivers, theaterBbox),
     "layers/water-bodies.geojson": filterFeatureCollectionToBbox(lakes, theaterBbox),
+    "layers/seas.geojson": filterFeatureCollectionToBbox(seas, theaterBbox),
     "layers/wetlands.geojson": wetlands,
     "layers/forests.geojson": forests,
     "layers/roads.geojson": filterFeatureCollectionToBbox(roads, theaterBbox),
@@ -659,6 +664,13 @@ async function main() {
         category: "hydrology",
         geometryKind: "polygon",
         path: "layers/water-bodies.geojson",
+      },
+      {
+        id: "seas",
+        label: "Seas",
+        category: "hydrology",
+        geometryKind: "polygon",
+        path: "layers/seas.geojson",
       },
       {
         id: "wetlands",

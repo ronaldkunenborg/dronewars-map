@@ -210,6 +210,7 @@ function settlementScoreForHex(hexFeature, settlements) {
 
 function dominantTerrain(summary) {
   const candidates = [
+    ["sea", summary.seaCoverage],
     ["wetland", summary.wetlandCoverage],
     ["forest", summary.forestCoverage],
     ["open", summary.openTerrainCoverage],
@@ -232,6 +233,7 @@ async function main() {
   const hexCells = await readGeoJson("hex-cells.geojson");
   const forests = buildSpatialIndex(await loadOptionalLayer("layers/forests.geojson"));
   const wetlands = buildSpatialIndex(await loadOptionalLayer("layers/wetlands.geojson"));
+  const seas = buildSpatialIndex(await loadOptionalLayer("layers/seas.geojson"));
   const rivers = buildSpatialIndex(await loadOptionalLayer("layers/rivers.geojson"));
   const roads = buildSpatialIndex(await loadOptionalLayer("layers/roads.geojson"));
   const railways = buildSpatialIndex(await loadOptionalLayer("layers/railways.geojson"));
@@ -241,6 +243,7 @@ async function main() {
     const hexBounds = geometryBounds(hexFeature.geometry);
     const forestCandidates = querySpatialIndex(forests, hexBounds);
     const wetlandCandidates = querySpatialIndex(wetlands, hexBounds);
+    const seaCandidates = querySpatialIndex(seas, hexBounds);
     const riverCandidates = querySpatialIndex(rivers, hexBounds);
     const roadCandidates = querySpatialIndex(roads, hexBounds);
     const railwayCandidates = querySpatialIndex(railways, hexBounds);
@@ -260,8 +263,17 @@ async function main() {
         0,
       ),
     );
-    const openTerrainCoverage = Math.max(0, 1 - forestCoverage - wetlandCoverage);
-    const waterBarrierPresence = riverCandidates.some((feature) => lineTouchesHex(hexFeature, feature));
+    const seaCoverage = Math.min(
+      1,
+      seaCandidates.reduce(
+        (sum, feature) => sum + fractionOfVerticesInside(hexFeature, feature),
+        0,
+      ),
+    );
+    const openTerrainCoverage = Math.max(0, 1 - forestCoverage - wetlandCoverage - seaCoverage);
+    const waterBarrierPresence =
+      seaCoverage > 0.2 ||
+      riverCandidates.some((feature) => lineTouchesHex(hexFeature, feature));
     const roadKm = roadCandidates.reduce(
       (sum, feature) => sum + approximateLineLengthKmInHex(hexFeature, feature),
       0,
@@ -276,10 +288,12 @@ async function main() {
 
     const terrainSummary = {
       dominantTerrain: dominantTerrain({
+        seaCoverage,
         forestCoverage,
         wetlandCoverage,
         openTerrainCoverage,
       }),
+      seaCoverage: Number(seaCoverage.toFixed(3)),
       forestCoverage: Number(forestCoverage.toFixed(3)),
       wetlandCoverage: Number(wetlandCoverage.toFixed(3)),
       openTerrainCoverage: Number(openTerrainCoverage.toFixed(3)),
@@ -302,6 +316,16 @@ async function main() {
 
     hexFeature.properties = {
       ...hexFeature.properties,
+      dominantTerrain: terrainSummary.dominantTerrain,
+      seaCoverage: terrainSummary.seaCoverage,
+      forestCoverage: terrainSummary.forestCoverage,
+      wetlandCoverage: terrainSummary.wetlandCoverage,
+      openTerrainCoverage: terrainSummary.openTerrainCoverage,
+      waterBarrierPresence: terrainSummary.waterBarrierPresence,
+      elevationRoughness: terrainSummary.elevationRoughness,
+      roadDensity: infrastructureSummary.roadDensity,
+      railPresence: infrastructureSummary.railPresence,
+      settlementScore: infrastructureSummary.settlementScore,
       terrainSummary,
       infrastructureSummary,
       baseCapacity: scoringConfig.baseCapacity,

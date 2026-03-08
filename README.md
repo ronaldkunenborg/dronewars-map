@@ -193,6 +193,7 @@ Implemented:
 
 Not yet complete:
 
+- final settlement symbol sizing policy in the UI: cities should scale by population where available, while towns and villages can continue to use rank-based sizing
 - finalized README coverage for the completed end-state
 
 ## Known Limitations
@@ -200,6 +201,7 @@ Not yet complete:
 - the debug panel is still temporary and too noisy
 - the fallback layer builder uses public reference data rather than the intended richer local pipeline
 - overlay slots exist but are not populated with operational data yet
+- settlement population data exists for many places, but the map does not yet use a city-only population scaling rule for circle size
 - the build currently produces a large JS bundle and would benefit from code-splitting later
 
 ## Repo Rules

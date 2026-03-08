@@ -1,5 +1,5 @@
 {
-  "generatedAt": "2026-03-08T20:28:44.479Z",
+  "generatedAt": "2026-03-08T23:28:18.100Z",
   "layers": [
     {
       "id": "theater-boundary",
@@ -28,6 +28,13 @@
       "category": "hydrology",
       "geometryKind": "polygon",
       "path": "layers/water-bodies.geojson"
+    },
+    {
+      "id": "seas",
+      "label": "Seas",
+      "category": "hydrology",
+      "geometryKind": "polygon",
+      "path": "layers/seas.geojson"
     },
     {
       "id": "wetlands",

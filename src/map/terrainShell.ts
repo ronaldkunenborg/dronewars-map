@@ -38,6 +38,21 @@ type SourceData = string | HexPolygonGeoJson | HexEdgeGeoJson;
 
 const worldCoverWmsUrl =
   "https://services.terrascope.be/wms/v2?service=WMS&version=1.1.1&request=GetMap&layers=WORLDCOVER_2021_MAP&styles=&format=image/png&transparent=true&srs=EPSG:3857&bbox={bbox-epsg-3857}&width=256&height=256";
+const kyivHexMarker = {
+  type: "FeatureCollection",
+  features: [
+    {
+      type: "Feature",
+      properties: {
+        label: "★",
+      },
+      geometry: {
+        type: "Point",
+        coordinates: [30.588720977474967, 50.36335633455103],
+      },
+    },
+  ],
+} as const;
 
 function addSourceIfMissing(
   map: Map,
@@ -87,19 +102,30 @@ function mountOperationalHexLayer(map: Map) {
       type: "fill",
       source: "operational-hexes",
       paint: {
-        "fill-color": "#6e7664",
+        "fill-color": [
+          "case",
+          ["==", ["coalesce", ["get", "dominantTerrain"], "open"], "sea"],
+          "#5f8fb3",
+          [">=", ["coalesce", ["get", "settlementScore"], 0], 3],
+          "#9a6f66",
+          ["==", ["coalesce", ["get", "dominantTerrain"], "open"], "wetland"],
+          "#8a6f46",
+          ["==", ["coalesce", ["get", "dominantTerrain"], "open"], "forest"],
+          "#3f5c3a",
+          "#8b8578",
+        ],
         "fill-opacity": [
           "interpolate",
           ["linear"],
           ["zoom"],
           4,
-          0.015,
+          0.16,
           6,
-          0.025,
+          0.24,
           8,
-          0.04,
+          0.36,
           10,
-          0.06,
+          0.48,
         ],
       },
     });
@@ -150,6 +176,65 @@ function mountOperationalHexLayer(map: Map) {
   }
 }
 
+function mountKyivHexMarker(map: Map) {
+  if (!map.getSource("kyiv-hex-marker")) {
+    map.addSource("kyiv-hex-marker", {
+      type: "geojson",
+      data: kyivHexMarker,
+    });
+  }
+
+  if (!map.getLayer("kyiv-hex-star")) {
+    map.addLayer({
+      id: "kyiv-hex-star",
+      type: "symbol",
+      source: "kyiv-hex-marker",
+      layout: {
+        "text-field": ["get", "label"],
+        "text-size": [
+          "interpolate",
+          ["linear"],
+          ["zoom"],
+          4,
+          12,
+          7,
+          16,
+          10,
+          20,
+        ],
+        "text-allow-overlap": true,
+      },
+      paint: {
+        "text-color": "#f0d57a",
+        "text-halo-color": "rgba(56, 44, 24, 0.95)",
+        "text-halo-width": 1.4,
+      },
+    });
+  }
+}
+
+function raiseSettlementLayers(map: Map) {
+  for (const layerId of [
+    "settlements-city-circle",
+    "settlements-town-circle",
+    "settlements-village-circle",
+  ]) {
+    if (map.getLayer(layerId)) {
+      map.moveLayer(layerId);
+    }
+  }
+
+  for (const layerId of [
+    "settlements-city-label",
+    "settlements-town-label",
+    "settlements-village-label",
+  ]) {
+    if (map.getLayer(layerId)) {
+      map.moveLayer(layerId);
+    }
+  }
+}
+
 function mountManifestLayer(map: Map, layer: LayerManifest) {
   const sourceId = `processed-${layer.id}`;
   addSourceIfMissing(map, sourceId, layer.sourcePath);
@@ -195,5 +280,7 @@ export function mountTerrainShell(
     },
   );
   mountOperationalHexLayer(map);
+  raiseSettlementLayers(map);
+  mountKyivHexMarker(map);
   mountOverlayManager(map);
 }
