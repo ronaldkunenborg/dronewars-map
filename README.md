@@ -8,15 +8,17 @@ The project currently includes:
 
 - a Vite + React + TypeScript + MapLibre application shell
 - a generated operational hex grid with analytics fields
+- a user-facing cell inspector with click selection and cell highlighting
 - a clickable hex debug panel
 - UI controls for presets, layer toggles, reset-to-Ukraine, legend, and coordinate readout
+- lightweight overlay slots for future frontlines, zones of control, artillery ranges, logistics routes, and force placement
 - a public fallback data pipeline that generates visible map layers without requiring the full OSM/GDAL workflow
 
 The project does **not** yet include the full intended production-grade terrain pipeline. In particular:
 
 - `forests` and `wetlands` are currently empty in the public fallback layer set
 - the current debug panel is still a temporary diagnostic tool
-- future overlay architecture and operational analytics UI are not finished yet
+- the future overlays are scaffolded but not populated with real data yet
 
 ## Install and Run
 
@@ -45,6 +47,7 @@ With the current fallback processed data, the app should show:
 - operational hex cells
 - water, roads, railways, settlements, theater boundary, and oblast boundaries
 - sidebar controls for visibility and presets
+- a cell inspector in the top-left after clicking a hex
 - a hex debug panel in the top-right
 
 At the moment, the fallback processed layers provide:
@@ -182,12 +185,12 @@ Implemented:
 - reset-to-Ukraine
 - scale bar
 - coordinate readout
+- cell inspector with selection highlight
 - hex debug panel
+- overlay slot manager for future operational overlays
 
 Not yet complete:
 
-- production-style hex analytics side panel
-- final overlay architecture
 - finalized README coverage for the completed end-state
 
 ## Known Limitations
@@ -195,6 +198,7 @@ Not yet complete:
 - fallback `forests` and `wetlands` are empty
 - the debug panel is still temporary and too noisy
 - the fallback layer builder uses public reference data rather than the intended richer local pipeline
+- overlay slots exist but are not populated with operational data yet
 - the build currently produces a large JS bundle and would benefit from code-splitting later
 
 ## Repo Rules

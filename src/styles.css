@@ -273,6 +273,41 @@ select {
   opacity: 0.92;
 }
 
+.hex-inspector {
+  position: absolute;
+  top: 1.5rem;
+  left: 1.5rem;
+  z-index: 5;
+  width: min(340px, calc(100vw - 3rem));
+  max-height: calc(100vh - 12rem);
+  overflow: auto;
+  padding: 1rem 1.1rem;
+  background: rgba(245, 244, 236, 0.94);
+  border: 1px solid rgba(90, 100, 86, 0.2);
+  border-radius: 14px;
+  box-shadow: 0 16px 30px rgba(51, 60, 46, 0.14);
+}
+
+.hex-inspector h2,
+.hex-inspector h3 {
+  margin: 0 0 0.7rem;
+}
+
+.hex-inspector h3 {
+  margin-top: 1rem;
+  font-size: 0.96rem;
+}
+
+.hex-inspector p {
+  margin: 0 0 0.4rem;
+  color: #455244;
+  font-size: 0.92rem;
+}
+
+.hex-inspector--empty {
+  opacity: 0.92;
+}
+
 @media (max-width: 960px) {
   .app-shell {
     grid-template-columns: 1fr;
@@ -286,5 +321,19 @@ select {
 
   .map-root {
     min-height: 60vh;
+  }
+
+  .hex-inspector,
+  .debug-panel {
+    position: static;
+    width: auto;
+    max-height: none;
+    margin: 1rem;
+  }
+
+  .map-status {
+    position: static;
+    margin: 1rem;
+    pointer-events: auto;
   }
 }

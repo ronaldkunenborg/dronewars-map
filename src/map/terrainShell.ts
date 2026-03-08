@@ -11,6 +11,7 @@ import {
   getManifestLayerById,
   getOrderedLayerRegistry,
 } from "./layerRegistry";
+import { mountOverlayManager } from "./overlayManager";
 
 export const terrainShellStyle: StyleSpecification = {
   version: 8,
@@ -65,13 +66,13 @@ function mountOperationalHexLayer(map: Map) {
           ["linear"],
           ["zoom"],
           4,
-          0.02,
+          0.015,
           6,
-          0.035,
+          0.025,
           8,
-          0.05,
+          0.04,
           10,
-          0.075,
+          0.06,
         ],
       },
     });
@@ -92,15 +93,15 @@ function mountOperationalHexLayer(map: Map) {
           ["linear"],
           ["zoom"],
           4,
-          0.08,
+          0.06,
           6,
-          0.14,
+          0.12,
           8,
-          0.3,
+          0.24,
           10,
-          0.55,
+          0.48,
           12,
-          0.78,
+          0.7,
         ],
         "line-width": [
           "interpolate",
@@ -165,4 +166,5 @@ export function mountTerrainShell(
     },
   );
   mountOperationalHexLayer(map);
+  mountOverlayManager(map);
 }

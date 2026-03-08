@@ -3,7 +3,9 @@ import type {
   Map as MapLibreMap,
   MapMouseEvent,
   MapGeoJSONFeature,
+  GeoJSONSource,
 } from "maplibre-gl";
+import { HexInspector, type HexInspectorData } from "../components/HexInspector";
 import {
   loadHexOnlyProcessedData,
   loadProcessedMapData,
@@ -18,15 +20,13 @@ type HexDebugInfo = {
   hexId: string;
   trueCenterLngLat: [number, number] | null;
   trueCenterPixels: [number, number] | null;
-  centroidLngLat: [number, number];
-  centroidPixels: [number, number];
   clickLngLat: [number, number];
   clickPixels: [number, number];
-  deltaPixels: [number, number];
   deltaTrueCenterPixels: [number, number] | null;
-  clickToCenterKm: number;
-  rawProperties: string;
+  clickToTrueCenterKm: number | null;
 };
+
+type JsonObject = Record<string, unknown>;
 
 function toRadians(value: number) {
   return (value * Math.PI) / 180;
@@ -70,6 +70,56 @@ function parseCentroid(value: unknown): [number, number] | null {
   return null;
 }
 
+function parseJsonObject<T extends JsonObject>(value: unknown): T | null {
+  if (typeof value === "string") {
+    try {
+      const parsed = JSON.parse(value);
+      return parseJsonObject<T>(parsed);
+    } catch {
+      return null;
+    }
+  }
+
+  if (value && typeof value === "object" && !Array.isArray(value)) {
+    return value as T;
+  }
+
+  return null;
+}
+
+function parseNumber(value: unknown): number | null {
+  if (typeof value === "number") {
+    return value;
+  }
+
+  if (typeof value === "string" && value.trim() !== "") {
+    const parsed = Number(value);
+    return Number.isFinite(parsed) ? parsed : null;
+  }
+
+  return null;
+}
+
+function parseBoolean(value: unknown): boolean | null {
+  if (typeof value === "boolean") {
+    return value;
+  }
+
+  if (value === "true") {
+    return true;
+  }
+
+  if (value === "false") {
+    return false;
+  }
+
+  return null;
+}
+
+function parseString(value: unknown): string | null {
+  return typeof value === "string" ? value : null;
+}
+
 function geometryCentroid(feature: MapGeoJSONFeature): [number, number] | null {
   const geometry = feature.geometry;
 
@@ -98,6 +148,123 @@ type MapViewProps = {
   resetToken: number;
 };
 
+function ensureSelectedHexLayers(map: MapLibreMap) {
+  if (!map.getSource("selected-hex")) {
+    map.addSource("selected-hex", {
+      type: "geojson",
+      data: {
+        type: "FeatureCollection",
+        features: [],
+      },
+    });
+  }
+
+  if (!map.getLayer("selected-hex-fill")) {
+    map.addLayer({
+      id: "selected-hex-fill",
+      type: "fill",
+      source: "selected-hex",
+      paint: {
+        "fill-color": "#d3a85e",
+        "fill-opacity": 0.12,
+      },
+    });
+  }
+
+  if (!map.getLayer("selected-hex-outline")) {
+    map.addLayer({
+      id: "selected-hex-outline",
+      type: "line",
+      source: "selected-hex",
+      paint: {
+        "line-color": "#9f7035",
+        "line-opacity": 0.95,
+        "line-width": [
+          "interpolate",
+          ["linear"],
+          ["zoom"],
+          4,
+          0.8,
+          8,
+          1.4,
+          12,
+          2.2,
+        ],
+      },
+    });
+  }
+}
+
+function clearSelectedHex(map: MapLibreMap) {
+  const source = map.getSource("selected-hex") as GeoJSONSource | undefined;
+
+  source?.setData({
+    type: "FeatureCollection",
+    features: [],
+  });
+}
+
+function setSelectedHexFeature(map: MapLibreMap, feature: MapGeoJSONFeature) {
+  const source = map.getSource("selected-hex") as GeoJSONSource | undefined;
+
+  if (!source) {
+    return;
+  }
+
+  source.setData({
+    type: "FeatureCollection",
+    features: [feature],
+  });
+}
+
+function buildHexInspectorData(feature: MapGeoJSONFeature): HexInspectorData {
+  const terrainSummary = parseJsonObject<{
+    dominantTerrain?: unknown;
+    forestCoverage?: unknown;
+    wetlandCoverage?: unknown;
+    openTerrainCoverage?: unknown;
+    waterBarrierPresence?: unknown;
+    elevationRoughness?: unknown;
+  }>(feature.properties?.terrainSummary);
+
+  const infrastructureSummary = parseJsonObject<{
+    roadDensity?: unknown;
+    railPresence?: unknown;
+    settlementScore?: unknown;
+  }>(feature.properties?.infrastructureSummary);
+
+  return {
+    hexId: parseString(feature.properties?.id) ?? "unknown",
+    parentRegionName: parseString(feature.properties?.parentRegionName) ?? "unassigned",
+    areaKm2: parseNumber(feature.properties?.areaKm2),
+    centroidLngLat:
+      parseCentroid(feature.properties?.centroid) ?? geometryCentroid(feature),
+    trueCenterLngLat: parseCentroid(feature.properties?.centerLngLat),
+    terrainSummary: terrainSummary
+      ? {
+          dominantTerrain: parseString(terrainSummary.dominantTerrain) ?? "n/a",
+          forestCoverage: parseNumber(terrainSummary.forestCoverage),
+          wetlandCoverage: parseNumber(terrainSummary.wetlandCoverage),
+          openTerrainCoverage: parseNumber(terrainSummary.openTerrainCoverage),
+          waterBarrierPresence: parseBoolean(terrainSummary.waterBarrierPresence),
+          elevationRoughness: parseNumber(terrainSummary.elevationRoughness),
+        }
+      : null,
+    infrastructureSummary: infrastructureSummary
+      ? {
+          roadDensity: parseNumber(infrastructureSummary.roadDensity),
+          railPresence: parseBoolean(infrastructureSummary.railPresence),
+          settlementScore: parseNumber(infrastructureSummary.settlementScore),
+        }
+      : null,
+    baseCapacity: parseNumber(feature.properties?.baseCapacity),
+    effectiveCapacity: parseNumber(feature.properties?.effectiveCapacity),
+    assignedForceCount: parseNumber(feature.properties?.assignedForceCount),
+    mobilityScore: parseNumber(feature.properties?.mobilityScore),
+    defensibilityScore: parseNumber(feature.properties?.defensibilityScore),
+  };
+}
+
 function applyLayerVisibility(map: MapLibreMap, visibility: LayerVisibility) {
   for (const [logicalId, layerIds] of Object.entries(mapLayerVisibilityTargets)) {
     const desiredVisibility = visibility[logicalId as keyof LayerVisibility] ? "visible" : "none";
@@ -120,8 +287,11 @@ export function MapView({
   const [status, setStatus] = useState("Loading local processed map data.");
   const [datasetInfo, setDatasetInfo] = useState<string | null>(null);
   const [debugInfo, setDebugInfo] = useState<HexDebugInfo | null>(null);
+  const [selectedHex, setSelectedHex] = useState<HexInspectorData | null>(null);
 
   function attachHexDebugHandler(map: MapLibreMap) {
+    ensureSelectedHexLayers(map);
+
     const handleClick = (event: MapMouseEvent) => {
       const feature = map.queryRenderedFeatures(event.point, {
         layers: ["operational-hex-fill"],
@@ -129,6 +299,8 @@ export function MapView({
 
       if (!feature) {
         setDebugInfo(null);
+        setSelectedHex(null);
+        clearSelectedHex(map);
         return;
       }
 
@@ -163,33 +335,47 @@ export function MapView({
         ? [trueCenterPoint.x, trueCenterPoint.y]
         : null;
 
+      setSelectedHexFeature(map, feature);
+      setSelectedHex(buildHexInspectorData(feature));
       setDebugInfo({
         hexId,
         trueCenterLngLat: trueCenter,
         trueCenterPixels,
-        centroidLngLat: centroid,
-        centroidPixels,
         clickLngLat,
         clickPixels,
-        deltaPixels: [
-          clickPixels[0] - centroidPixels[0],
-          clickPixels[1] - centroidPixels[1],
-        ],
         deltaTrueCenterPixels: trueCenterPixels
           ? [
               clickPixels[0] - trueCenterPixels[0],
               clickPixels[1] - trueCenterPixels[1],
             ]
           : null,
-        clickToCenterKm: haversineKm(clickLngLat, centroid),
-        rawProperties: JSON.stringify(feature.properties ?? {}, null, 2),
+        clickToTrueCenterKm: trueCenter
+          ? haversineKm(clickLngLat, trueCenter)
+          : null,
       });
     };
 
+    const handleMouseMove = (event: MapMouseEvent) => {
+      const hasFeature = map.queryRenderedFeatures(event.point, {
+        layers: ["operational-hex-fill"],
+      }).length > 0;
+
+      map.getCanvas().style.cursor = hasFeature ? "pointer" : "";
+    };
+
+    const handleMouseLeave = () => {
+      map.getCanvas().style.cursor = "";
+    };
+
     map.on("click", handleClick);
+    map.on("mousemove", handleMouseMove);
+    map.on("mouseleave", "operational-hex-fill", handleMouseLeave);
 
     return () => {
       map.off("click", handleClick);
+      map.off("mousemove", handleMouseMove);
+      map.off("mouseleave", "operational-hex-fill", handleMouseLeave);
+      map.getCanvas().style.cursor = "";
     };
   }
 
@@ -315,14 +501,6 @@ export function MapView({
               : "n/a"}
           </p>
           <p>
-            <strong>Centroid lng/lat:</strong>{" "}
-            {debugInfo.centroidLngLat[0].toFixed(6)}, {debugInfo.centroidLngLat[1].toFixed(6)}
-          </p>
-          <p>
-            <strong>Centroid px:</strong>{" "}
-            {debugInfo.centroidPixels[0].toFixed(2)}, {debugInfo.centroidPixels[1].toFixed(2)}
-          </p>
-          <p>
             <strong>Click lng/lat:</strong>{" "}
             {debugInfo.clickLngLat[0].toFixed(6)}, {debugInfo.clickLngLat[1].toFixed(6)}
           </p>
@@ -331,27 +509,25 @@ export function MapView({
             {debugInfo.clickPixels[0].toFixed(2)}, {debugInfo.clickPixels[1].toFixed(2)}
           </p>
           <p>
-            <strong>Delta px:</strong>{" "}
-            {debugInfo.deltaPixels[0].toFixed(2)}, {debugInfo.deltaPixels[1].toFixed(2)}
-          </p>
-          <p>
             <strong>Delta true center px:</strong>{" "}
             {debugInfo.deltaTrueCenterPixels
               ? `${debugInfo.deltaTrueCenterPixels[0].toFixed(2)}, ${debugInfo.deltaTrueCenterPixels[1].toFixed(2)}`
               : "n/a"}
           </p>
           <p>
-            <strong>Click to center:</strong> {debugInfo.clickToCenterKm.toFixed(4)} km
+            <strong>Click to true center:</strong>{" "}
+            {debugInfo.clickToTrueCenterKm !== null
+              ? `${debugInfo.clickToTrueCenterKm.toFixed(4)} km`
+              : "n/a"}
           </p>
-          <p><strong>Raw properties:</strong></p>
-          <pre className="debug-panel__raw">{debugInfo.rawProperties}</pre>
         </aside>
       ) : (
         <aside className="debug-panel debug-panel--empty">
           <h2>Hex Debug</h2>
-          <p>Click inside a hex to inspect its center in pixels and kilometers.</p>
+          <p>Click inside a hex to inspect the true generated center and click delta.</p>
         </aside>
       )}
+      <HexInspector selectedHex={selectedHex} />
     </>
   );
 }

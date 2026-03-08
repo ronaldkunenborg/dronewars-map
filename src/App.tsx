@@ -1,17 +1,16 @@
 import { useState } from "react";
 import {
-  defaultLayerVisibility,
   LayerPanel,
-  type LayerControlId,
   presetVisibility,
+  type LayerControlId,
   type ViewMode,
 } from "./components/LayerPanel";
 import { appConfig, dataPaths, ukraineTheaterConfig } from "./config";
 import { MapView } from "./map/MapView";
 
 export default function App() {
-  const [visibility, setVisibility] = useState(defaultLayerVisibility);
-  const [viewMode, setViewMode] = useState<ViewMode>("terrain");
+  const [visibility, setVisibility] = useState(presetVisibility["operational-cells"]);
+  const [viewMode, setViewMode] = useState<ViewMode>("operational-cells");
   const [resetToken, setResetToken] = useState(0);
   const [coordinateReadout, setCoordinateReadout] = useState<string | null>(null);
 

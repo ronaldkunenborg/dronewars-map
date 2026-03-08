@@ -37,11 +37,11 @@ const layerControls: LayerControl[] = [
 
 export const defaultLayerVisibility: LayerVisibility = {
   water: true,
-  wetlands: true,
-  forests: true,
+  wetlands: false,
+  forests: false,
   roads: true,
   railways: true,
-  settlements: true,
+  settlements: false,
   oblasts: true,
   hexes: true,
   contours: false,
@@ -74,9 +74,6 @@ export const presetVisibility: Record<ViewMode, LayerVisibility> = {
   },
   "operational-cells": {
     ...defaultLayerVisibility,
-    wetlands: false,
-    forests: false,
-    settlements: false,
     hexes: true,
     oblasts: true,
   },

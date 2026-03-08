@@ -32,16 +32,16 @@
 
 16. [done] Build UI controls for layer toggles, preset view modes, reset-to-Ukraine, legend, scale bar, and optional coordinate readout.
 
-17. Implement hover/click interaction for hexes with a popup or side panel showing the required cell analytics.
+17. [done] Implement hover/click interaction for hexes with a popup or side panel showing the required cell analytics.
 
-18. Add a lightweight overlay architecture so future frontlines, artillery, logistics, and force placement can be added without refactoring the basemap.
+18. [done] Add a lightweight overlay architecture so future frontlines, artillery, logistics, and force placement can be added without refactoring the basemap.
 
-19. Write the README covering install/run steps, the import and preprocessing workflow, generated files, hex-size tuning, capacity logic, and future overlay extension points.
+19. [done] Write the README covering install/run steps, the import and preprocessing workflow, generated files, hex-size tuning, capacity logic, and future overlay extension points.
 
-20. Run local verification that `npm install` and `npm run dev` work, all required layers render, toggles function, and hex inspection shows derived attributes.
+20. [done] Run local verification that `npm install` and `npm run dev` work, all required layers render, toggles function, and hex inspection shows derived attributes.
 
-21. Tune defaults for readability and brigade-scale usability after a first end-to-end run.
+21. [done] Tune defaults for readability and brigade-scale usability after a first end-to-end run.
 
-22. Clean up the hex debug panel so it focuses on the true generated center, click position, delta to true center in pixels and kilometers, and removes the noisier derived-centroid fields.
+22. [done] Clean up the hex debug panel so it focuses on the true generated center, click position, delta to true center in pixels and kilometers, and removes the noisier derived-centroid fields.
 
 Note: the current public fallback layer set leaves `forests` and `wetlands` empty. Full generation of those layers still needs the intended landcover/OSM processing pipeline.
