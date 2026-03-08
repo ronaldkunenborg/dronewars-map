@@ -1,0 +1,49 @@
+{
+  "generatedAt": "2026-03-07T23:53:07.470Z",
+  "repoRoot": "C:\\Users\\RonaldKunenborg\\Dropbox\\GrundsatzlichIT\\Projecten\\WebCode\\dronewars-map",
+  "rawRoot": "C:\\Users\\RonaldKunenborg\\Dropbox\\GrundsatzlichIT\\Projecten\\WebCode\\dronewars-map\\data\\raw",
+  "processedRoot": "C:\\Users\\RonaldKunenborg\\Dropbox\\GrundsatzlichIT\\Projecten\\WebCode\\dronewars-map\\data\\processed",
+  "vectorLayers": [
+    {
+      "id": "theater-boundary",
+      "sourceId": "theater-boundary",
+      "outputName": "theater-boundary.geojson",
+      "geometryType": "polygon",
+      "category": "reference",
+      "clipToTheater": false
+    },
+    {
+      "id": "oblast-boundaries",
+      "sourceId": "oblast-boundaries",
+      "outputName": "oblast-boundaries.geojson",
+      "geometryType": "polygon",
+      "category": "reference",
+      "clipToTheater": true
+    },
+    {
+      "id": "hydrology",
+      "sourceId": "hydrology-supplement",
+      "outputName": "hydrology-supplement.geojson",
+      "geometryType": "polygon",
+      "category": "hydrology",
+      "clipToTheater": true,
+      "optional": true
+    }
+  ],
+  "rasterLayers": [
+    {
+      "id": "elevation",
+      "sourceId": "elevation",
+      "outputName": "elevation-clipped.tif",
+      "category": "terrain",
+      "clipToTheater": true
+    },
+    {
+      "id": "landcover",
+      "sourceId": "landcover",
+      "outputName": "landcover-clipped.tif",
+      "category": "terrain",
+      "clipToTheater": true
+    }
+  ]
+}

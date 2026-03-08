@@ -1,0 +1,34 @@
+{
+  "name": "dronewars-map",
+  "private": true,
+  "version": "0.0.1",
+  "type": "module",
+  "scripts": {
+    "dev": "vite",
+    "build": "tsc -b && vite build",
+    "preview": "vite preview",
+    "data:intake:prepare": "node scripts/intake/prepare-raw.mjs",
+    "data:intake:register": "node scripts/intake/register-raw-source.mjs",
+    "data:preprocess:plan": "node scripts/preprocess/plan-preprocess.mjs",
+    "data:preprocess": "node scripts/preprocess/run-preprocess.mjs",
+    "data:layers:plan": "node scripts/layers/plan-layers.mjs",
+    "data:layers": "node scripts/layers/build-layers.mjs",
+    "data:layers:public": "node scripts/layers/fetch-public-layers.mjs",
+    "data:hex:generate": "node scripts/hex/generate-hex-grid.mjs",
+    "data:hex:enrich": "node scripts/hex/enrich-hex-grid.mjs",
+    "data:analytics": "node scripts/analytics/compute-cell-analytics.mjs",
+    "data:export:hex": "node scripts/export/export-hex-dataset.mjs"
+  },
+  "dependencies": {
+    "maplibre-gl": "^5.2.0",
+    "react": "^19.1.0",
+    "react-dom": "^19.1.0"
+  },
+  "devDependencies": {
+    "@types/react": "^19.1.2",
+    "@types/react-dom": "^19.1.2",
+    "@vitejs/plugin-react": "^5.0.0",
+    "typescript": "^5.8.2",
+    "vite": "^7.0.6"
+  }
+}

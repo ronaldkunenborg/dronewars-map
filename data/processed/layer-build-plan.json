@@ -1,0 +1,107 @@
+{
+  "generatedAt": "2026-03-07T23:53:47.316Z",
+  "repoRoot": "C:\\Users\\RonaldKunenborg\\Dropbox\\GrundsatzlichIT\\Projecten\\WebCode\\dronewars-map",
+  "rawRoot": "C:\\Users\\RonaldKunenborg\\Dropbox\\GrundsatzlichIT\\Projecten\\WebCode\\dronewars-map\\data\\raw",
+  "processedRoot": "C:\\Users\\RonaldKunenborg\\Dropbox\\GrundsatzlichIT\\Projecten\\WebCode\\dronewars-map\\data\\processed",
+  "recipes": [
+    {
+      "id": "theater-boundary",
+      "label": "Theater Boundary",
+      "sourceType": "preprocessed-vector",
+      "sourcePath": "theater-boundary.geojson",
+      "outputPath": "layers/theater-boundary.geojson",
+      "geometryKind": "polygon",
+      "category": "reference"
+    },
+    {
+      "id": "oblast-boundaries",
+      "label": "Oblast Boundaries",
+      "sourceType": "preprocessed-vector",
+      "sourcePath": "oblast-boundaries.geojson",
+      "outputPath": "layers/oblast-boundaries.geojson",
+      "geometryKind": "polygon",
+      "category": "reference"
+    },
+    {
+      "id": "rivers",
+      "label": "Rivers",
+      "sourceType": "osm-sql",
+      "outputPath": "layers/rivers.geojson",
+      "geometryKind": "line",
+      "category": "hydrology",
+      "sql": "SELECT * FROM lines WHERE waterway IN ('river', 'canal', 'stream')"
+    },
+    {
+      "id": "water-bodies",
+      "label": "Lakes and Water Bodies",
+      "sourceType": "osm-sql",
+      "outputPath": "layers/water-bodies.geojson",
+      "geometryKind": "polygon",
+      "category": "hydrology",
+      "sql": "SELECT * FROM multipolygons WHERE natural='water' OR water IS NOT NULL OR landuse='reservoir'"
+    },
+    {
+      "id": "wetlands",
+      "label": "Wetlands",
+      "sourceType": "osm-sql",
+      "outputPath": "layers/wetlands.geojson",
+      "geometryKind": "polygon",
+      "category": "hydrology",
+      "sql": "SELECT * FROM multipolygons WHERE natural='wetland' OR wetland IS NOT NULL"
+    },
+    {
+      "id": "forests",
+      "label": "Forests",
+      "sourceType": "osm-sql",
+      "outputPath": "layers/forests.geojson",
+      "geometryKind": "polygon",
+      "category": "terrain",
+      "sql": "SELECT * FROM multipolygons WHERE landuse='forest' OR natural='wood'"
+    },
+    {
+      "id": "roads",
+      "label": "Roads",
+      "sourceType": "osm-sql",
+      "outputPath": "layers/roads.geojson",
+      "geometryKind": "line",
+      "category": "transport",
+      "sql": "SELECT * FROM lines WHERE highway IS NOT NULL"
+    },
+    {
+      "id": "railways",
+      "label": "Railways",
+      "sourceType": "osm-sql",
+      "outputPath": "layers/railways.geojson",
+      "geometryKind": "line",
+      "category": "transport",
+      "sql": "SELECT * FROM lines WHERE railway IS NOT NULL"
+    },
+    {
+      "id": "settlements",
+      "label": "Settlements",
+      "sourceType": "osm-sql",
+      "outputPath": "layers/settlements.geojson",
+      "geometryKind": "point",
+      "category": "settlements",
+      "sql": "SELECT * FROM points WHERE place IN ('city', 'town', 'village', 'hamlet')"
+    },
+    {
+      "id": "terrain-elevation",
+      "label": "Terrain Elevation",
+      "sourceType": "preprocessed-raster",
+      "sourcePath": "elevation-clipped.tif",
+      "outputPath": "terrain/elevation-clipped.tif",
+      "geometryKind": "raster",
+      "category": "terrain"
+    },
+    {
+      "id": "terrain-landcover",
+      "label": "Terrain Landcover",
+      "sourceType": "preprocessed-raster",
+      "sourcePath": "landcover-clipped.tif",
+      "outputPath": "terrain/landcover-clipped.tif",
+      "geometryKind": "raster",
+      "category": "terrain"
+    }
+  ]
+}

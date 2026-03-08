@@ -1,0 +1,68 @@
+{
+  "generatedAt": "2026-03-08T01:10:13.144Z",
+  "layers": [
+    {
+      "id": "theater-boundary",
+      "label": "Theater Boundary",
+      "category": "reference",
+      "geometryKind": "polygon",
+      "path": "layers/theater-boundary.geojson"
+    },
+    {
+      "id": "oblast-boundaries",
+      "label": "Oblast Boundaries",
+      "category": "reference",
+      "geometryKind": "polygon",
+      "path": "layers/oblast-boundaries.geojson"
+    },
+    {
+      "id": "rivers",
+      "label": "Rivers",
+      "category": "hydrology",
+      "geometryKind": "line",
+      "path": "layers/rivers.geojson"
+    },
+    {
+      "id": "water-bodies",
+      "label": "Water Bodies",
+      "category": "hydrology",
+      "geometryKind": "polygon",
+      "path": "layers/water-bodies.geojson"
+    },
+    {
+      "id": "wetlands",
+      "label": "Wetlands",
+      "category": "hydrology",
+      "geometryKind": "polygon",
+      "path": "layers/wetlands.geojson"
+    },
+    {
+      "id": "forests",
+      "label": "Forests",
+      "category": "terrain",
+      "geometryKind": "polygon",
+      "path": "layers/forests.geojson"
+    },
+    {
+      "id": "roads",
+      "label": "Roads",
+      "category": "transport",
+      "geometryKind": "line",
+      "path": "layers/roads.geojson"
+    },
+    {
+      "id": "railways",
+      "label": "Railways",
+      "category": "transport",
+      "geometryKind": "line",
+      "path": "layers/railways.geojson"
+    },
+    {
+      "id": "settlements",
+      "label": "Settlements",
+      "category": "settlements",
+      "geometryKind": "point",
+      "path": "layers/settlements.geojson"
+    }
+  ]
+}

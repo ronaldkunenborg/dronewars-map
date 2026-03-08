@@ -1,0 +1,80 @@
+{
+  "generatedAt": "2026-03-07T23:55:27.282Z",
+  "sources": [
+    {
+      "id": "theater-boundary",
+      "category": "boundary",
+      "targetName": "ukraine-theater-boundary",
+      "description": "Ukraine theater boundary polygon used to clip all layers.",
+      "acceptedExtensions": [
+        ".geojson",
+        ".gpkg",
+        ".shp",
+        ".json"
+      ],
+      "recommendedSource": "Administrative boundary export covering the theater."
+    },
+    {
+      "id": "oblast-boundaries",
+      "category": "boundary",
+      "targetName": "ukraine-oblast-boundaries",
+      "description": "Reference oblast boundaries for aggregation and labeling.",
+      "acceptedExtensions": [
+        ".geojson",
+        ".gpkg",
+        ".shp",
+        ".json"
+      ],
+      "recommendedSource": "Administrative oblast polygons aligned to Ukraine."
+    },
+    {
+      "id": "osm-extract",
+      "category": "osm",
+      "targetName": "ukraine-osm-extract",
+      "description": "Primary OpenStreetMap extract used for roads, rail, water, and settlements.",
+      "acceptedExtensions": [
+        ".pbf",
+        ".osm",
+        ".xml"
+      ],
+      "recommendedSource": "Regional OSM extract for Ukraine or the intended theater extent."
+    },
+    {
+      "id": "landcover",
+      "category": "landcover",
+      "targetName": "ukraine-landcover",
+      "description": "Landcover source for forests, wetlands, and open terrain.",
+      "acceptedExtensions": [
+        ".tif",
+        ".tiff",
+        ".geojson",
+        ".gpkg"
+      ],
+      "recommendedSource": "Raster or vector landcover dataset clipped later to the theater."
+    },
+    {
+      "id": "elevation",
+      "category": "terrain",
+      "targetName": "ukraine-elevation",
+      "description": "Elevation raster used for hillshade, contours, and terrain roughness.",
+      "acceptedExtensions": [
+        ".tif",
+        ".tiff",
+        ".img"
+      ],
+      "recommendedSource": "DEM tiles or merged raster covering the theater."
+    },
+    {
+      "id": "hydrology-supplement",
+      "category": "hydrology",
+      "targetName": "ukraine-hydrology-supplement",
+      "description": "Optional source for major rivers, reservoirs, and wetlands if OSM data needs supplementation.",
+      "acceptedExtensions": [
+        ".geojson",
+        ".gpkg",
+        ".shp"
+      ],
+      "recommendedSource": "National or regional hydrology dataset."
+    }
+  ]
+}

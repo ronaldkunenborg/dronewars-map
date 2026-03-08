@@ -1,0 +1,33 @@
+# Scripts
+
+This directory is reserved for data intake, preprocessing, hex generation, and
+analytics scripts that will be added in later tasks.
+
+Current intake scripts:
+
+- `scripts/intake/prepare-raw.mjs`: create the raw-data directory layout and write a source manifest.
+- `scripts/intake/register-raw-source.mjs`: copy a source file into its expected location under `data/raw`.
+
+Current preprocess scripts:
+
+- `scripts/preprocess/plan-preprocess.mjs`: write a visible processing plan to `data/processed/preprocess-plan.json`.
+- `scripts/preprocess/run-preprocess.mjs`: clip and normalize registered raw inputs into `data/processed` using GDAL tools.
+
+Current layer-build scripts:
+
+- `scripts/layers/plan-layers.mjs`: write the processed-layer recipe plan.
+- `scripts/layers/build-layers.mjs`: extract named app-facing layers into `data/processed/layers` and `data/processed/terrain`.
+
+Current hex scripts:
+
+- `scripts/hex/generate-hex-grid.mjs`: generate the operational hex grid from the configured theater extent and hex radius.
+- `scripts/hex/enrich-hex-grid.mjs`: assign IDs, centroids, areas, adjacency, and parent oblasts to the generated hex grid.
+
+Current analytics scripts:
+
+- `scripts/analytics/compute-cell-analytics.mjs`: derive terrain/infrastructure summaries and initial operational scores for each hex.
+- `scripts/analytics/scoring.mjs`: tunable heuristic scoring constants and formulas for capacity, mobility, and defensibility.
+
+Current export scripts:
+
+- `scripts/export/export-hex-dataset.mjs`: publish the analytics-enriched hex dataset to the canonical app-facing path.
