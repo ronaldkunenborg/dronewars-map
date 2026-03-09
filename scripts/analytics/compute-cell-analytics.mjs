@@ -152,6 +152,20 @@ function fractionOfVerticesInside(hexFeature, polygonFeature) {
   return insideCount / vertices.length;
 }
 
+function fractionOfHexVerticesInsidePolygon(hexFeature, polygonFeature) {
+  const hexVertices = getPolygonVertices(hexFeature);
+
+  if (hexVertices.length === 0) {
+    return 0;
+  }
+
+  const insideCount = hexVertices.filter((vertex) =>
+    isPointInPolygon(vertex, polygonFeature.geometry.coordinates),
+  ).length;
+
+  return insideCount / hexVertices.length;
+}
+
 function lineTouchesHex(hexFeature, lineFeature) {
   return getLineStrings(lineFeature).some((line) =>
     line.some((point) => hexContainsPoint(hexFeature, point)),
@@ -266,7 +280,7 @@ async function main() {
     const seaCoverage = Math.min(
       1,
       seaCandidates.reduce(
-        (sum, feature) => sum + fractionOfVerticesInside(hexFeature, feature),
+        (sum, feature) => sum + fractionOfHexVerticesInsidePolygon(hexFeature, feature),
         0,
       ),
     );

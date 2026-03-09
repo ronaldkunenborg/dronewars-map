@@ -54,8 +54,16 @@
 
 27. [done] Add caching for public geospatial source retrieval so stable downloads are stored locally and reruns only fetch missing or explicitly refreshed source data instead of requerying everything.
 
-28. [pending] Complete the sea-layer integration by generating and publishing `data/processed/layers/seas.geojson`, updating `layers.json`, rerunning analytics, and republishing the live hex dataset.
+28. [done] Complete the sea-layer integration by generating and publishing `data/processed/layers/seas.geojson`, updating `layers.json`, rerunning analytics, and republishing the live hex dataset.
 
-29. [pending] Update the map and inspector verification for the new sea terrain class so the Black Sea renders in a sea color and maritime hexes report `sea` instead of `open`.
+29. [done] Update the map and inspector verification for the new sea terrain class so the Black Sea renders in a sea color and maritime hexes report `sea` instead of `open`.
 
-30. [pending] Update `README.md` to document the geospatial caching behavior, cache locations, refresh expectations, the repository strategy for large generated outputs, and the new sea terrain handling.
+30. [done] Update `README.md` to document the geospatial caching behavior, cache locations, refresh expectations, the repository strategy for large generated outputs, and the new sea terrain handling.
+
+31. [pending] Restore the forest layer detail to the finer level that existed before the current coarser simplification so forest rendering regains the prior fidelity.
+
+32. [pending] Propose and implement a consistent mixed hex terrain dominance rule for part-sea, part-land hexes so urbanized coastal hexes such as `HX-E59-N5` and `HX-E40-N23` do not default to `sea` when city or land terrain should dominate.
+
+33. [pending] Move the Kyiv star marker so it sits on the same location as the Kyiv settlement point instead of the current offset position.
+
+34. [pending] Add star markers for the next two biggest Ukrainian cities after Kyiv using the same visual treatment, and make the city marker color read more clearly as red/gray.

@@ -13,6 +13,7 @@ The project currently includes:
 - UI controls for presets, layer toggles, reset-to-Ukraine, legend, and coordinate readout
 - lightweight overlay slots for future frontlines, zones of control, artillery ranges, logistics routes, and force placement
 - a public fallback data pipeline that generates visible map layers without requiring the full OSM/GDAL workflow
+- a cached public-source fetch path so repeated fallback rebuilds reuse prior downloads instead of refetching everything
 
 The project does **not** yet include the full intended production-grade terrain pipeline. In particular:
 
@@ -45,7 +46,8 @@ With the current fallback processed data, the app should show:
 
 - a terrain/reference map of Ukraine
 - operational hex cells
-- water, forests, wetlands, roads, railways, settlements, theater boundary, and oblast boundaries
+- water, seas, forests, wetlands, roads, railways, settlements, theater boundary, and oblast boundaries
+- major-city urban extents beneath city labels
 - sidebar controls for visibility and presets
 - a cell inspector in the top-left after clicking a hex
 - a hex debug panel in the top-right
@@ -56,10 +58,12 @@ At the moment, the fallback processed layers provide:
 - oblast boundaries
 - rivers
 - water bodies
+- seas
 - forests
 - wetlands
 - roads
 - railways
+- major-city urban areas
 - settlements
 
 ## Data Workflow
@@ -74,7 +78,7 @@ This is the fastest way to get visible map content into the app.
 npm run data:layers:public
 ```
 
-This downloads public Ukraine boundary and Natural Earth layers and writes:
+This downloads or reuses cached public Ukraine boundary, Natural Earth, and Overpass layers and writes:
 
 - `data/processed/layers.json`
 - `data/processed/layers/*.geojson`
@@ -82,9 +86,35 @@ This downloads public Ukraine boundary and Natural Earth layers and writes:
 This is what the app currently uses for visible thematic content. The public builder now combines:
 
 - GeoBoundaries for national and oblast boundaries
-- Natural Earth for rivers, lakes, roads, and railways
+- Natural Earth for rivers, lakes, seas, roads, railways, and urban areas
 - OSM Overpass for settlements, forests, and wetlands
 - ESA WorldCover raster fallback for landcover visualization in the map shell
+
+Public fallback cache behavior:
+
+- cached source responses live under `data/cache/public-sources`
+- cache entries are valid for one year from write time
+- cache entries are also invalidated when the script-level cache schema version changes
+- the cache directory is ignored by Git
+
+Useful public builder commands:
+
+```bash
+node scripts/layers/fetch-public-layers.mjs --cache-report
+node scripts/layers/fetch-public-layers.mjs --refresh
+node scripts/layers/fetch-public-layers.mjs --refresh=natural-earth
+node scripts/layers/fetch-public-layers.mjs --refresh=overpass/settlements
+node scripts/layers/fetch-public-layers.mjs --smoke-test=static
+node scripts/layers/fetch-public-layers.mjs --smoke-test=settlements
+node scripts/layers/fetch-public-layers.mjs --smoke-test=wetlands
+node scripts/layers/fetch-public-layers.mjs --smoke-test=forests
+```
+
+Refresh expectations:
+
+- a normal rerun of `npm run data:layers:public` should mostly report `cache hit` once the cache is warm
+- use `--refresh` only when you intentionally want to replace cached upstream responses
+- use `--cache-report` to see which source payloads are ready, missing, expired, or on an older schema
 
 ### 2. Full Intended Pipeline
 
@@ -123,6 +153,13 @@ Current important processed outputs:
 - `data/processed/hex-cells.dataset.json`
 - `data/processed/layers.json`
 - `data/processed/layers/*.geojson`
+
+Repository strategy for generated geodata:
+
+- `data/cache/` is intentionally local-only and ignored by Git
+- very large generated fallback layers such as `data/processed/layers/forests.geojson` and `data/processed/layers/wetlands.geojson` are ignored by Git to keep pushes repository-safe
+- use `npm run repo:audit:size` before pushing if you want a quick check for tracked files over GitHub-friendly limits
+- the application can still use those ignored generated files locally after they are rebuilt
 
 ## Hex Grid Notes
 
@@ -177,6 +214,12 @@ Current outputs include:
 - effective capacity
 - assigned force count
 
+Sea terrain handling:
+
+- `data/processed/layers/seas.geojson` is part of the fallback manifest and is rendered in the map as a dedicated sea layer
+- analytics now derive `seaCoverage` from the sea polygons and classify maritime hexes as `sea` instead of `open`
+- the published live hex dataset in `data/processed/hex-cells.geojson` includes that sea classification, so the map shell and inspector see the same terrain result
+
 ## Current UI
 
 Implemented:
@@ -190,6 +233,8 @@ Implemented:
 - cell inspector with selection highlight
 - hex debug panel
 - overlay slot manager for future operational overlays
+- major-city urban extent fills under settlement labels
+- Ukrainian settlement names with English names below in parentheses when available
 
 Not yet complete:
 
