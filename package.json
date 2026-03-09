@@ -7,6 +7,7 @@
     "dev": "vite",
     "build": "tsc -b && vite build",
     "preview": "vite preview",
+    "repo:audit:size": "node scripts/repo/audit-large-files.mjs",
     "data:intake:prepare": "node scripts/intake/prepare-raw.mjs",
     "data:intake:register": "node scripts/intake/register-raw-source.mjs",
     "data:preprocess:plan": "node scripts/preprocess/plan-preprocess.mjs",

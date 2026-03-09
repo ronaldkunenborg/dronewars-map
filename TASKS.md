@@ -50,7 +50,7 @@
 
 25. [done] Replace the current placeholder terrain assumptions in the hex analytics by deriving each hex's attributes from the real terrain and landcover layers so mobility, defensibility, and related fields reflect actual terrain.
 
-26. [pending] Make the repository check-in friendly again by reducing or restructuring oversized generated geospatial JSON outputs so Git can handle normal commits reliably.
+26. [done] Make the repository check-in friendly again by reducing or restructuring oversized generated geospatial JSON outputs so Git can handle normal commits reliably.
 
 27. [pending] Add caching for public geospatial source retrieval so stable downloads are stored locally and reruns only fetch missing or explicitly refreshed source data instead of requerying everything.
 
