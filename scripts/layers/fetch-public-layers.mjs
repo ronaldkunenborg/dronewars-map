@@ -1246,8 +1246,8 @@ async function main() {
       type: tags.landuse === "forest" ? "forest" : "wood",
     }),
     {
-      minApproxAreaKm2: 8,
-      maxVertices: 36,
+      minApproxAreaKm2: 0.4,
+      maxVertices: 120,
     },
   );
   const wetlands = await fetchTiledAreaLayer(

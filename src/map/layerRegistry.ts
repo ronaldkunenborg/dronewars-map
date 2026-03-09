@@ -195,7 +195,7 @@ const orderedLayerRegistry: OrderedLayerDefinition[] = [
         type: "fill",
         source: sourceId,
         paint: {
-          "fill-color": "#b2554c",
+          "fill-color": "#c15f57",
           "fill-opacity": [
             "interpolate",
             ["linear"],

@@ -49,15 +49,20 @@ function geometryBounds(geometry) {
       return;
     }
 
+    if (
+      coordinates.length >= 2 &&
+      typeof coordinates[0] === "number" &&
+      typeof coordinates[1] === "number"
+    ) {
+      bounds.west = Math.min(bounds.west, coordinates[0]);
+      bounds.east = Math.max(bounds.east, coordinates[0]);
+      bounds.south = Math.min(bounds.south, coordinates[1]);
+      bounds.north = Math.max(bounds.north, coordinates[1]);
+      return;
+    }
+
     for (const coordinate of coordinates) {
-      if (Array.isArray(coordinate) && typeof coordinate[0] === "number") {
-        bounds.west = Math.min(bounds.west, coordinate[0]);
-        bounds.east = Math.max(bounds.east, coordinate[0]);
-        bounds.south = Math.min(bounds.south, coordinate[1]);
-        bounds.north = Math.max(bounds.north, coordinate[1]);
-      } else {
-        visit(coordinate);
-      }
+      visit(coordinate);
     }
   }
 
@@ -212,19 +217,26 @@ function pointScore(pointFeature) {
   }
 }
 
-function settlementScoreForHex(hexFeature, settlements) {
-  return settlements.reduce((total, feature) => {
+function settlementMetricsForHex(hexFeature, settlements) {
+  return settlements.reduce((summary, feature) => {
     if (!hexContainsPoint(hexFeature, feature.geometry.coordinates)) {
-      return total;
+      return summary;
     }
 
-    return total + pointScore(feature);
-  }, 0);
+    const score = pointScore(feature);
+
+    return {
+      totalScore: summary.totalScore + score,
+      strongestPlaceScore: Math.max(summary.strongestPlaceScore, score),
+    };
+  }, {
+    totalScore: 0,
+    strongestPlaceScore: 0,
+  });
 }
 
-function dominantTerrain(summary) {
+function dominantLandTerrain(summary) {
   const candidates = [
-    ["sea", summary.seaCoverage],
     ["wetland", summary.wetlandCoverage],
     ["forest", summary.forestCoverage],
     ["open", summary.openTerrainCoverage],
@@ -232,6 +244,30 @@ function dominantTerrain(summary) {
 
   candidates.sort((left, right) => right[1] - left[1]);
   return candidates[0][0];
+}
+
+// Treat mixed coastal hexes with real settlement presence as land-dominant unless they are overwhelmingly maritime.
+function dominantTerrain(summary, infrastructure) {
+  const landCoverage =
+    summary.forestCoverage + summary.wetlandCoverage + summary.openTerrainCoverage;
+
+  if (summary.seaCoverage <= 0) {
+    return dominantLandTerrain(summary);
+  }
+
+  if (landCoverage <= 0) {
+    return "sea";
+  }
+
+  if (infrastructure.strongestPlaceScore >= 3 && landCoverage >= 0.25) {
+    return "open";
+  }
+
+  if (summary.seaCoverage >= 0.67 && summary.seaCoverage >= landCoverage + 0.15) {
+    return "sea";
+  }
+
+  return dominantLandTerrain(summary);
 }
 
 async function loadOptionalLayer(relativePath) {
@@ -295,10 +331,16 @@ async function main() {
     const areaKm2 = hexFeature.properties.areaKm2;
     const roadDensity = areaKm2 > 0 ? roadKm / areaKm2 : 0;
     const railPresence = railwayCandidates.some((feature) => lineTouchesHex(hexFeature, feature));
-    const settlementScore = settlementScoreForHex(hexFeature, settlementCandidates);
+    const settlementMetrics = settlementMetricsForHex(hexFeature, settlementCandidates);
     const elevationRoughness = Number(
       Math.min(1, 0.12 + wetlandCoverage * 0.08 + forestCoverage * 0.15).toFixed(3),
     );
+
+    const infrastructureSummary = {
+      roadDensity: Number(roadDensity.toFixed(3)),
+      railPresence,
+      settlementScore: settlementMetrics.totalScore,
+    };
 
     const terrainSummary = {
       dominantTerrain: dominantTerrain({
@@ -306,6 +348,9 @@ async function main() {
         forestCoverage,
         wetlandCoverage,
         openTerrainCoverage,
+      }, {
+        ...infrastructureSummary,
+        strongestPlaceScore: settlementMetrics.strongestPlaceScore,
       }),
       seaCoverage: Number(seaCoverage.toFixed(3)),
       forestCoverage: Number(forestCoverage.toFixed(3)),
@@ -313,12 +358,6 @@ async function main() {
       openTerrainCoverage: Number(openTerrainCoverage.toFixed(3)),
       waterBarrierPresence,
       elevationRoughness,
-    };
-
-    const infrastructureSummary = {
-      roadDensity: Number(roadDensity.toFixed(3)),
-      railPresence,
-      settlementScore,
     };
 
     const effectiveCapacity = Math.round(
