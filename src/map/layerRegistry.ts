@@ -14,6 +14,7 @@ export const mapLayerVisibilityTargets = {
   roads: ["roads-line"],
   railways: ["railways-line"],
   settlements: [
+    "major-city-urban-fill",
     "settlements-city-circle",
     "settlements-town-circle",
     "settlements-village-circle",
@@ -185,6 +186,31 @@ const orderedLayerRegistry: OrderedLayerDefinition[] = [
     ],
   },
   {
+    id: "major-city-urban-areas",
+    sourceLayerId: "major-city-urban-areas",
+    build: (sourceId) => [
+      {
+        id: "major-city-urban-fill",
+        type: "fill",
+        source: sourceId,
+        paint: {
+          "fill-color": "#b56648",
+          "fill-opacity": [
+            "interpolate",
+            ["linear"],
+            ["zoom"],
+            4,
+            0.08,
+            7,
+            0.12,
+            10,
+            0.18,
+          ],
+        },
+      },
+    ],
+  },
+  {
     id: "settlements",
     sourceLayerId: "settlements",
     build: (sourceId) => [
@@ -196,7 +222,6 @@ const orderedLayerRegistry: OrderedLayerDefinition[] = [
         filter: ["==", ["get", "place"], "city"],
         paint: {
           "circle-radius": [
-            [
               "interpolate",
               ["linear"],
               ["zoom"],
@@ -242,7 +267,6 @@ const orderedLayerRegistry: OrderedLayerDefinition[] = [
                 3000000,
                 20,
               ],
-            ],
           ],
           "circle-color": "#b4482d",
           "circle-opacity": 0.96,
@@ -334,7 +358,28 @@ const orderedLayerRegistry: OrderedLayerDefinition[] = [
         source: sourceId,
         minzoom: 4,
         layout: {
-          "text-field": ["coalesce", ["get", "nameUk"], ["get", "name"]],
+          "text-field": [
+            "case",
+            [
+              "all",
+              ["has", "nameEn"],
+              [
+                "!=",
+                ["coalesce", ["get", "nameEn"], ""],
+                ["coalesce", ["get", "nameUk"], ["get", "name"], ""],
+              ],
+            ],
+            [
+              "format",
+              ["coalesce", ["get", "nameUk"], ["get", "name"]],
+              {},
+              "\n",
+              {},
+              ["concat", "(", ["get", "nameEn"], ")"],
+              { "font-scale": 0.78 },
+            ],
+            ["coalesce", ["get", "nameUk"], ["get", "name"]],
+          ],
           "text-font": ["Open Sans Regular"],
           "text-size": [
             "interpolate",
@@ -367,7 +412,28 @@ const orderedLayerRegistry: OrderedLayerDefinition[] = [
         source: sourceId,
         minzoom: 6,
         layout: {
-          "text-field": ["coalesce", ["get", "nameUk"], ["get", "name"]],
+          "text-field": [
+            "case",
+            [
+              "all",
+              ["has", "nameEn"],
+              [
+                "!=",
+                ["coalesce", ["get", "nameEn"], ""],
+                ["coalesce", ["get", "nameUk"], ["get", "name"], ""],
+              ],
+            ],
+            [
+              "format",
+              ["coalesce", ["get", "nameUk"], ["get", "name"]],
+              {},
+              "\n",
+              {},
+              ["concat", "(", ["get", "nameEn"], ")"],
+              { "font-scale": 0.78 },
+            ],
+            ["coalesce", ["get", "nameUk"], ["get", "name"]],
+          ],
           "text-font": ["Open Sans Regular"],
           "text-size": [
             "interpolate",
@@ -398,7 +464,28 @@ const orderedLayerRegistry: OrderedLayerDefinition[] = [
         source: sourceId,
         minzoom: 8,
         layout: {
-          "text-field": ["coalesce", ["get", "nameUk"], ["get", "name"]],
+          "text-field": [
+            "case",
+            [
+              "all",
+              ["has", "nameEn"],
+              [
+                "!=",
+                ["coalesce", ["get", "nameEn"], ""],
+                ["coalesce", ["get", "nameUk"], ["get", "name"], ""],
+              ],
+            ],
+            [
+              "format",
+              ["coalesce", ["get", "nameUk"], ["get", "name"]],
+              {},
+              "\n",
+              {},
+              ["concat", "(", ["get", "nameEn"], ")"],
+              { "font-scale": 0.78 },
+            ],
+            ["coalesce", ["get", "nameUk"], ["get", "name"]],
+          ],
           "text-font": ["Open Sans Regular"],
           "text-size": [
             "interpolate",

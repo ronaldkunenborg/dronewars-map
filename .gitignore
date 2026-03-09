@@ -7,5 +7,6 @@ dist/
 .codex-dev.log
 vite.config.js
 vite.config.d.ts
+data/cache/
 data/processed/layers/forests.geojson
 data/processed/layers/wetlands.geojson

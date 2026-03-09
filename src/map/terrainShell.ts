@@ -1,3 +1,4 @@
+import type { FeatureCollection, Point } from "geojson";
 import type { GeoJSONSourceSpecification, Map, StyleSpecification } from "maplibre-gl";
 import { appConfig } from "../config";
 import type { LayerManifest } from "../data";
@@ -38,7 +39,7 @@ type SourceData = string | HexPolygonGeoJson | HexEdgeGeoJson;
 
 const worldCoverWmsUrl =
   "https://services.terrascope.be/wms/v2?service=WMS&version=1.1.1&request=GetMap&layers=WORLDCOVER_2021_MAP&styles=&format=image/png&transparent=true&srs=EPSG:3857&bbox={bbox-epsg-3857}&width=256&height=256";
-const kyivHexMarker = {
+const kyivHexMarker: FeatureCollection<Point, { label: string }> = {
   type: "FeatureCollection",
   features: [
     {
@@ -52,7 +53,7 @@ const kyivHexMarker = {
       },
     },
   ],
-} as const;
+};
 
 function addSourceIfMissing(
   map: Map,

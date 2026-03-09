@@ -52,7 +52,7 @@
 
 26. [done] Make the repository check-in friendly again by reducing or restructuring oversized generated geospatial JSON outputs so Git can handle normal commits reliably.
 
-27. [pending] Add caching for public geospatial source retrieval so stable downloads are stored locally and reruns only fetch missing or explicitly refreshed source data instead of requerying everything.
+27. [done] Add caching for public geospatial source retrieval so stable downloads are stored locally and reruns only fetch missing or explicitly refreshed source data instead of requerying everything.
 
 28. [pending] Complete the sea-layer integration by generating and publishing `data/processed/layers/seas.geojson`, updating `layers.json`, rerunning analytics, and republishing the live hex dataset.
 

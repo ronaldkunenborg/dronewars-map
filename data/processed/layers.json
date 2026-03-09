@@ -1,5 +1,5 @@
 {
-  "generatedAt": "2026-03-08T23:28:18.100Z",
+  "generatedAt": "2026-03-09T21:00:26.576Z",
   "layers": [
     {
       "id": "theater-boundary",
@@ -63,6 +63,13 @@
       "category": "transport",
       "geometryKind": "line",
       "path": "layers/railways.geojson"
+    },
+    {
+      "id": "major-city-urban-areas",
+      "label": "Major City Urban Areas",
+      "category": "settlements",
+      "geometryKind": "polygon",
+      "path": "layers/major-city-urban-areas.geojson"
     },
     {
       "id": "settlements",

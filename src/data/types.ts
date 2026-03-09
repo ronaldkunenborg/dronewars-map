@@ -81,7 +81,13 @@ export type TerrainLayerDefinition = {
 };
 
 export type LayerManifest = TerrainLayerDefinition & {
-  group: "terrain" | "hydrology" | "transport" | "reference" | "operational";
+  group:
+    | "terrain"
+    | "hydrology"
+    | "transport"
+    | "reference"
+    | "operational"
+    | "settlements";
 };
 
 export type OverlayDefinition = {
@@ -100,4 +106,3 @@ export type ProcessedDataCatalog = {
   terrainLayers: TerrainLayerDefinition[];
   overlaySlots: OverlayDefinition[];
 };
-
