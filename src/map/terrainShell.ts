@@ -91,7 +91,7 @@ function mountOperationalHexLayer(map: Map) {
           "case",
           ["==", ["coalesce", ["get", "dominantTerrain"], "open"], "sea"],
           "#5f8fb3",
-          [">=", ["coalesce", ["get", "settlementScore"], 0], 3],
+          [">=", ["coalesce", ["get", "settlementScore"], 0], 20],
           "#9a6f66",
           ["==", ["coalesce", ["get", "dominantTerrain"], "open"], "wetland"],
           "#8a6f46",
