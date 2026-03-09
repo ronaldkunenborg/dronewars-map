@@ -15,6 +15,7 @@ export const mapLayerVisibilityTargets = {
   railways: ["railways-line"],
   settlements: [
     "major-city-urban-fill",
+    "priority-city-star",
     "settlements-city-circle",
     "settlements-town-circle",
     "settlements-village-circle",
@@ -194,7 +195,7 @@ const orderedLayerRegistry: OrderedLayerDefinition[] = [
         type: "fill",
         source: sourceId,
         paint: {
-          "fill-color": "#b56648",
+          "fill-color": "#b2554c",
           "fill-opacity": [
             "interpolate",
             ["linear"],
@@ -214,6 +215,46 @@ const orderedLayerRegistry: OrderedLayerDefinition[] = [
     id: "settlements",
     sourceLayerId: "settlements",
     build: (sourceId) => [
+      {
+        id: "priority-city-star",
+        type: "symbol",
+        source: sourceId,
+        minzoom: 4,
+        filter: [
+          "all",
+          ["==", ["get", "place"], "city"],
+          [
+            "match",
+            ["coalesce", ["get", "nameUk"], ["get", "name"]],
+            ["Київ", "Харків", "Одеса"],
+            true,
+            false,
+          ],
+        ],
+        layout: {
+          "text-field": "★",
+          "text-size": [
+            "interpolate",
+            ["linear"],
+            ["zoom"],
+            4,
+            12,
+            7,
+            16,
+            10,
+            20,
+          ],
+          "text-offset": [0, -0.05],
+          "text-anchor": "center",
+          "text-allow-overlap": true,
+          "text-ignore-placement": true,
+        },
+        paint: {
+          "text-color": "#f0cf63",
+          "text-halo-color": "rgba(86, 45, 40, 0.95)",
+          "text-halo-width": 0.45,
+        },
+      },
       {
         id: "settlements-city-circle",
         type: "circle",
@@ -268,9 +309,9 @@ const orderedLayerRegistry: OrderedLayerDefinition[] = [
                 20,
               ],
           ],
-          "circle-color": "#b4482d",
+          "circle-color": "#c94840",
           "circle-opacity": 0.96,
-          "circle-stroke-color": "#fff5e5",
+          "circle-stroke-color": "#b8bec3",
           "circle-stroke-width": [
             "interpolate",
             ["linear"],
@@ -302,9 +343,9 @@ const orderedLayerRegistry: OrderedLayerDefinition[] = [
             11,
             6,
           ],
-          "circle-color": "#b4482d",
+          "circle-color": "#a75249",
           "circle-opacity": 0.92,
-          "circle-stroke-color": "#fff5e5",
+          "circle-stroke-color": "#b8bec3",
           "circle-stroke-width": [
             "interpolate",
             ["linear"],
@@ -336,9 +377,9 @@ const orderedLayerRegistry: OrderedLayerDefinition[] = [
             12,
             4,
           ],
-          "circle-color": "#b4482d",
+          "circle-color": "#8f5a53",
           "circle-opacity": 0.9,
-          "circle-stroke-color": "#fff5e5",
+          "circle-stroke-color": "#b8bec3",
           "circle-stroke-width": [
             "interpolate",
             ["linear"],

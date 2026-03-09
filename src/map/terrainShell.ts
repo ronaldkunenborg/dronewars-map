@@ -1,4 +1,3 @@
-import type { FeatureCollection, Point } from "geojson";
 import type { GeoJSONSourceSpecification, Map, StyleSpecification } from "maplibre-gl";
 import { appConfig } from "../config";
 import type { LayerManifest } from "../data";
@@ -39,21 +38,6 @@ type SourceData = string | HexPolygonGeoJson | HexEdgeGeoJson;
 
 const worldCoverWmsUrl =
   "https://services.terrascope.be/wms/v2?service=WMS&version=1.1.1&request=GetMap&layers=WORLDCOVER_2021_MAP&styles=&format=image/png&transparent=true&srs=EPSG:3857&bbox={bbox-epsg-3857}&width=256&height=256";
-const kyivHexMarker: FeatureCollection<Point, { label: string }> = {
-  type: "FeatureCollection",
-  features: [
-    {
-      type: "Feature",
-      properties: {
-        label: "★",
-      },
-      geometry: {
-        type: "Point",
-        coordinates: [30.588720977474967, 50.36335633455103],
-      },
-    },
-  ],
-};
 
 function addSourceIfMissing(
   map: Map,
@@ -177,43 +161,6 @@ function mountOperationalHexLayer(map: Map) {
   }
 }
 
-function mountKyivHexMarker(map: Map) {
-  if (!map.getSource("kyiv-hex-marker")) {
-    map.addSource("kyiv-hex-marker", {
-      type: "geojson",
-      data: kyivHexMarker,
-    });
-  }
-
-  if (!map.getLayer("kyiv-hex-star")) {
-    map.addLayer({
-      id: "kyiv-hex-star",
-      type: "symbol",
-      source: "kyiv-hex-marker",
-      layout: {
-        "text-field": ["get", "label"],
-        "text-size": [
-          "interpolate",
-          ["linear"],
-          ["zoom"],
-          4,
-          12,
-          7,
-          16,
-          10,
-          20,
-        ],
-        "text-allow-overlap": true,
-      },
-      paint: {
-        "text-color": "#f0d57a",
-        "text-halo-color": "rgba(56, 44, 24, 0.95)",
-        "text-halo-width": 1.4,
-      },
-    });
-  }
-}
-
 function raiseSettlementLayers(map: Map) {
   for (const layerId of [
     "settlements-city-circle",
@@ -223,6 +170,10 @@ function raiseSettlementLayers(map: Map) {
     if (map.getLayer(layerId)) {
       map.moveLayer(layerId);
     }
+  }
+
+  if (map.getLayer("priority-city-star")) {
+    map.moveLayer("priority-city-star");
   }
 
   for (const layerId of [
@@ -282,6 +233,5 @@ export function mountTerrainShell(
   );
   mountOperationalHexLayer(map);
   raiseSettlementLayers(map);
-  mountKyivHexMarker(map);
   mountOverlayManager(map);
 }

@@ -109,6 +109,122 @@ const sources = {
     "https://raw.githubusercontent.com/nvkelso/natural-earth-vector/master/geojson/ne_10m_urban_areas_landscan.geojson",
 };
 
+// Fallback populations for the 50 largest Ukrainian urban areas, used only when OSM settlement records omit population.
+// Source trail for refreshing this table:
+// 1. Start with the GeoNames "largest cities in Ukraine" listing:
+//    https://www.geonames.org/UA/largest-cities-in-ukraine.html
+// 2. If a city is still missing or the naming differs, check the GeoNames export datasets next:
+//    https://download.geonames.org/export/dump/
+// 3. These values only need to be refreshed into the local fallback table occasionally; normal public layer
+//    builds should keep reading the checked-in fallback values instead of repopulating them on every run.
+const topUkraineCityPopulationFallbacks = [
+  { population: 2614581, aliases: ["kyiv", "київ", "kiev"] },
+  { population: 1308892, aliases: ["kharkiv", "харків", "kharkov"] },
+  { population: 899157, aliases: ["odesa", "одеса", "odessa"] },
+  { population: 792115, aliases: ["dnipro", "дніпро", "dnepr", "dnipropetrovsk"] },
+  { population: 705832, aliases: ["donetsk", "донецьк", "донецк"] },
+  { population: 627280, aliases: ["lviv", "львів", "lvov"] },
+  { population: 566844, aliases: ["zaporizhzhia", "запоріжжя", "zaporozhye", "zaporizhzhya"] },
+  { population: 477940, aliases: ["kryvyi rih", "кривий ріг", "krivoy rog", "kryvyy rih"] },
+  { population: 419484, aliases: ["mykolaiv", "миколаїв", "nikolaev", "mykolayiv"] },
+  { population: 375504, aliases: ["mariupol", "маріуполь", "mariupol’"] },
+  { population: 363466, aliases: ["vinnytsia", "вінниця", "vinnitsa"] },
+  { population: 354296, aliases: ["luhansk", "луганськ", "lugansk"] },
+  { population: 294735, aliases: ["simferopol", "сімферополь", "сімферопіль", "simferopol’"] },
+  { population: 257682, aliases: ["kherson", "херсон"] },
+  { population: 248683, aliases: ["cherkasy", "черкаси", "cherкассы"] },
+  { population: 244882, aliases: ["chernihiv", "чернігів", "chernigov"] },
+  { population: 242753, aliases: ["poltava", "полтава"] },
+  { population: 242022, aliases: ["khmelnytskyi", "хмельницький", "khmelnitskyi", "khmelnitskiy"] },
+  { population: 234228, aliases: ["ivano-frankivsk", "івано-франківськ", "ivano frankivsk"] },
+  { population: 234032, aliases: ["chernivtsi", "чернівці", "chernovtsy"] },
+  { population: 226028, aliases: ["sevastopol", "севастополь", "sebastopol"] },
+  { population: 225363, aliases: ["zhytomyr", "житомир", "zhitomir"] },
+  { population: 222927, aliases: ["rivne", "рівне", "rovno"] },
+  { population: 209014, aliases: ["lutsk", "луцьк"] },
+  { population: 200894, aliases: ["kropyvnytskyi", "кропивницький", "kirovohrad", "kirovograd"] },
+  { population: 200425, aliases: ["makiivka", "макіївка", "makeyevka"] },
+  { population: 193565, aliases: ["ternopil", "тернопіль", "ternopol"] },
+  { population: 192645, aliases: ["kamianske", "кам’янське", "камянське", "dniprodzerzhynsk"] },
+  { population: 191217, aliases: ["bila tserkva", "біла церква", "belaya tserkov"] },
+  { population: 189130, aliases: ["sumy", "суми"] },
+  { population: 157847, aliases: ["alchevsk", "алчевськ", "alchevs’k"] },
+  { population: 151814, aliases: ["horlivka", "горлівка", "gorlovka"] },
+  { population: 130974, aliases: ["kremenchuk", "кременчук"] },
+  { population: 126945, aliases: ["uzhhorod", "ужгород", "uzhgorod"] },
+  { population: 122344, aliases: ["brovary", "бровари"] },
+  { population: 104383, aliases: ["nikopol", "нікополь"] },
+  { population: 102818, aliases: ["kramatorsk", "краматорськ"] },
+  { population: 94511, aliases: ["pishchane", "піщане"] },
+  { population: 94476, aliases: ["sloviansk", "слов’янськ", "slavyansk"] },
+  { population: 92933, aliases: ["yevpatoriya", "євпаторія", "yevpatoriya", "evpatoriya"] },
+  { population: 90861, aliases: ["kamianets-podilskyi", "кам’янець-подільський", "kamianets podilskyi", "kamenets-podolskiy"] },
+  { population: 88468, aliases: ["sievierodonetsk", "сєвєродонецьк", "severodonetsk"] },
+  { population: 87071, aliases: ["drohobych", "дрогобич", "drogobych"] },
+  { population: 85914, aliases: ["oleksandriia", "олександрія", "alexandriya"] },
+  { population: 84764, aliases: ["khartsyzk", "харцизьк", "khartsyzsk"] },
+  { population: 82456, aliases: ["pavlohrad", "павлоград", "pavlograd"] },
+  { population: 79826, aliases: ["kerch", "керч", "kerch’"] },
+  { population: 78952, aliases: ["brianka", "брянка", "bryanka"] },
+  { population: 76412, aliases: ["uman", "умань"] },
+  { population: 75307, aliases: ["stryi", "стрий", "stryj"] },
+  { population: 183105, aliases: ["oradea"] },
+  { population: 144307, aliases: ["bacau", "bacău", "бакеу"] },
+  { population: 125000, aliases: ["balti", "bălți", "бельці"] },
+  { population: 123738, aliases: ["baia mare"] },
+  { population: 102411, aliases: ["satu mare"] },
+  { population: 92392, aliases: ["suceava"] },
+  { population: 78776, aliases: ["bistrita", "bistrița"] },
+  { population: 73914, aliases: ["tulcea"] },
+  { population: 56373, aliases: ["zalau", "zalău"] },
+  { population: 56006, aliases: ["sepsiszentgyorgy", "sepsiszentgyörgy", "sfantu gheorghe", "sfântu gheorghe"] },
+  { population: 55455, aliases: ["ribnita", "rîbnița", "рибницька міська рада"] },
+  { population: 50713, aliases: ["roman"] },
+  { population: 47144, aliases: ["turda"] },
+  { population: 45891, aliases: ["slobozia"] },
+  { population: 39761, aliases: ["medias", "mediaș"] },
+  { population: 39719, aliases: ["adjud"] },
+  { population: 39284, aliases: ["medgidia"] },
+  { population: 37631, aliases: ["miercurea ciuc"] },
+  { population: 34871, aliases: ["tecuci"] },
+  { population: 34668, aliases: ["onesti", "onești"] },
+  { population: 34492, aliases: ["cahul"] },
+  { population: 22911, aliases: ["comrat"] },
+  { population: 34257, aliases: ["odorheiu secuiesc"] },
+  { population: 33107, aliases: ["dej"] },
+  { population: 23741, aliases: ["dorohoi"] },
+  { population: 32847, aliases: ["pascani", "pașcani"] },
+  { population: 30800, aliases: ["sacele", "săcele"] },
+  { population: 28688, aliases: ["reghin"] },
+  { population: 28593, aliases: ["campina", "câmpina"] },
+  { population: 26847, aliases: ["husi", "huși"] },
+  { population: 25723, aliases: ["falticeni", "fălticeni"] },
+  { population: 24822, aliases: ["oltenita", "oltenița"] },
+  { population: 23254, aliases: ["dubasari", "dubăsari", "дубосарська міська рада"] },
+  { population: 22781, aliases: ["aiud"] },
+  { population: 22122, aliases: ["campia turzii", "câmpia turzii"] },
+  { population: 22075, aliases: ["tarnaveni", "târnăveni"] },
+  { population: 21678, aliases: ["moinesti", "moinești"] },
+  { population: 20830, aliases: ["blaj"] },
+  { population: 20482, aliases: ["gherla"] },
+  { population: 18700, aliases: ["straseni", "strășeni"] },
+  { population: 18000, aliases: ["targu secuiesc", "târgu secuiesc"] },
+  { population: 17666, aliases: ["gheorgheni"] },
+  { population: 16600, aliases: ["ceadir lunga", "ceadîr lunga"] },
+  { population: 15871, aliases: ["marghita"] },
+  { population: 15859, aliases: ["urziceni"] },
+  { population: 15100, aliases: ["hincesti", "hîncești"] },
+  { population: 15078, aliases: ["edinet", "edineț"] },
+  { population: 13300, aliases: ["toplita", "toplița"] },
+  { population: 9942, aliases: ["beius", "beiuș"] },
+];
+
+const topUkraineCityPopulationFallbackLookup = new Map(
+  topUkraineCityPopulationFallbacks.flatMap((entry) =>
+    entry.aliases.map((alias) => [alias, entry.population]),
+  ),
+);
+
 // Optional CLI refresh targets let callers invalidate part of the cache or all of it.
 const refreshTargets = new Set(
   process.argv
@@ -396,6 +512,50 @@ function normalizePopulation(value) {
   return null;
 }
 
+// Normalize city names into a lookup key that is resilient to case, punctuation, and accent differences.
+function normalizeSettlementName(value) {
+  if (typeof value !== "string") {
+    return null;
+  }
+
+  const normalized = value
+    .normalize("NFKD")
+    .replace(/\p{Diacritic}/gu, "")
+    .toLowerCase()
+    .replace(/[’'`]/g, "")
+    .replace(/[^\p{L}\p{N}]+/gu, " ")
+    .trim();
+
+  return normalized === "" ? null : normalized;
+}
+
+// Fill missing city populations from a curated top-50 Ukraine city fallback table.
+function resolveSettlementPopulation(place, population, nameUk, nameEn) {
+  if (population !== null) {
+    return population;
+  }
+
+  if (place !== "city") {
+    return null;
+  }
+
+  for (const candidate of [nameUk, nameEn]) {
+    const key = normalizeSettlementName(candidate);
+
+    if (!key) {
+      continue;
+    }
+
+    const fallbackPopulation = topUkraineCityPopulationFallbackLookup.get(key);
+
+    if (fallbackPopulation) {
+      return fallbackPopulation;
+    }
+  }
+
+  return null;
+}
+
 // Sort place classes into a stable label and symbol priority order.
 function placeRank(place) {
   switch (place) {
@@ -584,6 +744,90 @@ function dedupeSettlements(features) {
   return [...grouped.values()].flat();
 }
 
+// Reuse the strongest known city population for duplicate city names when a sibling record is missing one.
+function applyDuplicateCityPopulationFallback(features) {
+  const highestPopulationByName = new Map();
+
+  for (const feature of features) {
+    if (feature.properties.place !== "city" || feature.properties.population == null) {
+      continue;
+    }
+
+    for (const candidate of [feature.properties.nameUk, feature.properties.nameEn]) {
+      const key = normalizeSettlementName(candidate);
+
+      if (!key) {
+        continue;
+      }
+
+      const existing = highestPopulationByName.get(key) ?? 0;
+      highestPopulationByName.set(
+        key,
+        Math.max(existing, feature.properties.population),
+      );
+    }
+  }
+
+  return features.map((feature) => {
+    if (feature.properties.place !== "city" || feature.properties.population != null) {
+      return feature;
+    }
+
+    for (const candidate of [feature.properties.nameUk, feature.properties.nameEn]) {
+      const key = normalizeSettlementName(candidate);
+
+      if (!key) {
+        continue;
+      }
+
+      const fallbackPopulation = highestPopulationByName.get(key);
+
+      if (fallbackPopulation != null) {
+        return {
+          ...feature,
+          properties: {
+            ...feature.properties,
+            population: fallbackPopulation,
+          },
+        };
+      }
+    }
+
+    return feature;
+  });
+}
+
+// Apply the curated fallback lookup one last time after deduplication so late-selected city records still get populated.
+function applyCuratedCityPopulationFallback(features) {
+  return features.map((feature) => {
+    if (feature.properties.place !== "city" || feature.properties.population != null) {
+      return feature;
+    }
+
+    for (const candidate of [feature.properties.nameUk, feature.properties.nameEn]) {
+      const key = normalizeSettlementName(candidate);
+
+      if (!key) {
+        continue;
+      }
+
+      const fallbackPopulation = topUkraineCityPopulationFallbackLookup.get(key);
+
+      if (fallbackPopulation != null) {
+        return {
+          ...feature,
+          properties: {
+            ...feature.properties,
+            population: fallbackPopulation,
+          },
+        };
+      }
+    }
+
+    return feature;
+  });
+}
+
 // Split the theater bbox into tiles so heavy Overpass polygon queries stay manageable.
 function buildBboxGrid(bbox, columns, rows) {
   const boxes = [];
@@ -741,13 +985,20 @@ function overpassElementsToGeoJson(elements, theaterBoundary) {
       }
 
       const place = tags.place ?? "locality";
-      const population = normalizePopulation(tags.population);
+      const rawPopulation = normalizePopulation(tags.population);
       const nameUk = tags["name:uk"] ?? tags.name ?? null;
       const nameEn = tags["name:en"] ?? null;
 
       if (!nameUk) {
         return null;
       }
+
+      const population = resolveSettlementPopulation(
+        place,
+        rawPopulation,
+        nameUk,
+        nameEn,
+      );
 
       return {
         type: "Feature",
@@ -776,7 +1027,11 @@ function overpassElementsToGeoJson(elements, theaterBoundary) {
 
   return {
     type: "FeatureCollection",
-    features: sortSettlements(dedupeSettlements(features)),
+    features: sortSettlements(
+      applyCuratedCityPopulationFallback(
+        dedupeSettlements(applyDuplicateCityPopulationFallback(features)),
+      ),
+    ),
   };
 }
 
