@@ -29,6 +29,7 @@ export type HexInspectorData = {
 };
 
 type HexInspectorProps = {
+  hexRadiusKm?: number;
   selectedHex: HexInspectorData | null;
   title?: string;
 };
@@ -66,6 +67,7 @@ function formatLngLat(value: LngLat | null) {
 }
 
 export function HexInspector({
+  hexRadiusKm,
   selectedHex,
   title = "Cell Inspector",
 }: HexInspectorProps) {
@@ -82,6 +84,7 @@ export function HexInspector({
     <div className="hex-inspector">
       <h2>{title}</h2>
       <p><strong>Hex:</strong> {selectedHex.hexId}</p>
+      <p><strong>Hex radius:</strong> {hexRadiusKm ?? "n/a"} km</p>
       <p><strong>Region:</strong> {selectedHex.parentRegionName}</p>
       <p><strong>Area:</strong> {formatNumber(selectedHex.areaKm2, 1)} km²</p>
       <p><strong>Centroid:</strong> {formatLngLat(selectedHex.centroidLngLat)}</p>

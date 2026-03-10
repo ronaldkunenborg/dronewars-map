@@ -17,7 +17,7 @@ import type {
   LayerVisibility,
   SettlementDisplayLevel,
 } from "../components/LayerPanel";
-import { ukraineTheaterConfig } from "../config";
+import { appConfig, ukraineTheaterConfig } from "../config";
 import { createBaseMap } from "./createMap";
 import { mapLayerVisibilityTargets } from "./layerRegistry";
 
@@ -919,7 +919,11 @@ export function MapView({
         </div>
         {detailsVisible ? (
           <div className="cell-panel__body" id="cell-details-panel">
-            <HexInspector selectedHex={selectedHex} title="Cell Inspector" />
+            <HexInspector
+              hexRadiusKm={appConfig.hexRadiusKm}
+              selectedHex={selectedHex}
+              title="Cell Inspector"
+            />
             {debugVisible ? debugInfo ? (
               <section className="debug-panel">
                 <h2>Hex Debug</h2>

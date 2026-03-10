@@ -14,12 +14,13 @@ The project currently includes:
 - a settlements display-level selector (`Cities`, `Cities + Towns`, `Cities + Towns + Villages`)
 - a cell-layer mode switch between `Hex` and `Voronoi`
 - lightweight overlay slots for future frontlines, zones of control, artillery ranges, logistics routes, and force placement
-- a public fallback data pipeline that generates visible map layers without requiring the full OSM/GDAL workflow
-- a cached public-source fetch path so repeated fallback rebuilds reuse prior downloads instead of refetching everything
+- a public-source data pipeline that generates and refreshes visible map layers using cached upstream downloads
+- a cached fetch path so repeated rebuilds reuse prior downloads instead of refetching everything
 
-The project does **not** yet include the full intended production-grade terrain pipeline. In particular:
+The project is intentionally built around public-source layers (GeoBoundaries, Natural Earth, Overpass, WorldCover) as its operational data foundation.
+Remaining limitations are mostly about tooling maturity and optional overlays, not a planned replacement of the source stack.
 
-- the current public fallback terrain layers are generated from public OSM/Overpass and WorldCover-backed sources rather than the intended final local ingest pipeline
+- terrain layers are generated from public OSM/Overpass and WorldCover-backed sources
 - the current debug panel is still a temporary diagnostic tool
 - the future overlays are scaffolded but not populated with real data yet
 
@@ -44,7 +45,7 @@ npm run build
 
 ## What You Should See
 
-With the current fallback processed data, the app should show:
+With the current processed data, the app should show:
 
 - a terrain/reference map of Ukraine
 - operational hex cells
@@ -55,7 +56,7 @@ With the current fallback processed data, the app should show:
 - a cell inspector in the top-left after clicking a hex
 - a hex debug panel in the top-right
 
-At the moment, the fallback processed layers provide:
+At the moment, the processed layers provide:
 
 - theater boundary
 - oblast boundaries
@@ -72,11 +73,11 @@ At the moment, the fallback processed layers provide:
 
 ## Data Workflow
 
-There are currently two data paths.
+There are currently two data paths in the repository.
 
-### 1. Public Fallback Layer Build
+### 1. Primary Public-Source Pipeline
 
-This is the fastest way to get visible map content into the app.
+This is the primary pipeline for this project and the recommended way to build map content.
 
 ```bash
 npm run data:layers:public
@@ -87,14 +88,14 @@ This downloads or reuses cached public Ukraine boundary, Natural Earth, and Over
 - `data/processed/layers.json`
 - `data/processed/layers/*.geojson`
 
-This is what the app currently uses for visible thematic content. The public builder now combines:
+This is what the app uses for visible thematic content. The public builder combines:
 
 - GeoBoundaries for national and oblast boundaries
 - Natural Earth for rivers, lakes, seas, roads, railways, and urban areas
 - OSM Overpass for settlements, forests, and wetlands
 - ESA WorldCover raster fallback for landcover visualization in the map shell
 
-Public fallback cache behavior:
+Public-source cache behavior:
 
 - cached source responses live under `data/cache/public-sources`
 - cache entries are valid for one year from write time
@@ -120,9 +121,9 @@ Refresh expectations:
 - use `--refresh` only when you intentionally want to replace cached upstream responses
 - use `--cache-report` to see which source payloads are ready, missing, expired, or on an older schema
 
-### 2. Full Intended Pipeline
+### 2. Optional Local Pipeline Scaffolding
 
-The repo also contains the fuller pipeline structure for:
+The repo also contains a local pipeline structure for:
 
 - raw data intake
 - preprocessing
@@ -146,7 +147,7 @@ npm run data:analytics
 npm run data:export:hex
 ```
 
-Important: the full pipeline still expects proper raw source data and GIS tooling. The public fallback path is what currently makes the visible map usable.
+Important: this local path is optional and expects raw source prep plus GIS tooling. For this project, the public-source pipeline above is the canonical workflow.
 
 ## Generated Files
 
@@ -162,7 +163,7 @@ Current important processed outputs:
 Repository strategy for generated geodata:
 
 - `data/cache/` is intentionally local-only and ignored by Git
-- very large generated fallback layers such as `data/processed/layers/forests.geojson` and `data/processed/layers/wetlands.geojson` are ignored by Git to keep pushes repository-safe
+- very large generated layers such as `data/processed/layers/forests.geojson` and `data/processed/layers/wetlands.geojson` are ignored by Git to keep pushes repository-safe
 - use `npm run repo:audit:size` before pushing if you want a quick check for tracked files over GitHub-friendly limits
 - the application can still use those ignored generated files locally after they are rebuilt
 
@@ -223,7 +224,7 @@ Current outputs include:
 
 Sea terrain handling:
 
-- `data/processed/layers/seas.geojson` is part of the fallback manifest and is rendered in the map as a dedicated sea layer
+- `data/processed/layers/seas.geojson` is part of the processed manifest and is rendered in the map as a dedicated sea layer
 - analytics now derive `seaCoverage` from the sea polygons and classify maritime hexes as `sea` instead of `open`
 - the published live hex dataset in `data/processed/hex-cells.geojson` includes that sea classification, so the map shell and inspector see the same terrain result
 
@@ -253,7 +254,7 @@ Not yet complete:
 ## Known Limitations
 
 - the debug panel is still temporary and too noisy
-- the fallback layer builder uses public reference data rather than the intended richer local pipeline
+- data quality is bounded by available public-source inputs and their update cadence
 - overlay slots exist but are not populated with operational data yet
 - the build currently produces a large JS bundle and would benefit from code-splitting later
 

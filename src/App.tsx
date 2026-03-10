@@ -7,7 +7,7 @@ import {
   type SettlementDisplayLevel,
   type ViewMode,
 } from "./components/LayerPanel";
-import { appConfig, dataPaths, ukraineTheaterConfig } from "./config";
+import { ukraineTheaterConfig } from "./config";
 import { MapView } from "./map/MapView";
 
 export default function App() {
@@ -46,19 +46,13 @@ export default function App() {
           <p className="eyebrow">Operational Cartography</p>
           <h1>Dronewars Map</h1>
           <p className="sidebar__copy">
-            Terrain-first offline mapping scaffold for Ukraine theater analysis.
-          </p>
-          <p className="sidebar__copy">
-            Default hex radius: {appConfig.hexRadiusKm} km. Theater extent:
+            Theater extent:
             {" "}
             {ukraineTheaterConfig.extent.west} to {ukraineTheaterConfig.extent.east}
             {" "}
             lon / {ukraineTheaterConfig.extent.south} to {ukraineTheaterConfig.extent.north}
             {" "}
             lat.
-          </p>
-          <p className="sidebar__copy">
-            Processed data path: <code>{dataPaths.processedDir}</code>
           </p>
         </header>
         <LayerPanel
