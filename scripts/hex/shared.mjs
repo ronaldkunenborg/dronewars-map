@@ -9,7 +9,7 @@ export const repoRoot = path.resolve(__dirname, "..", "..");
 export const processedRoot = path.join(repoRoot, "data", "processed");
 
 export const hexConfig = {
-  radiusKm: 12,
+  radiusKm: 24,
   extent: {
     west: 22.0,
     south: 44.0,

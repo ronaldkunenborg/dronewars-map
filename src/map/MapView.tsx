@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from "react";
+import { useDeferredValue, useEffect, useRef, useState } from "react";
 import type {
   Map as MapLibreMap,
   MapMouseEvent,
@@ -7,11 +7,16 @@ import type {
 } from "maplibre-gl";
 import { HexInspector, type HexInspectorData } from "../components/HexInspector";
 import {
+  type HexPolygonGeoJson,
   loadHexOnlyProcessedData,
   loadProcessedMapData,
   type ProcessedMapData,
 } from "../data/loadProcessedData";
-import type { LayerVisibility } from "../components/LayerPanel";
+import type {
+  CellLayerMode,
+  LayerVisibility,
+  SettlementDisplayLevel,
+} from "../components/LayerPanel";
 import { ukraineTheaterConfig } from "../config";
 import { createBaseMap } from "./createMap";
 import { mapLayerVisibilityTargets } from "./layerRegistry";
@@ -27,6 +32,15 @@ type HexDebugInfo = {
 };
 
 type JsonObject = Record<string, unknown>;
+type Point = [number, number];
+type SettlementSearchEntry = {
+  id: string;
+  nameUk: string;
+  nameEn: string | null;
+  place: string;
+  population: number | null;
+  coordinates: Point;
+};
 
 function toRadians(value: number) {
   return (value * Math.PI) / 180;
@@ -120,6 +134,20 @@ function parseString(value: unknown): string | null {
   return typeof value === "string" ? value : null;
 }
 
+function normalizeSearchText(value: string) {
+  return value
+    .normalize("NFKD")
+    .replace(/\p{Diacritic}/gu, "")
+    .toLowerCase()
+    .replace(/[’'`]/g, "")
+    .replace(/[^\p{L}\p{N}]+/gu, " ")
+    .trim();
+}
+
+function settlementLabel(entry: SettlementSearchEntry) {
+  return entry.nameEn ? `${entry.nameUk} (${entry.nameEn})` : entry.nameUk;
+}
+
 function geometryCentroid(feature: MapGeoJSONFeature): [number, number] | null {
   const geometry = feature.geometry;
 
@@ -142,11 +170,139 @@ function geometryCentroid(feature: MapGeoJSONFeature): [number, number] | null {
   return [longitude, latitude];
 }
 
+function pointInRing(point: Point, ring: Point[]) {
+  let inside = false;
+
+  for (let index = 0, previous = ring.length - 1; index < ring.length; previous = index++) {
+    const [xi, yi] = ring[index];
+    const [xj, yj] = ring[previous];
+    const intersects =
+      yi > point[1] !== yj > point[1] &&
+      point[0] < ((xj - xi) * (point[1] - yi)) / (yj - yi) + xi;
+
+    if (intersects) {
+      inside = !inside;
+    }
+  }
+
+  return inside;
+}
+
+function pointInPolygonFeature(
+  point: Point,
+  feature: HexPolygonGeoJson["features"][number],
+) {
+  const ring = feature.geometry.coordinates[0];
+  return pointInRing(point, ring);
+}
+
+async function loadSettlementSearchEntries(processedData: ProcessedMapData) {
+  const settlementsLayer = processedData.layers.find((layer) => layer.id === "settlements");
+
+  if (!settlementsLayer) {
+    return [];
+  }
+
+  const response = await fetch(settlementsLayer.sourcePath, {
+    headers: {
+      Accept: "application/json",
+    },
+  });
+
+  if (!response.ok) {
+    throw new Error(`Failed to load ${settlementsLayer.sourcePath}: ${response.status}`);
+  }
+
+  const geojson = (await response.json()) as {
+    features?: Array<{
+      geometry?: {
+        type?: string;
+        coordinates?: unknown;
+      };
+      properties?: Record<string, unknown>;
+    }>;
+  };
+
+  return (geojson.features ?? [])
+    .filter((feature) => feature.geometry?.type === "Point" && Array.isArray(feature.geometry.coordinates))
+    .map((feature) => {
+      const coordinates = feature.geometry?.coordinates as unknown[];
+      const nameUk = parseString(feature.properties?.nameUk) ?? parseString(feature.properties?.name) ?? "";
+
+      return {
+        id: parseString(feature.properties?.id) ?? `${nameUk}-${coordinates.join(",")}`,
+        nameUk,
+        nameEn: parseString(feature.properties?.nameEn),
+        place: parseString(feature.properties?.place) ?? "settlement",
+        population: parseNumber(feature.properties?.population),
+        coordinates: [Number(coordinates[0]), Number(coordinates[1])] as Point,
+      } satisfies SettlementSearchEntry;
+    })
+    .filter((entry) => entry.nameUk !== "");
+}
+
 type MapViewProps = {
+  cellLayerMode: CellLayerMode;
   layerVisibility: LayerVisibility;
+  settlementDisplayLevel: SettlementDisplayLevel;
   onCoordinateChange: (value: string | null) => void;
   resetToken: number;
 };
+
+function setLayerVisibility(
+  map: MapLibreMap,
+  layerIds: string[],
+  visibility: "visible" | "none",
+) {
+  for (const layerId of layerIds) {
+    if (map.getLayer(layerId)) {
+      map.setLayoutProperty(layerId, "visibility", visibility);
+    }
+  }
+}
+
+function applyOperationalCellLayerMode(
+  map: MapLibreMap,
+  cellsVisible: boolean,
+  cellLayerMode: CellLayerMode,
+) {
+  setLayerVisibility(
+    map,
+    ["operational-hex-fill", "operational-hex-outline"],
+    cellsVisible && cellLayerMode === "hexes" ? "visible" : "none",
+  );
+  setLayerVisibility(
+    map,
+    ["settlement-voronoi-fill", "settlement-voronoi-outline"],
+    cellsVisible && cellLayerMode === "voronoi" ? "visible" : "none",
+  );
+}
+
+function applySettlementDisplayLevel(
+  map: MapLibreMap,
+  settlementsVisible: boolean,
+  settlementDisplayLevel: SettlementDisplayLevel,
+) {
+  const showCities = settlementsVisible;
+  const showTowns = settlementsVisible && settlementDisplayLevel !== "cities";
+  const showVillages = settlementsVisible && settlementDisplayLevel === "villages";
+
+  setLayerVisibility(
+    map,
+    ["major-city-urban-fill", "priority-city-star", "settlements-city-circle", "settlements-city-label"],
+    showCities ? "visible" : "none",
+  );
+  setLayerVisibility(
+    map,
+    ["settlements-town-circle", "settlements-town-label"],
+    showTowns ? "visible" : "none",
+  );
+  setLayerVisibility(
+    map,
+    ["settlements-village-circle", "settlements-village-label"],
+    showVillages ? "visible" : "none",
+  );
+}
 
 function ensureSelectedHexLayers(map: MapLibreMap) {
   if (!map.getSource("selected-hex")) {
@@ -217,6 +373,66 @@ function setSelectedHexFeature(map: MapLibreMap, feature: MapGeoJSONFeature) {
   });
 }
 
+function ensureSearchResultHexLayers(map: MapLibreMap) {
+  if (!map.getSource("search-result-hex")) {
+    map.addSource("search-result-hex", {
+      type: "geojson",
+      data: {
+        type: "FeatureCollection",
+        features: [],
+      },
+    });
+  }
+
+  if (!map.getLayer("search-result-hex-outline")) {
+    map.addLayer({
+      id: "search-result-hex-outline",
+      type: "line",
+      source: "search-result-hex",
+      paint: {
+        "line-color": "#d8b24f",
+        "line-opacity": 0.98,
+        "line-width": [
+          "interpolate",
+          ["linear"],
+          ["zoom"],
+          4,
+          1.2,
+          8,
+          2.2,
+          12,
+          3.6,
+        ],
+      },
+    });
+  }
+}
+
+function clearSearchResultHex(map: MapLibreMap) {
+  const source = map.getSource("search-result-hex") as GeoJSONSource | undefined;
+
+  source?.setData({
+    type: "FeatureCollection",
+    features: [],
+  });
+}
+
+function setSearchResultHexFeature(
+  map: MapLibreMap,
+  feature: HexPolygonGeoJson["features"][number],
+) {
+  const source = map.getSource("search-result-hex") as GeoJSONSource | undefined;
+
+  if (!source) {
+    return;
+  }
+
+  source.setData({
+    type: "FeatureCollection",
+    features: [feature],
+  });
+}
+
 function buildHexInspectorData(feature: MapGeoJSONFeature): HexInspectorData {
   const terrainSummary = parseJsonObject<{
     dominantTerrain?: unknown;
@@ -232,6 +448,7 @@ function buildHexInspectorData(feature: MapGeoJSONFeature): HexInspectorData {
     roadDensity?: unknown;
     railPresence?: unknown;
     settlementScore?: unknown;
+    strongestPlaceScore?: unknown;
   }>(feature.properties?.infrastructureSummary);
 
   return {
@@ -257,6 +474,7 @@ function buildHexInspectorData(feature: MapGeoJSONFeature): HexInspectorData {
           roadDensity: parseNumber(infrastructureSummary.roadDensity),
           railPresence: parseBoolean(infrastructureSummary.railPresence),
           settlementScore: parseNumber(infrastructureSummary.settlementScore),
+          strongestPlaceScore: parseNumber(infrastructureSummary.strongestPlaceScore),
         }
       : null,
     baseCapacity: parseNumber(feature.properties?.baseCapacity),
@@ -280,18 +498,131 @@ function applyLayerVisibility(map: MapLibreMap, visibility: LayerVisibility) {
 }
 
 export function MapView({
+  cellLayerMode,
   layerVisibility,
+  settlementDisplayLevel,
   onCoordinateChange,
   resetToken,
 }: MapViewProps) {
   const containerRef = useRef<HTMLDivElement | null>(null);
   const mapRef = useRef<MapLibreMap | null>(null);
+  const hexGeoJsonRef = useRef<HexPolygonGeoJson | null>(null);
+  const settlementsRef = useRef<SettlementSearchEntry[]>([]);
   const [status, setStatus] = useState("Loading local processed map data.");
   const [datasetInfo, setDatasetInfo] = useState<string | null>(null);
   const [debugInfo, setDebugInfo] = useState<HexDebugInfo | null>(null);
   const [selectedHex, setSelectedHex] = useState<HexInspectorData | null>(null);
   const [detailsVisible, setDetailsVisible] = useState(true);
   const [debugVisible, setDebugVisible] = useState(false);
+  const [searchQuery, setSearchQuery] = useState("");
+  const deferredSearchQuery = useDeferredValue(searchQuery);
+  const [searchResults, setSearchResults] = useState<SettlementSearchEntry[]>([]);
+  const [searchMessage, setSearchMessage] = useState<string | null>("Loading settlements for search.");
+
+  useEffect(() => {
+    const normalizedQuery = normalizeSearchText(deferredSearchQuery);
+
+    if (normalizedQuery === "") {
+      setSearchResults([]);
+      setSearchMessage(
+        settlementsRef.current.length > 0
+          ? "Search for a city, town, or village."
+          : "Loading settlements for search.",
+      );
+      return;
+    }
+
+    const rankedResults = settlementsRef.current
+      .map((entry) => {
+        const uk = normalizeSearchText(entry.nameUk);
+        const en = entry.nameEn ? normalizeSearchText(entry.nameEn) : "";
+        const label = normalizeSearchText(settlementLabel(entry));
+        const exactMatch =
+          uk === normalizedQuery || en === normalizedQuery || label === normalizedQuery;
+        const prefixMatch =
+          uk.startsWith(normalizedQuery) ||
+          en.startsWith(normalizedQuery) ||
+          label.startsWith(normalizedQuery);
+        const containsMatch =
+          uk.includes(normalizedQuery) ||
+          en.includes(normalizedQuery) ||
+          label.includes(normalizedQuery);
+
+        if (!containsMatch) {
+          return null;
+        }
+
+        return {
+          entry,
+          exactMatch,
+          prefixMatch,
+        };
+      })
+      .filter((result): result is { entry: SettlementSearchEntry; exactMatch: boolean; prefixMatch: boolean } => result !== null)
+      .sort((left, right) => {
+        if (left.exactMatch !== right.exactMatch) {
+          return left.exactMatch ? -1 : 1;
+        }
+
+        if (left.prefixMatch !== right.prefixMatch) {
+          return left.prefixMatch ? -1 : 1;
+        }
+
+        const populationDelta = (right.entry.population ?? 0) - (left.entry.population ?? 0);
+
+        if (populationDelta !== 0) {
+          return populationDelta;
+        }
+
+        return settlementLabel(left.entry).localeCompare(settlementLabel(right.entry), "uk");
+      })
+      .slice(0, 12)
+      .map((result) => result.entry);
+
+    setSearchResults(rankedResults);
+    setSearchMessage(
+      rankedResults.length > 0
+        ? null
+        : `No settlements matched "${deferredSearchQuery.trim()}".`,
+    );
+  }, [deferredSearchQuery]);
+
+  function focusSettlement(entry: SettlementSearchEntry) {
+    const map = mapRef.current;
+    const hexGeoJson = hexGeoJsonRef.current;
+
+    if (!map || !hexGeoJson) {
+      return;
+    }
+
+  const containingHex = hexGeoJson.features.find((feature: HexPolygonGeoJson["features"][number]) =>
+      pointInPolygonFeature(entry.coordinates, feature),
+    );
+
+    if (!containingHex) {
+      clearSearchResultHex(map);
+      map.flyTo({
+        center: entry.coordinates,
+        zoom: Math.max(map.getZoom(), 9),
+        essential: true,
+      });
+      setSearchQuery(settlementLabel(entry));
+      setSearchMessage(`Centered on ${settlementLabel(entry)}.`);
+      return;
+    }
+
+    setSearchResultHexFeature(map, containingHex);
+    map.flyTo({
+      center: entry.coordinates,
+      zoom: Math.max(map.getZoom(), 9),
+      essential: true,
+    });
+    setSelectedHexFeature(map, containingHex as unknown as MapGeoJSONFeature);
+    setSelectedHex(buildHexInspectorData(containingHex as unknown as MapGeoJSONFeature));
+    setDebugInfo(null);
+    setSearchQuery(settlementLabel(entry));
+    setSearchMessage(`Centered on ${settlementLabel(entry)} in ${containingHex.properties.id}.`);
+  }
 
   function attachHexDebugHandler(map: MapLibreMap) {
     ensureSelectedHexLayers(map);
@@ -396,7 +727,10 @@ export function MapView({
     const mountDebugHandler = () => {
       detachDebugHandler?.();
       detachDebugHandler = attachHexDebugHandler(map);
+      ensureSearchResultHexLayers(map);
       applyLayerVisibility(map, layerVisibility);
+      applyOperationalCellLayerMode(map, layerVisibility.hexes, cellLayerMode);
+      applySettlementDisplayLevel(map, layerVisibility.settlements, settlementDisplayLevel);
     };
 
     const handleMouseMove = (event: MapMouseEvent) => {
@@ -413,6 +747,8 @@ export function MapView({
           return;
         }
 
+        hexGeoJsonRef.current = processedData.hexGeoJson ?? null;
+
         map.remove();
         map = createBaseMap(containerRef.current, processedData);
         mapRef.current = map;
@@ -422,6 +758,24 @@ export function MapView({
         setDatasetInfo(
           `${processedData.layers.length} local layers available. Hex dataset bound from processed storage.`,
         );
+
+        loadSettlementSearchEntries(processedData)
+          .then((entries) => {
+            if (disposed) {
+              return;
+            }
+
+            settlementsRef.current = entries;
+            setSearchMessage("Search for a city, town, or village.");
+          })
+          .catch(() => {
+            if (disposed) {
+              return;
+            }
+
+            settlementsRef.current = [];
+            setSearchMessage("Settlement search is unavailable.");
+          });
       })
       .catch(() => {
         loadHexOnlyProcessedData()
@@ -429,6 +783,9 @@ export function MapView({
             if (disposed || !containerRef.current) {
               return;
             }
+
+            hexGeoJsonRef.current = processedData.hexGeoJson ?? null;
+            settlementsRef.current = [];
 
             map.remove();
             map = createBaseMap(containerRef.current, processedData);
@@ -440,6 +797,7 @@ export function MapView({
             setDatasetInfo(
               "Hex cells are loaded from processed storage. Build layers.json and thematic layers to populate terrain sources.",
             );
+            setSearchMessage("Settlement search is unavailable.");
           })
           .catch(() => {
             if (disposed) {
@@ -468,7 +826,13 @@ export function MapView({
     }
 
     applyLayerVisibility(mapRef.current, layerVisibility);
-  }, [layerVisibility]);
+    applyOperationalCellLayerMode(mapRef.current, layerVisibility.hexes, cellLayerMode);
+    applySettlementDisplayLevel(
+      mapRef.current,
+      layerVisibility.settlements,
+      settlementDisplayLevel,
+    );
+  }, [cellLayerMode, layerVisibility, settlementDisplayLevel]);
 
   useEffect(() => {
     if (!mapRef.current) {
@@ -484,6 +848,51 @@ export function MapView({
   return (
     <>
       <div className="map-root" ref={containerRef} />
+      <section className="search-panel" aria-label="Settlement search">
+        <h2>Settlement Search</h2>
+        <form
+          className="search-panel__form"
+          onSubmit={(event) => {
+            event.preventDefault();
+
+            if (searchResults[0]) {
+              focusSettlement(searchResults[0]);
+            }
+          }}
+        >
+          <input
+            className="search-panel__input"
+            onChange={(event) => setSearchQuery(event.target.value)}
+            placeholder="Search Kyiv, Очаків, Makiivka..."
+            type="search"
+            value={searchQuery}
+          />
+          <button className="search-panel__button" type="submit">
+            Find
+          </button>
+        </form>
+        {searchResults.length > 0 ? (
+          <ul className="search-panel__results">
+            {searchResults.map((entry) => (
+              <li key={entry.id}>
+                <button
+                  className="search-panel__result"
+                  onClick={() => focusSettlement(entry)}
+                  type="button"
+                >
+                  <strong>{entry.nameUk}</strong>
+                  <span>
+                    {entry.nameEn ? `(${entry.nameEn}) · ` : ""}
+                    {entry.place}
+                  </span>
+                </button>
+              </li>
+            ))}
+          </ul>
+        ) : searchMessage ? (
+          <p className="search-panel__message">{searchMessage}</p>
+        ) : null}
+      </section>
       <div className="map-status">
         <p className="placeholder-note">{status}</p>
         {datasetInfo ? <p className="placeholder-note">{datasetInfo}</p> : null}

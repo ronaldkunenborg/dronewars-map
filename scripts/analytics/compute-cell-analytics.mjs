@@ -259,7 +259,7 @@ function dominantTerrain(summary, infrastructure) {
     return "sea";
   }
 
-  if (infrastructure.strongestPlaceScore >= 3 && landCoverage >= 0.25) {
+  if (infrastructure.strongestPlaceScore >= 4 && landCoverage >= 0.25) {
     return "open";
   }
 
@@ -340,6 +340,7 @@ async function main() {
       roadDensity: Number(roadDensity.toFixed(3)),
       railPresence,
       settlementScore: settlementMetrics.totalScore,
+      strongestPlaceScore: settlementMetrics.strongestPlaceScore,
     };
 
     const terrainSummary = {
@@ -379,6 +380,7 @@ async function main() {
       roadDensity: infrastructureSummary.roadDensity,
       railPresence: infrastructureSummary.railPresence,
       settlementScore: infrastructureSummary.settlementScore,
+      strongestPlaceScore: infrastructureSummary.strongestPlaceScore,
       terrainSummary,
       infrastructureSummary,
       baseCapacity: scoringConfig.baseCapacity,

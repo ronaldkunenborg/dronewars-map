@@ -1,6 +1,10 @@
 import { mkdir, readFile, writeFile } from "node:fs/promises";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
+import {
+  buildSettlementVoronoiLayer,
+  settlementVoronoiCatalogEntry,
+} from "./settlement-voronoi.mjs";
 
 /*
  * Public fallback layer builder and cache utility.
@@ -1280,6 +1284,10 @@ async function main() {
       theaterBoundary,
     ),
   };
+  filteredLayers["layers/settlement-voronoi-cells.geojson"] = buildSettlementVoronoiLayer(
+    oblastBoundaries,
+    filteredLayers["layers/settlements.geojson"],
+  );
 
   for (const [relativePath, data] of Object.entries(filteredLayers)) {
     await writeGeoJson(relativePath, data);
@@ -1365,6 +1373,7 @@ async function main() {
         geometryKind: "point",
         path: "layers/settlements.geojson",
       },
+      settlementVoronoiCatalogEntry,
     ],
   });
 

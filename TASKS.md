@@ -71,3 +71,15 @@
 35. [done] Propose and implement a consistent mixed hex terrain dominance rule for part-sea, part-land hexes so urbanized coastal hexes such as `HX-E59-N5` and `HX-E40-N23` do not default to `sea` when city or land terrain should dominate.
 
 36. [done] Adjust the `major-city-urban-areas` polygon fill styling so its color reads closer to the city marker palette instead of looking like a separate older settlement color.
+
+37. [done] Stop village-only settlement presence from turning hex terrain styling reddish so village hexes keep terrain-driven colors unless larger settlements justify an urban tint.
+
+38. [done] Stop town-only settlement presence from turning hex terrain styling reddish so town hexes keep terrain-driven colors unless larger settlements justify an urban tint.
+
+39. [done] Finish the settlement search function for city, town, and village names by keeping the result state coherent after selection, so it centers the map on the match, highlights the containing hex, and does not show a false "No settlements matched" message for the chosen result.
+
+40. [done] Add a Voronoi cell layer centered on settlements that can be toggled in place of the hex layer, while still respecting country and oblast borders.
+
+41. [done] Under the settlements layer control, add a selector (dropdown or equivalent) for display level: cities only, cities+towns, or cities+towns+villages.
+
+42. [done] Increase the operational hex size by a factor of two and regenerate the derived hex datasets so the map and analytics use the larger cells consistently.

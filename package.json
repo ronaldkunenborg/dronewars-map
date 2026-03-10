@@ -15,13 +15,16 @@
     "data:layers:plan": "node scripts/layers/plan-layers.mjs",
     "data:layers": "node scripts/layers/build-layers.mjs",
     "data:layers:public": "node scripts/layers/fetch-public-layers.mjs",
+    "data:layers:voronoi": "node scripts/layers/build-settlement-voronoi-cells.mjs",
     "data:hex:generate": "node scripts/hex/generate-hex-grid.mjs",
     "data:hex:enrich": "node scripts/hex/enrich-hex-grid.mjs",
     "data:analytics": "node scripts/analytics/compute-cell-analytics.mjs",
     "data:export:hex": "node scripts/export/export-hex-dataset.mjs"
   },
   "dependencies": {
+    "d3-delaunay": "^6.0.4",
     "maplibre-gl": "^5.2.0",
+    "polygon-clipping": "^0.15.7",
     "react": "^19.1.0",
     "react-dom": "^19.1.0"
   },

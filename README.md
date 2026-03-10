@@ -11,6 +11,8 @@ The project currently includes:
 - a user-facing cell inspector with click selection and cell highlighting
 - a clickable hex debug panel
 - UI controls for presets, layer toggles, reset-to-Ukraine, legend, and coordinate readout
+- a settlements display-level selector (`Cities`, `Cities + Towns`, `Cities + Towns + Villages`)
+- a cell-layer mode switch between `Hex` and `Voronoi`
 - lightweight overlay slots for future frontlines, zones of control, artillery ranges, logistics routes, and force placement
 - a public fallback data pipeline that generates visible map layers without requiring the full OSM/GDAL workflow
 - a cached public-source fetch path so repeated fallback rebuilds reuse prior downloads instead of refetching everything
@@ -48,6 +50,7 @@ With the current fallback processed data, the app should show:
 - operational hex cells
 - water, seas, forests, wetlands, roads, railways, settlements, theater boundary, and oblast boundaries
 - major-city urban extents beneath city labels
+- optional city-seeded Voronoi operational cells (when `Cell Layer` is set to `Voronoi`)
 - sidebar controls for visibility and presets
 - a cell inspector in the top-left after clicking a hex
 - a hex debug panel in the top-right
@@ -65,6 +68,7 @@ At the moment, the fallback processed layers provide:
 - railways
 - major-city urban areas
 - settlements
+- settlement voronoi cells (city-seeded)
 
 ## Data Workflow
 
@@ -135,6 +139,7 @@ npm run data:preprocess:plan
 npm run data:preprocess
 npm run data:layers:plan
 npm run data:layers
+npm run data:layers:voronoi
 npm run data:hex:generate
 npm run data:hex:enrich
 npm run data:analytics
@@ -183,14 +188,16 @@ The default hex radius is configured in:
 Current default:
 
 ```ts
-hexRadiusKm: 12
+hexRadiusKm: 24
 ```
 
 To change hex scale:
 
 1. update `hexRadiusKm` in `src/config/app.ts`
-2. regenerate the hex dataset
-3. reload the app
+2. update `radiusKm` in `scripts/hex/shared.mjs`
+3. regenerate the hex dataset
+4. rerun analytics and export
+5. reload the app
 
 ## Capacity and Analytics
 
@@ -225,20 +232,22 @@ Sea terrain handling:
 Implemented:
 
 - layer toggles
+- settlements display-level selector (`Cities`, `Cities + Towns`, `Cities + Towns + Villages`)
 - preset modes
 - legend
 - reset-to-Ukraine
 - scale bar
 - coordinate readout
+- cell-layer mode selector (`Hex` / `Voronoi`)
 - cell inspector with selection highlight
 - hex debug panel
 - overlay slot manager for future operational overlays
 - major-city urban extent fills under settlement labels
 - Ukrainian settlement names with English names below in parentheses when available
+- city-seeded Voronoi cells for alternative operational cell display
 
 Not yet complete:
 
-- final settlement symbol sizing policy in the UI: cities should scale by population where available, while towns and villages can continue to use rank-based sizing
 - finalized README coverage for the completed end-state
 
 ## Known Limitations
@@ -246,7 +255,6 @@ Not yet complete:
 - the debug panel is still temporary and too noisy
 - the fallback layer builder uses public reference data rather than the intended richer local pipeline
 - overlay slots exist but are not populated with operational data yet
-- settlement population data exists for many places, but the map does not yet use a city-only population scaling rule for circle size
 - the build currently produces a large JS bundle and would benefit from code-splitting later
 
 ## Repo Rules

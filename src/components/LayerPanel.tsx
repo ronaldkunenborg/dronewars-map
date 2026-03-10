@@ -11,6 +11,8 @@ export type LayerControlId =
   | "hillshade";
 
 export type ViewMode = "terrain" | "hydrology" | "mobility" | "operational-cells";
+export type CellLayerMode = "hexes" | "voronoi";
+export type SettlementDisplayLevel = "cities" | "towns" | "villages";
 
 export type LayerVisibility = Record<LayerControlId, boolean>;
 
@@ -80,8 +82,12 @@ export const presetVisibility: Record<ViewMode, LayerVisibility> = {
 };
 
 type LayerPanelProps = {
+  cellLayerMode: CellLayerMode;
   coordinateReadout: string | null;
+  settlementDisplayLevel: SettlementDisplayLevel;
   onApplyPreset: (mode: ViewMode) => void;
+  onChangeCellLayerMode: (mode: CellLayerMode) => void;
+  onChangeSettlementDisplayLevel: (level: SettlementDisplayLevel) => void;
   onReset: () => void;
   onToggleLayer: (layerId: LayerControlId) => void;
   visibility: LayerVisibility;
@@ -89,8 +95,12 @@ type LayerPanelProps = {
 };
 
 export function LayerPanel({
+  cellLayerMode,
   coordinateReadout,
+  settlementDisplayLevel,
   onApplyPreset,
+  onChangeCellLayerMode,
+  onChangeSettlementDisplayLevel,
   onReset,
   onToggleLayer,
   visibility,
@@ -159,9 +169,52 @@ export function LayerPanel({
                   />
                 </span>
               </label>
+              {layer.id === "settlements" ? (
+                <div className="settlement-level">
+                  <label className="settlement-level__label" htmlFor="settlement-level-select">
+                    Level
+                  </label>
+                  <select
+                    className="settlement-level__select"
+                    disabled={!visibility.settlements}
+                    id="settlement-level-select"
+                    onChange={(event) =>
+                      onChangeSettlementDisplayLevel(event.target.value as SettlementDisplayLevel)
+                    }
+                    value={settlementDisplayLevel}
+                  >
+                    <option value="cities">Cities</option>
+                    <option value="towns">Cities + Towns</option>
+                    <option value="villages">Cities + Towns + Villages</option>
+                  </select>
+                </div>
+              ) : null}
             </li>
           ))}
         </ul>
+      </section>
+
+      <section className="panel">
+        <h2>Cell Layer</h2>
+        <div className="preset-row">
+          <button
+            className={`preset-button${cellLayerMode === "hexes" ? " is-active" : ""}`}
+            onClick={() => onChangeCellLayerMode("hexes")}
+            type="button"
+          >
+            Hex
+          </button>
+          <button
+            className={`preset-button${cellLayerMode === "voronoi" ? " is-active" : ""}`}
+            onClick={() => onChangeCellLayerMode("voronoi")}
+            type="button"
+          >
+            Voronoi
+          </button>
+        </div>
+        <p className="panel__copy">
+          Switch the operational cell overlay between the generated hex grid and settlement-centered Voronoi cells.
+        </p>
       </section>
 
       <section className="panel">

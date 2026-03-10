@@ -1,6 +1,6 @@
 export const appConfig = {
   name: "Dronewars Map",
-  hexRadiusKm: 12,
+  hexRadiusKm: 24,
   backgroundColor: "#d9ddce",
 };
 
@@ -10,4 +10,3 @@ export const mapViewConfig = {
   minZoom: 4,
   maxZoom: 14,
 };
-

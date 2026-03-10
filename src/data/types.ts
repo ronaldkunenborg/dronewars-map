@@ -36,6 +36,7 @@ export type InfrastructureSummary = {
   roadDensity: number;
   railPresence: boolean;
   settlementScore: number;
+  strongestPlaceScore: number;
 };
 
 export type CapacityScores = {

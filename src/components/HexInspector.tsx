@@ -19,6 +19,7 @@ export type HexInspectorData = {
     roadDensity: number | null;
     railPresence: boolean | null;
     settlementScore: number | null;
+    strongestPlaceScore: number | null;
   } | null;
   baseCapacity: number | null;
   effectiveCapacity: number | null;
@@ -112,6 +113,7 @@ export function HexInspector({
         {formatBoolean(selectedHex.infrastructureSummary?.railPresence ?? null, "Present", "Absent")}
       </p>
       <p><strong>Settlement score:</strong> {formatNumber(selectedHex.infrastructureSummary?.settlementScore ?? null)}</p>
+      <p><strong>Strongest settlement class:</strong> {formatNumber(selectedHex.infrastructureSummary?.strongestPlaceScore ?? null)}</p>
     </div>
   );
 }
