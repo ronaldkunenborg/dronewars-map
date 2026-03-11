@@ -1,19 +1,12 @@
 {
-  "generatedAt": "2026-03-10T21:42:02.011Z",
+  "generatedAt": "2026-03-11T12:16:20.794Z",
   "layers": [
     {
-      "id": "forests",
-      "label": "Forests",
-      "category": "terrain",
+      "id": "theater-boundary",
+      "label": "Theater Boundary",
+      "category": "reference",
       "geometryKind": "polygon",
-      "path": "layers/forests.geojson"
-    },
-    {
-      "id": "major-city-urban-areas",
-      "label": "Major City Urban Areas",
-      "category": "settlements",
-      "geometryKind": "polygon",
-      "path": "layers/major-city-urban-areas.geojson"
+      "path": "layers/theater-boundary.geojson"
     },
     {
       "id": "oblast-boundaries",
@@ -23,13 +16,6 @@
       "path": "layers/oblast-boundaries.geojson"
     },
     {
-      "id": "railways",
-      "label": "Railways",
-      "category": "transport",
-      "geometryKind": "line",
-      "path": "layers/railways.geojson"
-    },
-    {
       "id": "rivers",
       "label": "Rivers",
       "category": "hydrology",
@@ -37,11 +23,11 @@
       "path": "layers/rivers.geojson"
     },
     {
-      "id": "roads",
-      "label": "Roads",
-      "category": "transport",
-      "geometryKind": "line",
-      "path": "layers/roads.geojson"
+      "id": "water-bodies",
+      "label": "Water Bodies",
+      "category": "hydrology",
+      "geometryKind": "polygon",
+      "path": "layers/water-bodies.geojson"
     },
     {
       "id": "seas",
@@ -51,11 +37,39 @@
       "path": "layers/seas.geojson"
     },
     {
-      "id": "settlement-voronoi-cells",
-      "label": "Settlement Voronoi Cells",
-      "category": "operational",
+      "id": "wetlands",
+      "label": "Wetlands",
+      "category": "hydrology",
       "geometryKind": "polygon",
-      "path": "layers/settlement-voronoi-cells.geojson"
+      "path": "layers/wetlands.geojson"
+    },
+    {
+      "id": "forests",
+      "label": "Forests",
+      "category": "terrain",
+      "geometryKind": "polygon",
+      "path": "layers/forests.geojson"
+    },
+    {
+      "id": "roads",
+      "label": "Roads",
+      "category": "transport",
+      "geometryKind": "line",
+      "path": "layers/roads.geojson"
+    },
+    {
+      "id": "railways",
+      "label": "Railways",
+      "category": "transport",
+      "geometryKind": "line",
+      "path": "layers/railways.geojson"
+    },
+    {
+      "id": "major-city-urban-areas",
+      "label": "Major City Urban Areas",
+      "category": "settlements",
+      "geometryKind": "polygon",
+      "path": "layers/major-city-urban-areas.geojson"
     },
     {
       "id": "settlements",
@@ -72,13 +86,6 @@
       "path": "terrain/elevation-clipped.tif"
     },
     {
-      "id": "terrain-landcover",
-      "label": "Terrain Landcover",
-      "category": "terrain",
-      "geometryKind": "raster",
-      "path": "terrain/landcover-clipped.tif"
-    },
-    {
       "id": "terrain-hillshade",
       "label": "Terrain Hillshade",
       "category": "terrain",
@@ -86,25 +93,11 @@
       "path": "terrain/hillshade-clipped.png"
     },
     {
-      "id": "theater-boundary",
-      "label": "Theater Boundary",
-      "category": "reference",
+      "id": "settlement-voronoi-cells",
+      "label": "Settlement Voronoi Cells",
+      "category": "operational",
       "geometryKind": "polygon",
-      "path": "layers/theater-boundary.geojson"
-    },
-    {
-      "id": "water-bodies",
-      "label": "Lakes and Water Bodies",
-      "category": "hydrology",
-      "geometryKind": "polygon",
-      "path": "layers/water-bodies.geojson"
-    },
-    {
-      "id": "wetlands",
-      "label": "Wetlands",
-      "category": "hydrology",
-      "geometryKind": "polygon",
-      "path": "layers/wetlands.geojson"
+      "path": "layers/settlement-voronoi-cells.geojson"
     }
   ]
 }

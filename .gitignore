@@ -10,3 +10,6 @@ vite.config.d.ts
 data/cache/
 data/processed/layers/forests.geojson
 data/processed/layers/wetlands.geojson
+data/processed/terrain/elevation-clipped.tif
+data/processed/terrain/hillshade-clipped.tif
+data/raw/terrain/ukraine-elevation.tif

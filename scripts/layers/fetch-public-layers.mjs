@@ -1,4 +1,5 @@
 import { access, copyFile, mkdir, readFile, writeFile } from "node:fs/promises";
+import { existsSync } from "node:fs";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 import { spawn } from "node:child_process";
@@ -131,6 +132,18 @@ const gdalTools = {
   dem: "gdaldem",
   translate: "gdal_translate",
 };
+
+const gdalCommandNames = new Set(Object.values(gdalTools));
+const osgeoBinDir = process.env.OSGEO4W_BIN ?? "C:\\OSGeo4W\\bin";
+
+function resolveCommand(command) {
+  if (process.platform !== "win32" || !gdalCommandNames.has(command)) {
+    return command;
+  }
+
+  const explicitPath = path.join(osgeoBinDir, `${command}.exe`);
+  return existsSync(explicitPath) ? explicitPath : command;
+}
 
 // Fallback populations for the 50 largest Ukrainian urban areas, used only when OSM settlement records omit population.
 // Source trail for refreshing this table:
@@ -385,8 +398,10 @@ async function describeCacheEntry(cacheKey) {
 }
 
 function runCommand(command, args) {
+  const resolvedCommand = resolveCommand(command);
+
   return new Promise((resolve, reject) => {
-    const child = spawn(command, args, {
+    const child = spawn(resolvedCommand, args, {
       stdio: "inherit",
       shell: false,
     });
@@ -405,12 +420,25 @@ function runCommand(command, args) {
 }
 
 async function commandExists(command) {
-  try {
-    await runCommand(command, ["--version"]);
-    return true;
-  } catch {
-    return false;
+  if (process.platform === "win32" && gdalCommandNames.has(command)) {
+    const explicitPath = path.join(osgeoBinDir, `${command}.exe`);
+
+    if (existsSync(explicitPath)) {
+      return true;
+    }
   }
+
+  const locatorCommand = process.platform === "win32" ? "where" : "which";
+
+  return new Promise((resolve) => {
+    const child = spawn(locatorCommand, [command], {
+      stdio: "ignore",
+      shell: false,
+    });
+
+    child.on("exit", (code) => resolve(code === 0));
+    child.on("error", () => resolve(false));
+  });
 }
 
 // Read a cached response wrapper, enforcing schema compatibility and TTL.
@@ -635,11 +663,16 @@ function buildFabdemTileEntries(tileIndex) {
       continue;
     }
 
+    const normalizedFileName = fileName.replace(
+      /^([NS])0(\d{2}[EW]\d{3}_FABDEM_V1-2\.tif)$/i,
+      "$1$2",
+    );
+
     entries.push({
-      fileName,
+      fileName: normalizedFileName,
       zipfileName,
       zipUrl: `${sources.fabdemBase}/${zipfileName}`,
-      inputPath: `/vsizip//vsicurl/${sources.fabdemBase}/${zipfileName}/${fileName}`,
+      inputPath: `/vsizip//vsicurl/${sources.fabdemBase}/${zipfileName}/${normalizedFileName}`,
     });
   }
 
@@ -650,6 +683,24 @@ function buildFabdemTileEntries(tileIndex) {
   }
 
   return [...unique.values()];
+}
+
+async function filterReachableUrls(urls) {
+  const reachable = [];
+
+  for (const url of urls) {
+    try {
+      const response = await fetch(url, { method: "HEAD" });
+
+      if (response.ok) {
+        reachable.push(url);
+      }
+    } catch {
+      // Ignore individual failures; only fail if all candidates are unreachable.
+    }
+  }
+
+  return reachable;
 }
 
 async function ensureFabdemElevationCache() {
@@ -682,8 +733,6 @@ async function ensureFabdemElevationCache() {
     String(theaterBbox.south),
     String(theaterBbox.east),
     String(theaterBbox.north),
-    "-t_srs",
-    "EPSG:4326",
     "-r",
     "bilinear",
     "-dstnodata",
@@ -718,7 +767,11 @@ async function ensureCopernicusElevationCache() {
     }
   }
 
-  const tileUrls = buildCopernicusTileUrls();
+  const tileUrls = await filterReachableUrls(buildCopernicusTileUrls());
+
+  if (tileUrls.length === 0) {
+    throw new Error("No reachable Copernicus GLO-30 tiles for theater extent.");
+  }
   const outputPath = cachePathForBinary(relativePath);
   await mkdir(path.dirname(outputPath), { recursive: true });
 
@@ -730,8 +783,6 @@ async function ensureCopernicusElevationCache() {
     String(theaterBbox.south),
     String(theaterBbox.east),
     String(theaterBbox.north),
-    "-t_srs",
-    "EPSG:4326",
     "-r",
     "bilinear",
     "-dstnodata",
