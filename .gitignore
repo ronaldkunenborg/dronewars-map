@@ -12,4 +12,7 @@ data/processed/layers/forests.geojson
 data/processed/layers/wetlands.geojson
 data/processed/terrain/elevation-clipped.tif
 data/processed/terrain/hillshade-clipped.tif
+data/processed/terrain/hillshade-clipped.png
+data/processed/terrain/hillshade-clipped.png.aux.xml
 data/raw/terrain/ukraine-elevation.tif
+data/raw/terrain/ukraine-elevation.source.json
