@@ -1,5 +1,5 @@
 {
-  "generatedAt": "2026-03-07T23:55:27.282Z",
+  "generatedAt": "2026-03-11T09:45:25.021Z",
   "sources": [
     {
       "id": "theater-boundary",
@@ -62,7 +62,7 @@
         ".tiff",
         ".img"
       ],
-      "recommendedSource": "DEM tiles or merged raster covering the theater."
+      "recommendedSource": "FABDEM 30m preferred; Copernicus GLO-30 fallback, covering the full theater extent."
     },
     {
       "id": "hydrology-supplement",

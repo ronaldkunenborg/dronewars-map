@@ -84,18 +84,20 @@
 
 42. [done] Increase the operational hex size by a factor of two and regenerate the derived hex datasets so the map and analytics use the larger cells consistently.
 
-43. [pending] Clean up the cell details/debug UI: rename the `Cell Details` button to `Cell Information`, rename the debug toggle to `Detailed`, place the `Detailed` control within the same `Cell Information` header layout, and merge the detailed debug content into the main information panel so there is no separate debug panel.
+43. [done] Clean up the cell details/debug UI: rename the `Cell Details` button to `Cell Information`, rename the debug toggle to `Detailed`, place the `Detailed` control within the same `Cell Information` header layout, and merge the detailed debug content into the main information panel so there is no separate debug panel.
 
-44. [pending] Increase the visual strength of built-up area colors so major-city urban area fills are clearly visible and no longer too subtle.
+44. [done] Increase the visual strength of built-up area colors so major-city urban area fills are clearly visible and no longer too subtle.
 
-45. [pending] Implement the hillshade layer end-to-end by generating hillshade from elevation inputs, wiring it into the processed layer manifest and map layer registry, and activating the Hillshade toggle in the UI.
+45. [done] Implement the hillshade layer end-to-end by generating hillshade from elevation inputs, wiring it into the processed layer manifest and map layer registry, and activating the Hillshade toggle in the UI.
 
-46. [pending] For elevation and hillshade processing, clip to the full currently displayed operational hex/theater extent (including neighboring border regions) rather than clipping to Ukraine boundaries only.
+46. [done] For elevation and hillshade processing, clip to the full currently displayed operational hex/theater extent (including neighboring border regions) rather than clipping to Ukraine boundaries only.
 
-47. [pending] Redesign the layer GUI into four sections: `Terrain` (water, wetlands, forests, contours, hillshade), `Logistics` (roads, railways, and `airports` shown greyed/disabled for now), `Settlements` (keep current behavior and controls), and `Boundaries` (oblasts, hexes, voronoi).
+47. [pending] Implement a reproducible raw-data acquisition task that fetches or prepares the minimum required inputs (`theater-boundary`, `oblast-boundaries`, `osm-extract`, `elevation`, `landcover`) into `data/raw/*` so `data:preprocess` and `data:layers` can run on a clean checkout, using FABDEM 30m as the preferred elevation source and Copernicus GLO-30 as fallback.
 
-48. [pending] After completing the layer GUI redesign, update the `View Modes` presets and labels so they align with the new section structure and expected visibility behavior.
+48. [pending] Redesign the layer GUI into four sections: `Terrain` (water, wetlands, forests, contours, hillshade), `Logistics` (roads, railways, and `airports` shown greyed/disabled for now), `Settlements` (keep current behavior and controls), and `Boundaries` (oblasts, hexes, voronoi).
 
-49. [pending] Review and correct Voronoi generation logic so seed cities and rendered cells use the same country-scope input set (including cross-border consistency), and replace oblast-based clipping with nation-border clipping for Voronoi cells.
+49. [pending] After completing the layer GUI redesign, update the `View Modes` presets and labels so they align with the new section structure and expected visibility behavior.
 
-50. [pending] Add country-name labels placed within each country with a stronger cartographic style (for example curved/arc-like placement where suitable, larger text, and serif styling for Latin-script names), while using an appropriate readable non-serif fallback for Cyrillic labels.
+50. [pending] Review and correct Voronoi generation logic so seed cities and rendered cells use the same country-scope input set (including cross-border consistency), and replace oblast-based clipping with nation-border clipping for Voronoi cells.
+
+51. [pending] Add country-name labels placed within each country with a stronger cartographic style (for example curved/arc-like placement where suitable, larger text, and serif styling for Latin-script names), while using an appropriate readable non-serif fallback for Cyrillic labels.

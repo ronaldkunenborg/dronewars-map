@@ -1,5 +1,5 @@
 {
-  "generatedAt": "2026-03-07T23:53:47.316Z",
+  "generatedAt": "2026-03-11T09:31:58.748Z",
   "repoRoot": "C:\\Users\\RonaldKunenborg\\Dropbox\\GrundsatzlichIT\\Projecten\\WebCode\\dronewars-map",
   "rawRoot": "C:\\Users\\RonaldKunenborg\\Dropbox\\GrundsatzlichIT\\Projecten\\WebCode\\dronewars-map\\data\\raw",
   "processedRoot": "C:\\Users\\RonaldKunenborg\\Dropbox\\GrundsatzlichIT\\Projecten\\WebCode\\dronewars-map\\data\\processed",
@@ -100,6 +100,15 @@
       "sourceType": "preprocessed-raster",
       "sourcePath": "landcover-clipped.tif",
       "outputPath": "terrain/landcover-clipped.tif",
+      "geometryKind": "raster",
+      "category": "terrain"
+    },
+    {
+      "id": "terrain-hillshade",
+      "label": "Terrain Hillshade",
+      "sourceType": "preprocessed-raster",
+      "sourcePath": "hillshade-clipped.png",
+      "outputPath": "terrain/hillshade-clipped.png",
       "geometryKind": "raster",
       "category": "terrain"
     }

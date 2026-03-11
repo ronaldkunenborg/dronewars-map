@@ -31,7 +31,7 @@ export const mapLayerVisibilityTargets = {
     "settlement-voronoi-outline",
   ],
   contours: [],
-  hillshade: [],
+  hillshade: ["hillshade-raster"],
 } as const;
 
 const orderedLayerRegistry: OrderedLayerDefinition[] = [
@@ -44,6 +44,32 @@ const orderedLayerRegistry: OrderedLayerDefinition[] = [
         type: "background",
         paint: {
           "background-color": "#d7decb",
+        },
+      },
+    ],
+  },
+  {
+    id: "terrain-hillshade",
+    sourceLayerId: "terrain-hillshade",
+    build: (sourceId) => [
+      {
+        id: "hillshade-raster",
+        type: "raster",
+        source: sourceId,
+        paint: {
+          "raster-opacity": [
+            "interpolate",
+            ["linear"],
+            ["zoom"],
+            4,
+            0.2,
+            7,
+            0.32,
+            10,
+            0.44,
+          ],
+          "raster-saturation": -1,
+          "raster-contrast": 0.18,
         },
       },
     ],
@@ -263,17 +289,17 @@ const orderedLayerRegistry: OrderedLayerDefinition[] = [
         type: "fill",
         source: sourceId,
         paint: {
-          "fill-color": "#c15f57",
+          "fill-color": "#c65347",
           "fill-opacity": [
             "interpolate",
             ["linear"],
             ["zoom"],
             4,
-            0.08,
-            7,
-            0.12,
-            10,
             0.18,
+            7,
+            0.24,
+            10,
+            0.32,
           ],
         },
       },

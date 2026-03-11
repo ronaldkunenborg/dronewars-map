@@ -400,7 +400,7 @@ select {
 
 .hex-inspector h2,
 .hex-inspector h3,
-.debug-panel h2 {
+.cell-panel__detailed h3 {
   margin: 0 0 0.7rem;
 }
 
@@ -410,7 +410,7 @@ select {
 }
 
 .hex-inspector p,
-.debug-panel p {
+.cell-panel__detailed p {
   margin: 0 0 0.4rem;
   color: #455244;
   font-size: 0.92rem;
@@ -420,14 +420,10 @@ select {
   opacity: 0.92;
 }
 
-.debug-panel {
+.cell-panel__detailed {
   margin-top: 1rem;
   padding-top: 1rem;
   border-top: 1px solid rgba(90, 100, 86, 0.14);
-}
-
-.debug-panel--empty {
-  opacity: 0.92;
 }
 
 @media (max-width: 960px) {

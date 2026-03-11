@@ -98,5 +98,13 @@ export const processedLayerRecipes = [
     geometryKind: "raster",
     category: "terrain",
   },
+  {
+    id: "terrain-hillshade",
+    label: "Terrain Hillshade",
+    sourceType: "preprocessed-raster",
+    sourcePath: "hillshade-clipped.png",
+    outputPath: "terrain/hillshade-clipped.png",
+    geometryKind: "raster",
+    category: "terrain",
+  },
 ];
-

@@ -37,7 +37,7 @@ export const rawSourceManifest = [
     targetName: "ukraine-elevation",
     description: "Elevation raster used for hillshade, contours, and terrain roughness.",
     acceptedExtensions: [".tif", ".tiff", ".img"],
-    recommendedSource: "DEM tiles or merged raster covering the theater.",
+    recommendedSource: "FABDEM 30m preferred; Copernicus GLO-30 fallback, covering the full theater extent.",
   },
   {
     id: "hydrology-supplement",
@@ -59,4 +59,3 @@ export const rawDataDirectories = [
   "settlements",
   "working",
 ];
-

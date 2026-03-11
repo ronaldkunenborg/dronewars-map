@@ -1,3 +1,10 @@
+export const theaterExtent = {
+  west: 22.0,
+  south: 44.0,
+  east: 40.5,
+  north: 52.5,
+};
+
 export const vectorLayerDefinitions = [
   {
     id: "theater-boundary",
@@ -32,14 +39,13 @@ export const rasterLayerDefinitions = [
     sourceId: "elevation",
     outputName: "elevation-clipped.tif",
     category: "terrain",
-    clipToTheater: true,
+    clipMode: "theater-extent",
   },
   {
     id: "landcover",
     sourceId: "landcover",
     outputName: "landcover-clipped.tif",
     category: "terrain",
-    clipToTheater: true,
+    clipMode: "theater-boundary",
   },
 ];
-

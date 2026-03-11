@@ -3,6 +3,7 @@ import { spawn } from "node:child_process";
 import path from "node:path";
 import {
   rasterLayerDefinitions,
+  theaterExtent,
   vectorLayerDefinitions,
 } from "./layer-definitions.mjs";
 import {
@@ -70,17 +71,60 @@ async function preprocessVectorLayer(definition, theaterBoundaryFile) {
 async function preprocessRasterLayer(definition, theaterBoundaryFile) {
   const sourcePath = await resolveRawSourcePath(definition.sourceId);
   const outputPath = path.join(processedRoot, definition.outputName);
+  const clipMode = definition.clipMode ?? "theater-boundary";
 
-  await runCommand("gdalwarp", [
-    "-cutline",
-    theaterBoundaryFile,
-    "-crop_to_cutline",
+  const args = [
     "-t_srs",
     "EPSG:4326",
     "-dstnodata",
     "0",
-    sourcePath,
-    outputPath,
+  ];
+
+  if (clipMode === "theater-extent") {
+    args.push(
+      "-te",
+      String(theaterExtent.west),
+      String(theaterExtent.south),
+      String(theaterExtent.east),
+      String(theaterExtent.north),
+    );
+  } else {
+    args.push(
+      "-cutline",
+      theaterBoundaryFile,
+      "-crop_to_cutline",
+    );
+  }
+
+  args.push(sourcePath, outputPath);
+  await runCommand("gdalwarp", args);
+}
+
+async function generateHillshade() {
+  const elevationPath = path.join(processedRoot, "elevation-clipped.tif");
+  const hillshadeTifPath = path.join(processedRoot, "hillshade-clipped.tif");
+  const hillshadePngPath = path.join(processedRoot, "hillshade-clipped.png");
+
+  await runCommand("gdaldem", [
+    "hillshade",
+    elevationPath,
+    hillshadeTifPath,
+    "-z",
+    "1.0",
+    "-s",
+    "111120",
+    "-alt",
+    "45",
+    "-az",
+    "315",
+    "-compute_edges",
+  ]);
+
+  await runCommand("gdal_translate", [
+    "-of",
+    "PNG",
+    hillshadeTifPath,
+    hillshadePngPath,
   ]);
 }
 
@@ -100,11 +144,12 @@ async function main() {
   for (const definition of rasterLayerDefinitions) {
     await preprocessRasterLayer(definition, theaterBoundaryFile);
   }
+
+  await generateHillshade();
 }
 
 main().catch((error) => {
   console.error(error.message);
-  console.error("Preprocess requires GDAL tools (`ogr2ogr` and `gdalwarp`) on PATH.");
+  console.error("Preprocess requires GDAL tools (`ogr2ogr`, `gdalwarp`, `gdaldem`, and `gdal_translate`) on PATH.");
   process.exitCode = 1;
 });
-

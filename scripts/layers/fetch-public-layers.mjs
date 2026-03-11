@@ -1,6 +1,7 @@
-import { mkdir, readFile, writeFile } from "node:fs/promises";
+import { access, copyFile, mkdir, readFile, writeFile } from "node:fs/promises";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
+import { spawn } from "node:child_process";
 import {
   buildSettlementVoronoiLayer,
   settlementVoronoiCatalogEntry,
@@ -32,6 +33,10 @@ import {
  * - `data/processed/layers/railways.geojson`
  * - `data/processed/layers/major-city-urban-areas.geojson`
  * - `data/processed/layers/settlements.geojson`
+ * - `data/processed/terrain/elevation-clipped.tif` (when GDAL tools are available)
+ * - `data/processed/terrain/hillshade-clipped.tif` (when GDAL tools are available)
+ * - `data/processed/terrain/hillshade-clipped.png` (when GDAL tools are available)
+ * - `data/raw/terrain/ukraine-elevation.tif` (when GDAL tools are available)
  * - `data/processed/layers.json`
  *
  * Default invocation:
@@ -51,6 +56,8 @@ import {
  * Inspection and smoke tests:
  * - `--cache-report`
  *   Prints every known cache key with status, schema version, cached date, and remaining TTL.
+ * - `--elevation-only`
+ *   Runs only cached elevation+hillshade acquisition (FABDEM 30m preferred, Copernicus GLO-30 fallback).
  * - `--smoke-test=static`
  *   Fetches only the static GeoBoundaries and Natural Earth sources, mainly to validate cache behavior quickly.
  * - `--smoke-test=settlements`
@@ -77,6 +84,7 @@ const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 const repoRoot = path.resolve(__dirname, "..", "..");
 const cacheRoot = path.join(repoRoot, "data", "cache", "public-sources");
+const rawRoot = path.join(repoRoot, "data", "raw");
 const processedRoot = path.join(repoRoot, "data", "processed");
 const layersRoot = path.join(processedRoot, "layers");
 // Cached source responses stay reusable for up to one year unless explicitly refreshed.
@@ -111,6 +119,17 @@ const sources = {
     "https://raw.githubusercontent.com/nvkelso/natural-earth-vector/master/geojson/ne_10m_railroads.geojson",
   urbanAreas:
     "https://raw.githubusercontent.com/nvkelso/natural-earth-vector/master/geojson/ne_10m_urban_areas_landscan.geojson",
+  fabdemTileIndex:
+    "https://data.bris.ac.uk/datasets/s5hqmjcdj8yo2ibzi9b4ew3sn/FABDEM_v1-2_tiles.geojson",
+  fabdemBase:
+    "https://data.bris.ac.uk/datasets/s5hqmjcdj8yo2ibzi9b4ew3sn",
+  copernicusBase: "https://copernicus-dem-30m.s3.amazonaws.com",
+};
+
+const gdalTools = {
+  warp: "gdalwarp",
+  dem: "gdaldem",
+  translate: "gdal_translate",
 };
 
 // Fallback populations for the 50 largest Ukrainian urban areas, used only when OSM settlement records omit population.
@@ -254,6 +273,7 @@ const smokeTestMode =
   process.argv.find((argument) => argument.startsWith("--smoke-test="))
     ?.slice("--smoke-test=".length) ?? null;
 const cacheReportMode = process.argv.includes("--cache-report");
+const elevationOnlyMode = process.argv.includes("--elevation-only");
 
 // Shared empty fallback for layers that may intentionally produce no features.
 function emptyFeatureCollection() {
@@ -278,6 +298,10 @@ function cachePathForKey(cacheKey) {
   return path.join(cacheRoot, `${cacheKey}.json`);
 }
 
+function cachePathForBinary(relativePath) {
+  return path.join(cacheRoot, relativePath);
+}
+
 // Define the full set of cache keys this script may populate for reporting and refresh targeting.
 function getKnownCacheKeys() {
   const tiledLayerKeys = ["forests", "wetlands"].flatMap((layerId) =>
@@ -296,6 +320,10 @@ function getKnownCacheKeys() {
     "natural-earth/railways",
     "natural-earth/urban-areas",
     "overpass/settlements",
+    "elevation/fabdem/index",
+    "elevation/fabdem/theater-extent",
+    "elevation/copernicus/theater-extent",
+    "elevation/selected-source",
     ...tiledLayerKeys,
   ];
 }
@@ -356,6 +384,35 @@ async function describeCacheEntry(cacheKey) {
   }
 }
 
+function runCommand(command, args) {
+  return new Promise((resolve, reject) => {
+    const child = spawn(command, args, {
+      stdio: "inherit",
+      shell: false,
+    });
+
+    child.on("exit", (code) => {
+      if (code === 0) {
+        resolve();
+        return;
+      }
+
+      reject(new Error(`${command} exited with code ${code}`));
+    });
+
+    child.on("error", reject);
+  });
+}
+
+async function commandExists(command) {
+  try {
+    await runCommand(command, ["--version"]);
+    return true;
+  } catch {
+    return false;
+  }
+}
+
 // Read a cached response wrapper, enforcing schema compatibility and TTL.
 async function readCachedJson(cacheKey) {
   try {
@@ -402,6 +459,42 @@ async function writeCachedJson(cacheKey, data) {
   }, null, 2), "utf8");
 }
 
+async function readCachedBinary(cacheKey) {
+  const metadata = await readCachedJson(cacheKey);
+
+  if (!metadata || typeof metadata !== "object") {
+    return null;
+  }
+
+  const relativePath = metadata.relativePath;
+
+  if (typeof relativePath !== "string" || !relativePath) {
+    console.log(`cache skip ${cacheKey} (missing binary path)`);
+    return null;
+  }
+
+  const absolutePath = cachePathForBinary(relativePath);
+
+  try {
+    await access(absolutePath);
+    return {
+      ...metadata,
+      absolutePath,
+      relativePath,
+    };
+  } catch {
+    console.log(`cache skip ${cacheKey} (missing binary file)`);
+    return null;
+  }
+}
+
+async function writeCachedBinary(cacheKey, relativePath, metadata = {}) {
+  await writeCachedJson(cacheKey, {
+    ...metadata,
+    relativePath,
+  });
+}
+
 // Fetch JSON from a remote source, using the local cache unless this key was refreshed.
 async function fetchJsonWithCache(cacheKey, url, init) {
   if (!shouldRefresh(cacheKey)) {
@@ -435,6 +528,319 @@ async function fetchOverpassJson(query) {
     [sources.overpassApi, sources.overpassFallbackApi, sources.terrainOverpassApi],
     query,
     "overpass/settlements",
+  );
+}
+
+function geometryCoordinates(geometry) {
+  if (!geometry || typeof geometry !== "object") {
+    return [];
+  }
+
+  if (geometry.type === "Polygon") {
+    return geometry.coordinates?.flat() ?? [];
+  }
+
+  if (geometry.type === "MultiPolygon") {
+    return geometry.coordinates?.flat(2) ?? [];
+  }
+
+  return [];
+}
+
+function geometryExtent(geometry) {
+  const coordinates = geometryCoordinates(geometry);
+
+  if (coordinates.length === 0) {
+    return null;
+  }
+
+  let west = Number.POSITIVE_INFINITY;
+  let south = Number.POSITIVE_INFINITY;
+  let east = Number.NEGATIVE_INFINITY;
+  let north = Number.NEGATIVE_INFINITY;
+
+  for (const coordinate of coordinates) {
+    const longitude = Number(coordinate[0]);
+    const latitude = Number(coordinate[1]);
+
+    if (!Number.isFinite(longitude) || !Number.isFinite(latitude)) {
+      continue;
+    }
+
+    west = Math.min(west, longitude);
+    south = Math.min(south, latitude);
+    east = Math.max(east, longitude);
+    north = Math.max(north, latitude);
+  }
+
+  if (!Number.isFinite(west)) {
+    return null;
+  }
+
+  return { west, south, east, north };
+}
+
+function extentIntersects(left, right) {
+  return !(
+    left.east < right.west ||
+    left.west > right.east ||
+    left.north < right.south ||
+    left.south > right.north
+  );
+}
+
+function copernicusLatToken(value) {
+  const direction = value >= 0 ? "N" : "S";
+  const magnitude = String(Math.abs(value)).padStart(2, "0");
+  return `${direction}${magnitude}_00`;
+}
+
+function copernicusLonToken(value) {
+  const direction = value >= 0 ? "E" : "W";
+  const magnitude = String(Math.abs(value)).padStart(3, "0");
+  return `${direction}${magnitude}_00`;
+}
+
+function buildCopernicusTileUrls() {
+  const latStart = Math.floor(theaterBbox.south);
+  const latEnd = Math.ceil(theaterBbox.north) - 1;
+  const lonStart = Math.floor(theaterBbox.west);
+  const lonEnd = Math.ceil(theaterBbox.east) - 1;
+  const urls = [];
+
+  for (let latitude = latStart; latitude <= latEnd; latitude += 1) {
+    for (let longitude = lonStart; longitude <= lonEnd; longitude += 1) {
+      const tileBase = `Copernicus_DSM_COG_10_${copernicusLatToken(latitude)}_${copernicusLonToken(longitude)}_DEM`;
+      urls.push(`${sources.copernicusBase}/${tileBase}/${tileBase}.tif`);
+    }
+  }
+
+  return urls;
+}
+
+function buildFabdemTileEntries(tileIndex) {
+  const entries = [];
+
+  for (const feature of tileIndex.features ?? []) {
+    const bounds = geometryExtent(feature.geometry);
+
+    if (!bounds || !extentIntersects(bounds, theaterBbox)) {
+      continue;
+    }
+
+    const fileName = feature.properties?.file_name;
+    const zipfileName = feature.properties?.zipfile_name;
+
+    if (typeof fileName !== "string" || typeof zipfileName !== "string") {
+      continue;
+    }
+
+    entries.push({
+      fileName,
+      zipfileName,
+      zipUrl: `${sources.fabdemBase}/${zipfileName}`,
+      inputPath: `/vsizip//vsicurl/${sources.fabdemBase}/${zipfileName}/${fileName}`,
+    });
+  }
+
+  const unique = new Map();
+
+  for (const entry of entries) {
+    unique.set(`${entry.zipfileName}/${entry.fileName}`, entry);
+  }
+
+  return [...unique.values()];
+}
+
+async function ensureFabdemElevationCache() {
+  const cacheKey = "elevation/fabdem/theater-extent";
+  const relativePath = "elevation/fabdem/theater-extent.tif";
+
+  if (!shouldRefresh(cacheKey)) {
+    const cached = await readCachedBinary(cacheKey);
+
+    if (cached) {
+      return cached;
+    }
+  }
+
+  const tileIndex = await fetchJson(sources.fabdemTileIndex, "elevation/fabdem/index");
+  const tileEntries = buildFabdemTileEntries(tileIndex);
+
+  if (tileEntries.length === 0) {
+    throw new Error("No FABDEM tiles intersect the theater extent.");
+  }
+
+  const outputPath = cachePathForBinary(relativePath);
+  await mkdir(path.dirname(outputPath), { recursive: true });
+
+  await runCommand(gdalTools.warp, [
+    ...tileEntries.map((entry) => entry.inputPath),
+    outputPath,
+    "-te",
+    String(theaterBbox.west),
+    String(theaterBbox.south),
+    String(theaterBbox.east),
+    String(theaterBbox.north),
+    "-t_srs",
+    "EPSG:4326",
+    "-r",
+    "bilinear",
+    "-dstnodata",
+    "0",
+    "-overwrite",
+    "-multi",
+  ]);
+
+  await writeCachedBinary(cacheKey, relativePath, {
+    sourceId: "fabdem-30m",
+    sourceLabel: "FABDEM 30m",
+    tileCount: tileEntries.length,
+    tiles: tileEntries.map((entry) => ({
+      fileName: entry.fileName,
+      zipfileName: entry.zipfileName,
+      zipUrl: entry.zipUrl,
+    })),
+  });
+
+  return readCachedBinary(cacheKey);
+}
+
+async function ensureCopernicusElevationCache() {
+  const cacheKey = "elevation/copernicus/theater-extent";
+  const relativePath = "elevation/copernicus/theater-extent.tif";
+
+  if (!shouldRefresh(cacheKey)) {
+    const cached = await readCachedBinary(cacheKey);
+
+    if (cached) {
+      return cached;
+    }
+  }
+
+  const tileUrls = buildCopernicusTileUrls();
+  const outputPath = cachePathForBinary(relativePath);
+  await mkdir(path.dirname(outputPath), { recursive: true });
+
+  await runCommand(gdalTools.warp, [
+    ...tileUrls.map((url) => `/vsicurl/${url}`),
+    outputPath,
+    "-te",
+    String(theaterBbox.west),
+    String(theaterBbox.south),
+    String(theaterBbox.east),
+    String(theaterBbox.north),
+    "-t_srs",
+    "EPSG:4326",
+    "-r",
+    "bilinear",
+    "-dstnodata",
+    "0",
+    "-overwrite",
+    "-multi",
+  ]);
+
+  await writeCachedBinary(cacheKey, relativePath, {
+    sourceId: "copernicus-glo-30",
+    sourceLabel: "Copernicus GLO-30",
+    tileCount: tileUrls.length,
+    tiles: tileUrls,
+  });
+
+  return readCachedBinary(cacheKey);
+}
+
+async function ensureElevationOutputs() {
+  const gdalwarpAvailable = await commandExists(gdalTools.warp);
+
+  if (!gdalwarpAvailable) {
+    throw new Error("`gdalwarp` is required for cached elevation acquisition.");
+  }
+
+  const terrainRoot = path.join(processedRoot, "terrain");
+  const rawTerrainRoot = path.join(rawRoot, "terrain");
+  await mkdir(terrainRoot, { recursive: true });
+  await mkdir(rawTerrainRoot, { recursive: true });
+
+  let selected = null;
+
+  try {
+    selected = await ensureFabdemElevationCache();
+  } catch (error) {
+    console.warn(`FABDEM acquisition failed (${error.message}). Falling back to Copernicus GLO-30.`);
+    selected = await ensureCopernicusElevationCache();
+  }
+
+  if (!selected || typeof selected.absolutePath !== "string") {
+    throw new Error("Elevation source selection failed.");
+  }
+
+  const processedElevationPath = path.join(terrainRoot, "elevation-clipped.tif");
+  const rawElevationPath = path.join(rawTerrainRoot, "ukraine-elevation.tif");
+  await copyFile(selected.absolutePath, processedElevationPath);
+  await copyFile(selected.absolutePath, rawElevationPath);
+
+  const gdaldemAvailable = await commandExists(gdalTools.dem);
+  const gdalTranslateAvailable = await commandExists(gdalTools.translate);
+
+  if (!gdaldemAvailable || !gdalTranslateAvailable) {
+    throw new Error("`gdaldem` and `gdal_translate` are required for hillshade generation.");
+  }
+
+  const hillshadeTifPath = path.join(terrainRoot, "hillshade-clipped.tif");
+  const hillshadePngPath = path.join(terrainRoot, "hillshade-clipped.png");
+
+  await runCommand(gdalTools.dem, [
+    "hillshade",
+    processedElevationPath,
+    hillshadeTifPath,
+    "-z",
+    "1.0",
+    "-s",
+    "111120",
+    "-alt",
+    "45",
+    "-az",
+    "315",
+    "-compute_edges",
+  ]);
+
+  await runCommand(gdalTools.translate, [
+    "-of",
+    "PNG",
+    hillshadeTifPath,
+    hillshadePngPath,
+  ]);
+
+  await writeCachedJson("elevation/selected-source", {
+    generatedAt: new Date().toISOString(),
+    extent: theaterBbox,
+    source: {
+      sourceId: selected.sourceId ?? "unknown",
+      sourceLabel: selected.sourceLabel ?? "unknown",
+    },
+    cacheKey: selected.sourceId === "fabdem-30m"
+      ? "elevation/fabdem/theater-extent"
+      : "elevation/copernicus/theater-extent",
+  });
+
+  await writeFile(
+    path.join(rawTerrainRoot, "ukraine-elevation.source.json"),
+    JSON.stringify(
+      {
+        generatedAt: new Date().toISOString(),
+        extent: theaterBbox,
+        selectedSource: {
+          sourceId: selected.sourceId ?? "unknown",
+          sourceLabel: selected.sourceLabel ?? "unknown",
+          cacheRelativePath: selected.relativePath ?? null,
+        },
+        fallbackOrder: ["fabdem-30m", "copernicus-glo-30"],
+      },
+      null,
+      2,
+    ),
+    "utf8",
   );
 }
 
@@ -1156,6 +1562,12 @@ async function main() {
     return;
   }
 
+  if (elevationOnlyMode) {
+    await ensureElevationOutputs();
+    console.log("Elevation acquisition completed through the public cache pipeline.");
+    return;
+  }
+
   if (smokeTestMode === "static") {
     const [adm0Url, adm1Url] = await Promise.all([
       resolveGeoBoundariesDownload(sources.adm0Api),
@@ -1266,6 +1678,15 @@ async function main() {
     },
   );
 
+  let elevationAvailable = false;
+
+  try {
+    await ensureElevationOutputs();
+    elevationAvailable = true;
+  } catch (error) {
+    console.warn(`Skipping elevation/hillshade in public build: ${error.message}`);
+  }
+
   const filteredLayers = {
     "layers/theater-boundary.geojson": theaterBoundary,
     "layers/oblast-boundaries.geojson": oblastBoundaries,
@@ -1293,88 +1714,108 @@ async function main() {
     await writeGeoJson(relativePath, data);
   }
 
+  const layerCatalog = [
+    {
+      id: "theater-boundary",
+      label: "Theater Boundary",
+      category: "reference",
+      geometryKind: "polygon",
+      path: "layers/theater-boundary.geojson",
+    },
+    {
+      id: "oblast-boundaries",
+      label: "Oblast Boundaries",
+      category: "reference",
+      geometryKind: "polygon",
+      path: "layers/oblast-boundaries.geojson",
+    },
+    {
+      id: "rivers",
+      label: "Rivers",
+      category: "hydrology",
+      geometryKind: "line",
+      path: "layers/rivers.geojson",
+    },
+    {
+      id: "water-bodies",
+      label: "Water Bodies",
+      category: "hydrology",
+      geometryKind: "polygon",
+      path: "layers/water-bodies.geojson",
+    },
+    {
+      id: "seas",
+      label: "Seas",
+      category: "hydrology",
+      geometryKind: "polygon",
+      path: "layers/seas.geojson",
+    },
+    {
+      id: "wetlands",
+      label: "Wetlands",
+      category: "hydrology",
+      geometryKind: "polygon",
+      path: "layers/wetlands.geojson",
+    },
+    {
+      id: "forests",
+      label: "Forests",
+      category: "terrain",
+      geometryKind: "polygon",
+      path: "layers/forests.geojson",
+    },
+    {
+      id: "roads",
+      label: "Roads",
+      category: "transport",
+      geometryKind: "line",
+      path: "layers/roads.geojson",
+    },
+    {
+      id: "railways",
+      label: "Railways",
+      category: "transport",
+      geometryKind: "line",
+      path: "layers/railways.geojson",
+    },
+    {
+      id: "major-city-urban-areas",
+      label: "Major City Urban Areas",
+      category: "settlements",
+      geometryKind: "polygon",
+      path: "layers/major-city-urban-areas.geojson",
+    },
+    {
+      id: "settlements",
+      label: "Settlements",
+      category: "settlements",
+      geometryKind: "point",
+      path: "layers/settlements.geojson",
+    },
+    ...(elevationAvailable
+      ? [
+          {
+            id: "terrain-elevation",
+            label: "Terrain Elevation",
+            category: "terrain",
+            geometryKind: "raster",
+            path: "terrain/elevation-clipped.tif",
+          },
+          {
+            id: "terrain-hillshade",
+            label: "Terrain Hillshade",
+            category: "terrain",
+            geometryKind: "raster",
+            path: "terrain/hillshade-clipped.png",
+          },
+        ]
+      : []),
+    settlementVoronoiCatalogEntry,
+  ];
+
   await writeGeoJson("layers.json", {
     generatedAt: new Date().toISOString(),
-    layers: [
-      {
-        id: "theater-boundary",
-        label: "Theater Boundary",
-        category: "reference",
-        geometryKind: "polygon",
-        path: "layers/theater-boundary.geojson",
-      },
-      {
-        id: "oblast-boundaries",
-        label: "Oblast Boundaries",
-        category: "reference",
-        geometryKind: "polygon",
-        path: "layers/oblast-boundaries.geojson",
-      },
-      {
-        id: "rivers",
-        label: "Rivers",
-        category: "hydrology",
-        geometryKind: "line",
-        path: "layers/rivers.geojson",
-      },
-      {
-        id: "water-bodies",
-        label: "Water Bodies",
-        category: "hydrology",
-        geometryKind: "polygon",
-        path: "layers/water-bodies.geojson",
-      },
-      {
-        id: "seas",
-        label: "Seas",
-        category: "hydrology",
-        geometryKind: "polygon",
-        path: "layers/seas.geojson",
-      },
-      {
-        id: "wetlands",
-        label: "Wetlands",
-        category: "hydrology",
-        geometryKind: "polygon",
-        path: "layers/wetlands.geojson",
-      },
-      {
-        id: "forests",
-        label: "Forests",
-        category: "terrain",
-        geometryKind: "polygon",
-        path: "layers/forests.geojson",
-      },
-      {
-        id: "roads",
-        label: "Roads",
-        category: "transport",
-        geometryKind: "line",
-        path: "layers/roads.geojson",
-      },
-      {
-        id: "railways",
-        label: "Railways",
-        category: "transport",
-        geometryKind: "line",
-        path: "layers/railways.geojson",
-      },
-      {
-        id: "major-city-urban-areas",
-        label: "Major City Urban Areas",
-        category: "settlements",
-        geometryKind: "polygon",
-        path: "layers/major-city-urban-areas.geojson",
-      },
-      {
-        id: "settlements",
-        label: "Settlements",
-        category: "settlements",
-        geometryKind: "point",
-        path: "layers/settlements.geojson",
-      },
-      settlementVoronoiCatalogEntry,
-    ],
+    layers: layerCatalog,
   });
 
   console.log("Wrote processed public fallback layers and layers.json");

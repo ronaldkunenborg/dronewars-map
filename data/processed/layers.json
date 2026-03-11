@@ -79,6 +79,13 @@
       "path": "terrain/landcover-clipped.tif"
     },
     {
+      "id": "terrain-hillshade",
+      "label": "Terrain Hillshade",
+      "category": "terrain",
+      "geometryKind": "raster",
+      "path": "terrain/hillshade-clipped.png"
+    },
+    {
       "id": "theater-boundary",
       "label": "Theater Boundary",
       "category": "reference",

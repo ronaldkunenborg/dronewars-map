@@ -34,7 +34,7 @@ const layerControls: LayerControl[] = [
   { id: "oblasts", label: "Oblasts", description: "Reference boundaries", color: "#73796d", available: true },
   { id: "hexes", label: "Operational Cells", description: "Simulation hex grid", color: "#55614f", available: true },
   { id: "contours", label: "Contours", description: "Not generated yet", color: "#9f9f9f", available: false },
-  { id: "hillshade", label: "Hillshade", description: "Not generated yet", color: "#9f9f9f", available: false },
+  { id: "hillshade", label: "Hillshade", description: "Relief shading from elevation", color: "#727067", available: true },
 ];
 
 export const defaultLayerVisibility: LayerVisibility = {
@@ -53,6 +53,7 @@ export const defaultLayerVisibility: LayerVisibility = {
 export const presetVisibility: Record<ViewMode, LayerVisibility> = {
   terrain: {
     ...defaultLayerVisibility,
+    hillshade: true,
     roads: false,
     railways: false,
     settlements: false,
@@ -69,6 +70,7 @@ export const presetVisibility: Record<ViewMode, LayerVisibility> = {
   },
   mobility: {
     ...defaultLayerVisibility,
+    hillshade: true,
     wetlands: true,
     forests: false,
     oblasts: false,

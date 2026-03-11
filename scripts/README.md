@@ -8,6 +8,10 @@ Current intake scripts:
 - `scripts/intake/prepare-raw.mjs`: create the raw-data directory layout and write a source manifest.
 - `scripts/intake/register-raw-source.mjs`: copy a source file into its expected location under `data/raw`.
 
+Elevation acquisition is handled through the public-source cache pipeline:
+
+- `npm run data:intake:elevation` (runs `scripts/layers/fetch-public-layers.mjs --elevation-only`)
+
 Current preprocess scripts:
 
 - `scripts/preprocess/plan-preprocess.mjs`: write a visible processing plan to `data/processed/preprocess-plan.json`.

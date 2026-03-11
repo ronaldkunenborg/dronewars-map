@@ -513,7 +513,7 @@ export function MapView({
   const [debugInfo, setDebugInfo] = useState<HexDebugInfo | null>(null);
   const [selectedHex, setSelectedHex] = useState<HexInspectorData | null>(null);
   const [detailsVisible, setDetailsVisible] = useState(true);
-  const [debugVisible, setDebugVisible] = useState(false);
+  const [detailedVisible, setDetailedVisible] = useState(false);
   const [searchQuery, setSearchQuery] = useState("");
   const deferredSearchQuery = useDeferredValue(searchQuery);
   const [searchResults, setSearchResults] = useState<SettlementSearchEntry[]>([]);
@@ -897,7 +897,7 @@ export function MapView({
         <p className="placeholder-note">{status}</p>
         {datasetInfo ? <p className="placeholder-note">{datasetInfo}</p> : null}
       </div>
-      <section className="cell-panel" aria-label="Cell details">
+      <section className="cell-panel" aria-label="Cell information">
         <div className="cell-panel__controls">
           <button
             aria-controls="cell-details-panel"
@@ -906,15 +906,15 @@ export function MapView({
             onClick={() => setDetailsVisible((value) => !value)}
             type="button"
           >
-            Cell Details
+            Cell Information
           </button>
           <label className="cell-panel__debug">
             <input
-              checked={debugVisible}
-              onChange={(event) => setDebugVisible(event.target.checked)}
+              checked={detailedVisible}
+              onChange={(event) => setDetailedVisible(event.target.checked)}
               type="checkbox"
             />
-            <span>Debug</span>
+            <span>Detailed</span>
           </label>
         </div>
         {detailsVisible ? (
@@ -922,49 +922,50 @@ export function MapView({
             <HexInspector
               hexRadiusKm={appConfig.hexRadiusKm}
               selectedHex={selectedHex}
-              title="Cell Inspector"
+              title="Cell Information"
             />
-            {debugVisible ? debugInfo ? (
-              <section className="debug-panel">
-                <h2>Hex Debug</h2>
-                <p><strong>Hex:</strong> {debugInfo.hexId}</p>
-                <p>
-                  <strong>True center lng/lat:</strong>{" "}
-                  {debugInfo.trueCenterLngLat
-                    ? `${debugInfo.trueCenterLngLat[0].toFixed(6)}, ${debugInfo.trueCenterLngLat[1].toFixed(6)}`
-                    : "n/a"}
-                </p>
-                <p>
-                  <strong>True center px:</strong>{" "}
-                  {debugInfo.trueCenterPixels
-                    ? `${debugInfo.trueCenterPixels[0].toFixed(2)}, ${debugInfo.trueCenterPixels[1].toFixed(2)}`
-                    : "n/a"}
-                </p>
-                <p>
-                  <strong>Click lng/lat:</strong>{" "}
-                  {debugInfo.clickLngLat[0].toFixed(6)}, {debugInfo.clickLngLat[1].toFixed(6)}
-                </p>
-                <p>
-                  <strong>Click px:</strong>{" "}
-                  {debugInfo.clickPixels[0].toFixed(2)}, {debugInfo.clickPixels[1].toFixed(2)}
-                </p>
-                <p>
-                  <strong>Delta true center px:</strong>{" "}
-                  {debugInfo.deltaTrueCenterPixels
-                    ? `${debugInfo.deltaTrueCenterPixels[0].toFixed(2)}, ${debugInfo.deltaTrueCenterPixels[1].toFixed(2)}`
-                    : "n/a"}
-                </p>
-                <p>
-                  <strong>Click to true center:</strong>{" "}
-                  {debugInfo.clickToTrueCenterKm !== null
-                    ? `${debugInfo.clickToTrueCenterKm.toFixed(4)} km`
-                    : "n/a"}
-                </p>
-              </section>
-            ) : (
-              <section className="debug-panel debug-panel--empty">
-                <h2>Hex Debug</h2>
-                <p>Click inside a hex to inspect the true generated center and click delta.</p>
+            {detailedVisible ? (
+              <section className="cell-panel__detailed">
+                <h3>Detailed</h3>
+                {debugInfo ? (
+                  <>
+                    <p><strong>Hex:</strong> {debugInfo.hexId}</p>
+                    <p>
+                      <strong>True center lng/lat:</strong>{" "}
+                      {debugInfo.trueCenterLngLat
+                        ? `${debugInfo.trueCenterLngLat[0].toFixed(6)}, ${debugInfo.trueCenterLngLat[1].toFixed(6)}`
+                        : "n/a"}
+                    </p>
+                    <p>
+                      <strong>True center px:</strong>{" "}
+                      {debugInfo.trueCenterPixels
+                        ? `${debugInfo.trueCenterPixels[0].toFixed(2)}, ${debugInfo.trueCenterPixels[1].toFixed(2)}`
+                        : "n/a"}
+                    </p>
+                    <p>
+                      <strong>Click lng/lat:</strong>{" "}
+                      {debugInfo.clickLngLat[0].toFixed(6)}, {debugInfo.clickLngLat[1].toFixed(6)}
+                    </p>
+                    <p>
+                      <strong>Click px:</strong>{" "}
+                      {debugInfo.clickPixels[0].toFixed(2)}, {debugInfo.clickPixels[1].toFixed(2)}
+                    </p>
+                    <p>
+                      <strong>Delta true center px:</strong>{" "}
+                      {debugInfo.deltaTrueCenterPixels
+                        ? `${debugInfo.deltaTrueCenterPixels[0].toFixed(2)}, ${debugInfo.deltaTrueCenterPixels[1].toFixed(2)}`
+                        : "n/a"}
+                    </p>
+                    <p>
+                      <strong>Click to true center:</strong>{" "}
+                      {debugInfo.clickToTrueCenterKm !== null
+                        ? `${debugInfo.clickToTrueCenterKm.toFixed(4)} km`
+                        : "n/a"}
+                    </p>
+                  </>
+                ) : (
+                  <p>Click inside a hex to inspect the true generated center and click delta.</p>
+                )}
               </section>
             ) : null}
           </div>

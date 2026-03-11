@@ -1,5 +1,5 @@
 import type { GeoJSONSourceSpecification, Map, StyleSpecification } from "maplibre-gl";
-import { appConfig } from "../config";
+import { appConfig, ukraineTheaterConfig } from "../config";
 import type { LayerManifest } from "../data";
 import type {
   HexEdgeGeoJson,
@@ -50,6 +50,28 @@ function addSourceIfMissing(
       data,
     });
   }
+}
+
+function addRasterImageSourceIfMissing(
+  map: Map,
+  sourceId: string,
+  imagePath: string,
+) {
+  if (map.getSource(sourceId)) {
+    return;
+  }
+
+  const { west, south, east, north } = ukraineTheaterConfig.extent;
+  map.addSource(sourceId, {
+    type: "image",
+    url: imagePath,
+    coordinates: [
+      [west, north],
+      [east, north],
+      [east, south],
+      [west, south],
+    ],
+  });
 }
 
 function mountFallbackLandcoverLayer(map: Map) {
@@ -189,7 +211,11 @@ function raiseSettlementLayers(map: Map) {
 
 function mountManifestLayer(map: Map, layer: LayerManifest) {
   const sourceId = `processed-${layer.id}`;
-  addSourceIfMissing(map, sourceId, layer.sourcePath);
+  if (layer.id === "terrain-hillshade" && layer.geometryKind === "raster") {
+    addRasterImageSourceIfMissing(map, sourceId, layer.sourcePath);
+  } else {
+    addSourceIfMissing(map, sourceId, layer.sourcePath);
+  }
 
   const definition = getOrderedLayerRegistry().find((entry) => entry.id === layer.id);
 

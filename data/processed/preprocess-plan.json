@@ -1,5 +1,5 @@
 {
-  "generatedAt": "2026-03-07T23:53:07.470Z",
+  "generatedAt": "2026-03-11T09:31:58.707Z",
   "repoRoot": "C:\\Users\\RonaldKunenborg\\Dropbox\\GrundsatzlichIT\\Projecten\\WebCode\\dronewars-map",
   "rawRoot": "C:\\Users\\RonaldKunenborg\\Dropbox\\GrundsatzlichIT\\Projecten\\WebCode\\dronewars-map\\data\\raw",
   "processedRoot": "C:\\Users\\RonaldKunenborg\\Dropbox\\GrundsatzlichIT\\Projecten\\WebCode\\dronewars-map\\data\\processed",
@@ -36,14 +36,14 @@
       "sourceId": "elevation",
       "outputName": "elevation-clipped.tif",
       "category": "terrain",
-      "clipToTheater": true
+      "clipMode": "theater-extent"
     },
     {
       "id": "landcover",
       "sourceId": "landcover",
       "outputName": "landcover-clipped.tif",
       "category": "terrain",
-      "clipToTheater": true
+      "clipMode": "theater-boundary"
     }
   ]
 }

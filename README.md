@@ -106,8 +106,10 @@ Useful public builder commands:
 
 ```bash
 node scripts/layers/fetch-public-layers.mjs --cache-report
+node scripts/layers/fetch-public-layers.mjs --elevation-only
 node scripts/layers/fetch-public-layers.mjs --refresh
 node scripts/layers/fetch-public-layers.mjs --refresh=natural-earth
+node scripts/layers/fetch-public-layers.mjs --refresh=elevation
 node scripts/layers/fetch-public-layers.mjs --refresh=overpass/settlements
 node scripts/layers/fetch-public-layers.mjs --smoke-test=static
 node scripts/layers/fetch-public-layers.mjs --smoke-test=settlements
@@ -120,6 +122,7 @@ Refresh expectations:
 - a normal rerun of `npm run data:layers:public` should mostly report `cache hit` once the cache is warm
 - use `--refresh` only when you intentionally want to replace cached upstream responses
 - use `--cache-report` to see which source payloads are ready, missing, expired, or on an older schema
+- `--elevation-only` acquires cached elevation/hillshade via FABDEM 30m first, then Copernicus GLO-30 fallback
 
 ### 2. Optional Local Pipeline Scaffolding
 
