@@ -92,7 +92,11 @@
 
 46. [done] For elevation and hillshade processing, clip to the full currently displayed operational hex/theater extent (including neighboring border regions) rather than clipping to Ukraine boundaries only.
 
-47. [pending] Implement a reproducible raw-data acquisition task that fetches or prepares the minimum required inputs (`theater-boundary`, `oblast-boundaries`, `osm-extract`, `elevation`, `landcover`) into `data/raw/*` so `data:preprocess` and `data:layers` can run on a clean checkout, using FABDEM 30m as the preferred elevation source and Copernicus GLO-30 as fallback.
+47. [done] Implement a reproducible raw-data acquisition task that fetches or prepares the minimum required inputs (`theater-boundary`, `oblast-boundaries`, `osm-extract`, `elevation`, `landcover`) into `data/raw/*` so `data:preprocess` and `data:layers` can run on a clean checkout, using FABDEM 30m as the preferred elevation source and Copernicus GLO-30 as fallback.
+
+47.1 [done] Add a single bootstrap intake command (`data:intake:bootstrap`) that stages the required raw sources into `data/raw/*` with cache-aware refresh behavior and skip controls for heavy sources.
+
+47.2 [done] Wire the bootstrap flow and source details into project docs (`README.md` and `scripts/README.md`) so clean-checkout setup is reproducible without manual source registration.
 
 48. [pending] Redesign the layer GUI into four sections: `Terrain` (water, wetlands, forests, contours, hillshade), `Logistics` (roads, railways, and `airports` shown greyed/disabled for now), `Settlements` (keep current behavior and controls), and `Boundaries` (oblasts, hexes, voronoi).
 

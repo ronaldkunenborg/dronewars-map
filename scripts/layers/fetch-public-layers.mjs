@@ -59,6 +59,8 @@ import {
  *   Prints every known cache key with status, schema version, cached date, and remaining TTL.
  * - `--elevation-only`
  *   Runs only cached elevation+hillshade acquisition (FABDEM 30m preferred, Copernicus GLO-30 fallback).
+ * - `--skip-hillshade`
+ *   Only valid with `--elevation-only`; stages elevation but skips hillshade generation.
  * - `--smoke-test=static`
  *   Fetches only the static GeoBoundaries and Natural Earth sources, mainly to validate cache behavior quickly.
  * - `--smoke-test=settlements`
@@ -299,6 +301,7 @@ const smokeTestMode =
     ?.slice("--smoke-test=".length) ?? null;
 const cacheReportMode = process.argv.includes("--cache-report");
 const elevationOnlyMode = process.argv.includes("--elevation-only");
+const skipHillshadeMode = process.argv.includes("--skip-hillshade");
 
 // Shared empty fallback for layers that may intentionally produce no features.
 function emptyFeatureCollection() {
@@ -875,6 +878,12 @@ async function ensureElevationOutputs() {
   const rawElevationPath = path.join(rawTerrainRoot, "ukraine-elevation.tif");
   await copyFile(selected.absolutePath, processedElevationPath);
   await copyFile(selected.absolutePath, rawElevationPath);
+
+  if (skipHillshadeMode) {
+    return {
+      hillshadeLayerPath: "terrain/hillshade-clipped.png",
+    };
+  }
 
   const gdaldemAvailable = await commandExists(gdalTools.dem);
   const gdalTranslateAvailable = await commandExists(gdalTools.translate);

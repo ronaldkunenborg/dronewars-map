@@ -10,6 +10,7 @@
     "repo:audit:size": "node scripts/repo/audit-large-files.mjs",
     "data:intake:prepare": "node scripts/intake/prepare-raw.mjs",
     "data:intake:register": "node scripts/intake/register-raw-source.mjs",
+    "data:intake:bootstrap": "node scripts/intake/bootstrap-raw.mjs",
     "data:intake:elevation": "node scripts/layers/fetch-public-layers.mjs --elevation-only",
     "data:preprocess:plan": "node scripts/preprocess/plan-preprocess.mjs",
     "data:preprocess": "node scripts/preprocess/run-preprocess.mjs",

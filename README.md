@@ -117,6 +117,28 @@ node scripts/layers/fetch-public-layers.mjs --smoke-test=wetlands
 node scripts/layers/fetch-public-layers.mjs --smoke-test=forests
 ```
 
+Raw intake bootstrap command (clean checkout preparation for local preprocess/layer builds):
+
+```bash
+npm run data:intake:bootstrap
+```
+
+This prepares `data/raw/*` for:
+
+- `theater-boundary` (GeoBoundaries ADM0)
+- `oblast-boundaries` (GeoBoundaries ADM1)
+- `osm-extract` (Geofabrik Ukraine PBF)
+- `elevation` (FABDEM 30m preferred, Copernicus fallback via the existing elevation intake path)
+- `landcover` (ESA WorldCover mosaic clipped to theater extent)
+
+Optional bootstrap controls:
+
+```bash
+npm run data:intake:bootstrap -- --refresh
+npm run data:intake:bootstrap -- --refresh=landcover
+npm run data:intake:bootstrap -- --skip-osm --skip-landcover
+```
+
 Refresh expectations:
 
 - a normal rerun of `npm run data:layers:public` should mostly report `cache hit` once the cache is warm

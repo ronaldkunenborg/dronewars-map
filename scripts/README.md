@@ -7,10 +7,12 @@ Current intake scripts:
 
 - `scripts/intake/prepare-raw.mjs`: create the raw-data directory layout and write a source manifest.
 - `scripts/intake/register-raw-source.mjs`: copy a source file into its expected location under `data/raw`.
+- `scripts/intake/bootstrap-raw.mjs`: reproducibly fetch/prepare minimum raw inputs (`theater-boundary`, `oblast-boundaries`, `osm-extract`, `elevation`, `landcover`) using cached public sources.
 
 Elevation acquisition is handled through the public-source cache pipeline:
 
 - `npm run data:intake:elevation` (runs `scripts/layers/fetch-public-layers.mjs --elevation-only`)
+- `npm run data:intake:bootstrap` (runs full raw intake bootstrap; supports `--refresh` and `--skip-*` flags)
 
 Current preprocess scripts:
 
