@@ -124,6 +124,71 @@ Refresh expectations:
 - use `--cache-report` to see which source payloads are ready, missing, expired, or on an older schema
 - `--elevation-only` acquires cached elevation/hillshade via FABDEM 30m first, then Copernicus GLO-30 fallback
 
+### OSGeo4W (Windows GDAL/PROJ)
+
+Elevation and hillshade generation rely on GDAL tools (`gdalwarp`, `gdaldem`, `gdal_translate`, `gdal2tiles`).
+
+Install these OSGeo4W packages at minimum:
+
+- `gdal`
+- `gdal312-runtime` (or the runtime matching your installed GDAL package line)
+- `proj`
+- `proj-runtime-data`
+- `proj-data`
+
+Needed for tiled hillshade (`gdal2tiles`):
+
+- `python3-gdal`
+
+This project resolves GDAL tools from an explicit OSGeo path. Set this before running elevation commands:
+
+```powershell
+$env:OSGEO4W_BIN='C:\OSGeo4W\bin'
+```
+
+Quick verification (all should run without loader/proj errors):
+
+```powershell
+C:\OSGeo4W\bin\gdalinfo.exe --version
+C:\OSGeo4W\bin\proj.exe
+C:\OSGeo4W\bin\projinfo.exe EPSG:3857
+C:\OSGeo4W\bin\sqlite3.exe C:\OSGeo4W\share\proj\proj.db "select * from metadata where key in ('PROJ.VERSION','DATABASE.LAYOUT.VERSION.MAJOR','DATABASE.LAYOUT.VERSION.MINOR');"
+```
+
+Expected `proj.db` characteristics in a healthy modern install:
+
+- `DATABASE.LAYOUT.VERSION.MINOR` should be `>= 4` (recent installs typically show `6`)
+- `PROJ.VERSION` should match your current PROJ package family (for example `9.8.0`)
+
+If setup reports `upgrades from old installation not supported, please do a fresh install`, do a clean reinstall into an empty root (`C:\OSGeo4W`) instead of in-place upgrade.
+
+Important runtime consistency notes from recent fixes:
+
+- do not mix multiple PROJ runtime families in one install (for example avoid simultaneously keeping old `proj95-runtime` with `proj9-runtime`)
+- if tools crash with Windows loader errors (`-1073741515`) and `proj_9.dll` is missing, reinstall `proj9-runtime`
+- if `proj.db` mismatch errors appear (`DATABASE.LAYOUT.VERSION.MINOR = 2 whereas >= 4 expected`), runtime data is stale/mixed; reinstall PROJ runtime/data packages in a fresh OSGeo root
+
+Installer workaround (current broken state observed):
+
+If the OSGeo4W installer reports `proj9-runtime` as installed but `C:\OSGeo4W\bin\proj_9.dll` is still missing, recover manually:
+
+```powershell
+$pkgDir='C:\OSGeo4W\_pkg_fix'
+New-Item -ItemType Directory -Force -Path $pkgDir | Out-Null
+$url='https://download.osgeo.org/osgeo4w/v2/x86_64/release/proj/proj9-runtime/proj9-runtime-9.8.0-1.tar.bz2'
+$pkg=Join-Path $pkgDir 'proj9-runtime-9.8.0-1.tar.bz2'
+Invoke-WebRequest -Uri $url -OutFile $pkg
+tar -xjf $pkg -C 'C:\OSGeo4W'
+```
+
+Then verify:
+
+```powershell
+Test-Path C:\OSGeo4W\bin\proj_9.dll
+C:\OSGeo4W\bin\projinfo.exe EPSG:3857
+C:\OSGeo4W\bin\gdalinfo.exe --version
+```
+
 ### 2. Optional Local Pipeline Scaffolding
 
 The repo also contains a local pipeline structure for:
@@ -165,10 +230,11 @@ Current important processed outputs:
 
 Repository strategy for generated geodata:
 
-- `data/cache/` is intentionally local-only and ignored by Git
-- very large generated layers such as `data/processed/layers/forests.geojson` and `data/processed/layers/wetlands.geojson` are ignored by Git to keep pushes repository-safe
+- all content under `data/` is ignored by Git
+- only `.gitkeep` placeholders under `data/**/.gitkeep` remain trackable to preserve directory structure
+- downloaded caches, raw inputs, and generated outputs are all treated as local build artifacts
 - use `npm run repo:audit:size` before pushing if you want a quick check for tracked files over GitHub-friendly limits
-- the application can still use those ignored generated files locally after they are rebuilt
+- the application uses local `data/` artifacts after you run the intake/build commands
 
 ## Hex Grid Notes
 
