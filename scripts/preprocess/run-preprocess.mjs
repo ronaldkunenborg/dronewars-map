@@ -123,6 +123,9 @@ async function generateHillshade() {
   await runCommand("gdal_translate", [
     "-of",
     "PNG",
+    "-outsize",
+    "4096",
+    "0",
     hillshadeTifPath,
     hillshadePngPath,
   ]);

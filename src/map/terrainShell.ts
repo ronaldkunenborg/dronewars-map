@@ -74,6 +74,22 @@ function addRasterImageSourceIfMissing(
   });
 }
 
+function addRasterTileSourceIfMissing(
+  map: Map,
+  sourceId: string,
+  tilePathTemplate: string,
+) {
+  if (map.getSource(sourceId)) {
+    return;
+  }
+
+  map.addSource(sourceId, {
+    type: "raster",
+    tiles: [tilePathTemplate],
+    tileSize: 1024,
+  });
+}
+
 function mountFallbackLandcoverLayer(map: Map) {
   if (!map.getSource("fallback-worldcover")) {
     map.addSource("fallback-worldcover", {
@@ -209,10 +225,20 @@ function raiseSettlementLayers(map: Map) {
   }
 }
 
+function raiseHillshadeLayer(map: Map) {
+  if (map.getLayer("hillshade-raster")) {
+    map.moveLayer("hillshade-raster");
+  }
+}
+
 function mountManifestLayer(map: Map, layer: LayerManifest) {
   const sourceId = `processed-${layer.id}`;
   if (layer.id === "terrain-hillshade" && layer.geometryKind === "raster") {
-    addRasterImageSourceIfMissing(map, sourceId, layer.sourcePath);
+    if (layer.sourcePath.includes("{z}/{x}/{y}")) {
+      addRasterTileSourceIfMissing(map, sourceId, layer.sourcePath);
+    } else {
+      addRasterImageSourceIfMissing(map, sourceId, layer.sourcePath);
+    }
   } else {
     addSourceIfMissing(map, sourceId, layer.sourcePath);
   }
@@ -258,6 +284,8 @@ export function mountTerrainShell(
     },
   );
   mountOperationalHexLayer(map);
+  // Keep hillshade visible over terrain/hex fills while leaving labels above it.
+  raiseHillshadeLayer(map);
   raiseSettlementLayers(map);
   mountOverlayManager(map);
 }

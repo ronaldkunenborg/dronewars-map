@@ -131,18 +131,30 @@ const gdalTools = {
   warp: "gdalwarp",
   dem: "gdaldem",
   translate: "gdal_translate",
+  tiles: "gdal2tiles.exe",
 };
+const hillshadeTileSize = 1024;
+const hillshadeTileZoomRange = "4-12";
 
 const gdalCommandNames = new Set(Object.values(gdalTools));
 const osgeoBinDir = process.env.OSGEO4W_BIN ?? "C:\\OSGeo4W\\bin";
+const osgeoRootDir = path.dirname(osgeoBinDir);
 
 function resolveCommand(command) {
   if (process.platform !== "win32" || !gdalCommandNames.has(command)) {
     return command;
   }
 
-  const explicitPath = path.join(osgeoBinDir, `${command}.exe`);
-  return existsSync(explicitPath) ? explicitPath : command;
+  const explicitName = command.toLowerCase().endsWith(".py") || command.toLowerCase().endsWith(".exe")
+    ? command
+    : `${command}.exe`;
+  const candidates = [
+    path.join(osgeoBinDir, explicitName),
+    path.join(osgeoRootDir, "apps", "Python312", "Scripts", explicitName),
+    path.join(osgeoRootDir, "apps", "gdal-dev", "Scripts", explicitName),
+  ];
+  const match = candidates.find((candidate) => existsSync(candidate));
+  return match ?? command;
 }
 
 // Fallback populations for the 50 largest Ukrainian urban areas, used only when OSM settlement records omit population.
@@ -419,11 +431,44 @@ function runCommand(command, args) {
   });
 }
 
+function runCommandWithExitCode(command, args) {
+  const resolvedCommand = resolveCommand(command);
+
+  return new Promise((resolve) => {
+    const child = spawn(resolvedCommand, args, {
+      stdio: "ignore",
+      shell: false,
+    });
+
+    child.on("exit", (code) => {
+      resolve(code === 0);
+    });
+
+    child.on("error", () => resolve(false));
+  });
+}
+
+async function hasWorkingProjRuntime() {
+  const projInfoPath = process.platform === "win32"
+    ? path.join(osgeoBinDir, "projinfo.exe")
+    : "projinfo";
+  const command = existsSync(projInfoPath) ? projInfoPath : "projinfo";
+
+  return runCommandWithExitCode(command, ["EPSG:3857"]);
+}
+
 async function commandExists(command) {
   if (process.platform === "win32" && gdalCommandNames.has(command)) {
-    const explicitPath = path.join(osgeoBinDir, `${command}.exe`);
+    const explicitName = command.toLowerCase().endsWith(".py") || command.toLowerCase().endsWith(".exe")
+      ? command
+      : `${command}.exe`;
+    const candidates = [
+      path.join(osgeoBinDir, explicitName),
+      path.join(osgeoRootDir, "apps", "Python312", "Scripts", explicitName),
+      path.join(osgeoRootDir, "apps", "gdal-dev", "Scripts", explicitName),
+    ];
 
-    if (existsSync(explicitPath)) {
+    if (candidates.some((candidate) => existsSync(candidate))) {
       return true;
     }
   }
@@ -833,6 +878,7 @@ async function ensureElevationOutputs() {
 
   const gdaldemAvailable = await commandExists(gdalTools.dem);
   const gdalTranslateAvailable = await commandExists(gdalTools.translate);
+  let gdalTilesAvailable = await commandExists(gdalTools.tiles);
 
   if (!gdaldemAvailable || !gdalTranslateAvailable) {
     throw new Error("`gdaldem` and `gdal_translate` are required for hillshade generation.");
@@ -840,6 +886,8 @@ async function ensureElevationOutputs() {
 
   const hillshadeTifPath = path.join(terrainRoot, "hillshade-clipped.tif");
   const hillshadePngPath = path.join(terrainRoot, "hillshade-clipped.png");
+  const hillshadeTilesPath = path.join(terrainRoot, "hillshade-tiles");
+  let hillshadeLayerPath = "terrain/hillshade-clipped.png";
 
   await runCommand(gdalTools.dem, [
     "hillshade",
@@ -856,9 +904,39 @@ async function ensureElevationOutputs() {
     "-compute_edges",
   ]);
 
+  if (gdalTilesAvailable && !(await hasWorkingProjRuntime())) {
+    gdalTilesAvailable = false;
+    console.warn(
+      "Skipping hillshade tile generation because PROJ runtime data is incompatible with installed GDAL/PROJ tools. " +
+      "Use a fresh OSGeo4W install and point OSGEO4W_BIN to its bin directory.",
+    );
+  }
+
+  if (gdalTilesAvailable) {
+    try {
+      await runCommand(gdalTools.tiles, [
+        "--xyz",
+        "--tilesize",
+        String(hillshadeTileSize),
+        "-z",
+        hillshadeTileZoomRange,
+        "-w",
+        "none",
+        hillshadeTifPath,
+        hillshadeTilesPath,
+      ]);
+      hillshadeLayerPath = "terrain/hillshade-tiles/{z}/{x}/{y}.png";
+    } catch (error) {
+      console.warn(`Hillshade tile generation failed, using single-image fallback: ${error.message}`);
+    }
+  }
+
   await runCommand(gdalTools.translate, [
     "-of",
     "PNG",
+    "-outsize",
+    "4096",
+    "0",
     hillshadeTifPath,
     hillshadePngPath,
   ]);
@@ -893,6 +971,10 @@ async function ensureElevationOutputs() {
     ),
     "utf8",
   );
+
+  return {
+    hillshadeLayerPath,
+  };
 }
 
 // Try multiple Overpass endpoints until one succeeds, then cache the successful payload.
@@ -1730,9 +1812,11 @@ async function main() {
   );
 
   let elevationAvailable = false;
+  let hillshadeLayerPath = "terrain/hillshade-clipped.png";
 
   try {
-    await ensureElevationOutputs();
+    const elevationOutputs = await ensureElevationOutputs();
+    hillshadeLayerPath = elevationOutputs?.hillshadeLayerPath ?? hillshadeLayerPath;
     elevationAvailable = true;
   } catch (error) {
     console.warn(`Skipping elevation/hillshade in public build: ${error.message}`);
@@ -1857,7 +1941,7 @@ async function main() {
             label: "Terrain Hillshade",
             category: "terrain",
             geometryKind: "raster",
-            path: "terrain/hillshade-clipped.png",
+            path: hillshadeLayerPath,
           },
         ]
       : []),
