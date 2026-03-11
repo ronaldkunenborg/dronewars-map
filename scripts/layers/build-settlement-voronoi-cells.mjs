@@ -31,13 +31,20 @@ async function updateLayerCatalog() {
 }
 
 async function main() {
-  const oblastBoundaries = JSON.parse(
-    await readFile(path.join(processedRoot, "layers", "oblast-boundaries.geojson"), "utf8"),
-  );
+  const clippingBoundaries = await readFile(
+    path.join(processedRoot, "layers", "country-boundaries.geojson"),
+    "utf8",
+  )
+    .then((value) => JSON.parse(value))
+    .catch(async () =>
+      JSON.parse(
+        await readFile(path.join(processedRoot, "layers", "oblast-boundaries.geojson"), "utf8"),
+      ),
+    );
   const settlements = JSON.parse(
     await readFile(path.join(processedRoot, "layers", "settlements.geojson"), "utf8"),
   );
-  const voronoi = buildSettlementVoronoiLayer(oblastBoundaries, settlements);
+  const voronoi = buildSettlementVoronoiLayer(clippingBoundaries, settlements);
 
   await writeFile(
     path.join(processedRoot, "layers", "settlement-voronoi-cells.geojson"),

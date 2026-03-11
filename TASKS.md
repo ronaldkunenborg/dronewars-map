@@ -98,10 +98,24 @@
 
 47.2 [done] Wire the bootstrap flow and source details into project docs (`README.md` and `scripts/README.md`) so clean-checkout setup is reproducible without manual source registration.
 
-48. [pending] Redesign the layer GUI into four sections: `Terrain` (water, wetlands, forests, contours, hillshade), `Logistics` (roads, railways, and `airports` shown greyed/disabled for now), `Settlements` (keep current behavior and controls), and `Boundaries` (oblasts, hexes, voronoi).
+48. [done] Redesign the layer GUI into four sections: `Terrain` (water, wetlands, forests, contours, hillshade), `Logistics` (roads, railways, and `airports` shown greyed/disabled for now), `Settlements` (keep current behavior and controls), and `Boundaries` (oblasts, hexes, voronoi).
 
-49. [pending] After completing the layer GUI redesign, update the `View Modes` presets and labels so they align with the new section structure and expected visibility behavior.
+49. [done] After completing the layer GUI redesign, update the `View Modes` presets and labels so they align with the new section structure and expected visibility behavior.
 
-50. [pending] Review and correct Voronoi generation logic so seed cities and rendered cells use the same country-scope input set (including cross-border consistency), and replace oblast-based clipping with nation-border clipping for Voronoi cells.
+50. [done] Review and correct Voronoi generation logic so seed cities and rendered cells use the same country-scope input set (including cross-border consistency), and replace oblast-based clipping with nation-border clipping for Voronoi cells.
 
-51. [pending] Add country-name labels placed within each country with a stronger cartographic style (for example curved/arc-like placement where suitable, larger text, and serif styling for Latin-script names), while using an appropriate readable non-serif fallback for Cyrillic labels.
+51. [done] Add one dominant country-name label per country (not multiple repeated labels), rendered much larger and spanning most of the country with arc-like placement similar to stylized fantasy-map labels; for Cyrillic country names, show the English name directly below in a smaller secondary line.
+
+52. [pending] Investigate the impact of excluding cells whose elevation is predominantly sea-level or below 10 meters, including effects on map coverage, connectivity, analytics outputs, and operational usability.
+
+53. [pending] Investigate and benchmark options to reduce terrain generation runtime and output size, then recommend defaults with quality/performance tradeoffs documented.
+
+53.1 [pending] Benchmark reduced cached DEM resolutions (for example 60m and 90m) against current 30m for build time, file size, and visual quality.
+
+53.2 [pending] Evaluate compressed GeoTIFF outputs for cached theater DEM and derivatives (for example `COMPRESS=DEFLATE`, `PREDICTOR=2`, `TILED=YES`) and compare read/write performance.
+
+53.3 [pending] Benchmark lower hillshade tile max zoom levels (for example cap at z10 instead of z12) and measure tile count, generation time, and in-app zoomed-in quality impact.
+
+53.4 [pending] Evaluate theater extent reduction strategies (tighter bbox) and quantify impact on processing cost versus border-context loss.
+
+53.5 [pending] Prototype a two-tier terrain workflow: keep full raw elevation cache, but derive a smaller display DEM optimized for hillshade generation and map rendering.

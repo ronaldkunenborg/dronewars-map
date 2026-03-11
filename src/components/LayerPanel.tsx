@@ -1,16 +1,19 @@
+import type { CSSProperties } from "react";
+
 export type LayerControlId =
   | "water"
   | "wetlands"
   | "forests"
   | "roads"
   | "railways"
+  | "airports"
   | "settlements"
   | "oblasts"
   | "hexes"
   | "contours"
   | "hillshade";
 
-export type ViewMode = "terrain" | "hydrology" | "mobility" | "operational-cells";
+export type ViewMode = "terrain" | "logistics" | "settlements" | "boundaries";
 export type CellLayerMode = "hexes" | "voronoi";
 export type SettlementDisplayLevel = "cities" | "towns" | "villages";
 
@@ -24,17 +27,27 @@ type LayerControl = {
   available: boolean;
 };
 
-const layerControls: LayerControl[] = [
-  { id: "water", label: "Water", description: "Rivers and water bodies", color: "#6f8fab", available: true },
+const terrainLayerControls: LayerControl[] = [
+  { id: "water", label: "Water", description: "Rivers, seas, and water bodies", color: "#6f8fab", available: true },
   { id: "wetlands", label: "Wetlands", description: "Wetland layer", color: "#91a98f", available: true },
   { id: "forests", label: "Forests", description: "Forest cover", color: "#7f9572", available: true },
-  { id: "roads", label: "Roads", description: "Road network", color: "#b4895b", available: true },
-  { id: "railways", label: "Railways", description: "Rail network", color: "#5f655b", available: true },
-  { id: "settlements", label: "Settlements", description: "Populated places", color: "#5a4d3f", available: true },
-  { id: "oblasts", label: "Oblasts", description: "Reference boundaries", color: "#73796d", available: true },
-  { id: "hexes", label: "Operational Cells", description: "Simulation hex grid", color: "#55614f", available: true },
   { id: "contours", label: "Contours", description: "Not generated yet", color: "#9f9f9f", available: false },
   { id: "hillshade", label: "Hillshade", description: "Relief shading from elevation", color: "#727067", available: true },
+];
+
+const logisticsLayerControls: LayerControl[] = [
+  { id: "roads", label: "Roads", description: "Road network", color: "#b4895b", available: true },
+  { id: "railways", label: "Railways", description: "Rail network", color: "#5f655b", available: true },
+  { id: "airports", label: "Airports", description: "Planned layer", color: "#9f9f9f", available: false },
+];
+
+const settlementsLayerControls: LayerControl[] = [
+  { id: "settlements", label: "Settlements", description: "Populated places", color: "#5a4d3f", available: true },
+];
+
+const boundariesLayerControls: LayerControl[] = [
+  { id: "oblasts", label: "Oblasts", description: "Reference boundaries", color: "#73796d", available: true },
+  { id: "hexes", label: "Hexes", description: "Operational hex layer", color: "#55614f", available: true },
 ];
 
 export const defaultLayerVisibility: LayerVisibility = {
@@ -43,6 +56,7 @@ export const defaultLayerVisibility: LayerVisibility = {
   forests: false,
   roads: true,
   railways: true,
+  airports: false,
   settlements: false,
   oblasts: true,
   hexes: true,
@@ -53,39 +67,59 @@ export const defaultLayerVisibility: LayerVisibility = {
 export const presetVisibility: Record<ViewMode, LayerVisibility> = {
   terrain: {
     ...defaultLayerVisibility,
-    hillshade: true,
-    roads: false,
-    railways: false,
-    settlements: false,
-    hexes: false,
-  },
-  hydrology: {
-    ...defaultLayerVisibility,
-    forests: false,
-    roads: false,
-    railways: false,
-    settlements: false,
-    oblasts: false,
-    hexes: false,
-  },
-  mobility: {
-    ...defaultLayerVisibility,
-    hillshade: true,
+    water: true,
     wetlands: true,
-    forests: false,
+    forests: true,
+    contours: false,
+    hillshade: true,
+    roads: false,
+    railways: false,
+    settlements: false,
     oblasts: false,
     hexes: false,
   },
-  "operational-cells": {
+  logistics: {
     ...defaultLayerVisibility,
-    hexes: true,
+    water: false,
+    wetlands: false,
+    forests: false,
+    hillshade: false,
+    roads: true,
+    railways: true,
+    settlements: false,
+    oblasts: false,
+    hexes: false,
+  },
+  settlements: {
+    ...defaultLayerVisibility,
+    water: false,
+    wetlands: false,
+    forests: false,
+    roads: true,
+    railways: false,
+    settlements: true,
     oblasts: true,
+    hexes: false,
+    hillshade: false,
+  },
+  boundaries: {
+    ...defaultLayerVisibility,
+    water: false,
+    wetlands: false,
+    forests: false,
+    roads: false,
+    railways: false,
+    settlements: false,
+    oblasts: true,
+    hexes: true,
+    hillshade: false,
   },
 };
 
 type LayerPanelProps = {
   cellLayerMode: CellLayerMode;
   coordinateReadout: string | null;
+  zoomReadout: string | null;
   settlementDisplayLevel: SettlementDisplayLevel;
   onApplyPreset: (mode: ViewMode) => void;
   onChangeCellLayerMode: (mode: CellLayerMode) => void;
@@ -96,9 +130,44 @@ type LayerPanelProps = {
   viewMode: ViewMode;
 };
 
+function LayerToggleRow({
+  layer,
+  checked,
+  onToggle,
+}: {
+  layer: LayerControl;
+  checked: boolean;
+  onToggle: (layerId: LayerControlId) => void;
+}) {
+  return (
+    <li>
+      <label className={`toggle-row${layer.available ? "" : " is-disabled"}`}>
+        <div className="layer-label">
+          <strong>{layer.label}</strong>
+          <span>{layer.description}</span>
+        </div>
+        <span className="toggle-row__controls">
+          <span
+            aria-hidden="true"
+            className="layer-dot"
+            style={{ "--dot-color": layer.color } as CSSProperties}
+          />
+          <input
+            checked={checked}
+            disabled={!layer.available}
+            onChange={() => onToggle(layer.id)}
+            type="checkbox"
+          />
+        </span>
+      </label>
+    </li>
+  );
+}
+
 export function LayerPanel({
   cellLayerMode,
   coordinateReadout,
+  zoomReadout,
   settlementDisplayLevel,
   onApplyPreset,
   onChangeCellLayerMode,
@@ -121,25 +190,25 @@ export function LayerPanel({
             Terrain
           </button>
           <button
-            className={`preset-button${viewMode === "hydrology" ? " is-active" : ""}`}
-            onClick={() => onApplyPreset("hydrology")}
+            className={`preset-button${viewMode === "logistics" ? " is-active" : ""}`}
+            onClick={() => onApplyPreset("logistics")}
             type="button"
           >
-            Hydrology
+            Logistics
           </button>
           <button
-            className={`preset-button${viewMode === "mobility" ? " is-active" : ""}`}
-            onClick={() => onApplyPreset("mobility")}
+            className={`preset-button${viewMode === "settlements" ? " is-active" : ""}`}
+            onClick={() => onApplyPreset("settlements")}
             type="button"
           >
-            Mobility
+            Settlements
           </button>
           <button
-            className={`preset-button${viewMode === "operational-cells" ? " is-active" : ""}`}
-            onClick={() => onApplyPreset("operational-cells")}
+            className={`preset-button${viewMode === "boundaries" ? " is-active" : ""}`}
+            onClick={() => onApplyPreset("boundaries")}
             type="button"
           >
-            Cells
+            Boundaries
           </button>
         </div>
         <button className="reset-button" onClick={onReset} type="button">
@@ -148,9 +217,37 @@ export function LayerPanel({
       </section>
 
       <section className="panel">
-        <h2>Layers</h2>
+        <h2>Terrain</h2>
         <ul className="layer-list">
-          {layerControls.map((layer) => (
+          {terrainLayerControls.map((layer) => (
+            <LayerToggleRow
+              key={layer.id}
+              checked={visibility[layer.id]}
+              layer={layer}
+              onToggle={onToggleLayer}
+            />
+          ))}
+        </ul>
+      </section>
+
+      <section className="panel">
+        <h2>Logistics</h2>
+        <ul className="layer-list">
+          {logisticsLayerControls.map((layer) => (
+            <LayerToggleRow
+              key={layer.id}
+              checked={visibility[layer.id]}
+              layer={layer}
+              onToggle={onToggleLayer}
+            />
+          ))}
+        </ul>
+      </section>
+
+      <section className="panel">
+        <h2>Settlements</h2>
+        <ul className="layer-list">
+          {settlementsLayerControls.map((layer) => (
             <li key={layer.id}>
               <label className={`toggle-row${layer.available ? "" : " is-disabled"}`}>
                 <div className="layer-label">
@@ -171,52 +268,60 @@ export function LayerPanel({
                   />
                 </span>
               </label>
-              {layer.id === "settlements" ? (
-                <div className="settlement-level">
-                  <label className="settlement-level__label" htmlFor="settlement-level-select">
-                    Level
-                  </label>
-                  <select
-                    className="settlement-level__select"
-                    disabled={!visibility.settlements}
-                    id="settlement-level-select"
-                    onChange={(event) =>
-                      onChangeSettlementDisplayLevel(event.target.value as SettlementDisplayLevel)
-                    }
-                    value={settlementDisplayLevel}
-                  >
-                    <option value="cities">Cities</option>
-                    <option value="towns">Cities + Towns</option>
-                    <option value="villages">Cities + Towns + Villages</option>
-                  </select>
-                </div>
-              ) : null}
+              <div className="settlement-level">
+                <label className="settlement-level__label" htmlFor="settlement-level-select">
+                  Level
+                </label>
+                <select
+                  className="settlement-level__select"
+                  disabled={!visibility.settlements}
+                  id="settlement-level-select"
+                  onChange={(event) =>
+                    onChangeSettlementDisplayLevel(event.target.value as SettlementDisplayLevel)
+                  }
+                  value={settlementDisplayLevel}
+                >
+                  <option value="cities">Cities</option>
+                  <option value="towns">Cities + Towns</option>
+                  <option value="villages">Cities + Towns + Villages</option>
+                </select>
+              </div>
             </li>
           ))}
         </ul>
       </section>
 
       <section className="panel">
-        <h2>Cell Layer</h2>
-        <div className="preset-row">
-          <button
-            className={`preset-button${cellLayerMode === "hexes" ? " is-active" : ""}`}
-            onClick={() => onChangeCellLayerMode("hexes")}
-            type="button"
-          >
-            Hex
-          </button>
-          <button
-            className={`preset-button${cellLayerMode === "voronoi" ? " is-active" : ""}`}
-            onClick={() => onChangeCellLayerMode("voronoi")}
-            type="button"
-          >
-            Voronoi
-          </button>
+        <h2>Boundaries</h2>
+        <ul className="layer-list">
+          {boundariesLayerControls.map((layer) => (
+            <LayerToggleRow
+              key={layer.id}
+              checked={visibility[layer.id]}
+              layer={layer}
+              onToggle={onToggleLayer}
+            />
+          ))}
+        </ul>
+        <div className="cell-layer-mode">
+          <p className="cell-layer-mode__label">Voronoi</p>
+          <div className="preset-row">
+            <button
+              className={`preset-button${cellLayerMode === "hexes" ? " is-active" : ""}`}
+              onClick={() => onChangeCellLayerMode("hexes")}
+              type="button"
+            >
+              Hex
+            </button>
+            <button
+              className={`preset-button${cellLayerMode === "voronoi" ? " is-active" : ""}`}
+              onClick={() => onChangeCellLayerMode("voronoi")}
+              type="button"
+            >
+              Voronoi
+            </button>
+          </div>
         </div>
-        <p className="panel__copy">
-          Switch the operational cell overlay between the generated hex grid and settlement-centered Voronoi cells.
-        </p>
       </section>
 
       <section className="panel">
@@ -236,8 +341,10 @@ export function LayerPanel({
         <p className="panel__copy">
           {coordinateReadout ?? "Move the pointer over the map to read coordinates."}
         </p>
+        <p className="panel__copy">
+          {zoomReadout ?? "Zoom: n/a"}
+        </p>
       </section>
     </>
   );
 }
-import type { CSSProperties } from "react";

@@ -61,6 +61,8 @@ import {
  *   Runs only cached elevation+hillshade acquisition (FABDEM 30m preferred, Copernicus GLO-30 fallback).
  * - `--skip-hillshade`
  *   Only valid with `--elevation-only`; stages elevation but skips hillshade generation.
+ * - `--skip-elevation`
+ *   Skips elevation/hillshade processing during the full public layer build (useful for quick vector-only refreshes).
  * - `--smoke-test=static`
  *   Fetches only the static GeoBoundaries and Natural Earth sources, mainly to validate cache behavior quickly.
  * - `--smoke-test=settlements`
@@ -120,6 +122,10 @@ const sources = {
     "https://raw.githubusercontent.com/nvkelso/natural-earth-vector/master/geojson/ne_10m_roads.geojson",
   railways:
     "https://raw.githubusercontent.com/nvkelso/natural-earth-vector/master/geojson/ne_10m_railroads.geojson",
+  countries:
+    "https://raw.githubusercontent.com/nvkelso/natural-earth-vector/master/geojson/ne_10m_admin_0_countries.geojson",
+  countryBoundaryLines:
+    "https://raw.githubusercontent.com/nvkelso/natural-earth-vector/master/geojson/ne_10m_admin_0_boundary_lines_land.geojson",
   urbanAreas:
     "https://raw.githubusercontent.com/nvkelso/natural-earth-vector/master/geojson/ne_10m_urban_areas_landscan.geojson",
   fabdemTileIndex:
@@ -302,6 +308,7 @@ const smokeTestMode =
 const cacheReportMode = process.argv.includes("--cache-report");
 const elevationOnlyMode = process.argv.includes("--elevation-only");
 const skipHillshadeMode = process.argv.includes("--skip-hillshade");
+const skipElevationMode = process.argv.includes("--skip-elevation");
 
 // Shared empty fallback for layers that may intentionally produce no features.
 function emptyFeatureCollection() {
@@ -346,6 +353,8 @@ function getKnownCacheKeys() {
     "natural-earth/seas",
     "natural-earth/roads",
     "natural-earth/railways",
+    "natural-earth/countries",
+    "natural-earth/country-boundary-lines",
     "natural-earth/urban-areas",
     "overpass/settlements",
     "elevation/fabdem/index",
@@ -1050,6 +1059,198 @@ function filterMajorCityUrbanAreas(featureCollection) {
   };
 }
 
+function detectLabelScript(value) {
+  if (typeof value !== "string" || value.trim() === "") {
+    return "latin";
+  }
+
+  return /[\u0400-\u04ff]/u.test(value) ? "cyrillic" : "latin";
+}
+
+function geometryPrimaryBounds(geometry) {
+  const polygon = selectPrimaryPolygon(geometry);
+
+  if (!polygon) {
+    return null;
+  }
+
+  return polygonBounds(polygon);
+}
+
+function normalizeCountryNameProperties(feature) {
+  const properties = feature.properties ?? {};
+  const name =
+    properties.NAME ??
+    properties.ADMIN ??
+    properties.NAME_EN ??
+    properties.name ??
+    null;
+  const nameEn =
+    properties.NAME_EN ??
+    properties.NAME ??
+    properties.ADMIN ??
+    properties.name_en ??
+    null;
+  const nameUk =
+    properties.NAME_UK ??
+    properties.NAME_RU ??
+    properties.NAME ??
+    properties.ADMIN ??
+    nameEn ??
+    null;
+  const labelCandidate = typeof nameUk === "string" && nameUk.trim() !== "" ? nameUk : nameEn;
+  const bounds = geometryPrimaryBounds(feature.geometry);
+  const labelWidthDeg = bounds ? Math.max(0, bounds.maxLng - bounds.minLng) : 0;
+  const labelHeightDeg = bounds ? Math.max(0, bounds.maxLat - bounds.minLat) : 0;
+  const labelCentroidLng = bounds ? bounds.minLng + labelWidthDeg / 2 : null;
+  const labelCentroidLat = bounds ? bounds.minLat + labelHeightDeg / 2 : null;
+
+  return {
+    type: "Feature",
+    properties: {
+      ...properties,
+      id:
+        properties.ISO_A3_EH ??
+        properties.ISO_A3 ??
+        properties.ISO_A2_EH ??
+        properties.ISO_A2 ??
+        properties.SOV_A3 ??
+        nameEn ??
+        name ??
+        "country",
+      name,
+      nameEn,
+      nameUk,
+      nameLabel: labelCandidate,
+      labelScript: detectLabelScript(labelCandidate),
+      labelWidthDeg,
+      labelHeightDeg,
+      labelCentroidLng,
+      labelCentroidLat,
+    },
+    geometry: feature.geometry,
+  };
+}
+
+function buildCountryBoundaryLayer(featureCollection) {
+  return {
+    type: "FeatureCollection",
+    features: featureCollection.features
+      .filter((feature) => feature.geometry?.type === "Polygon" || feature.geometry?.type === "MultiPolygon")
+      .map(normalizeCountryNameProperties),
+  };
+}
+
+function ringArea(ring) {
+  let area = 0;
+
+  for (let index = 0; index < ring.length - 1; index += 1) {
+    const [x1, y1] = ring[index];
+    const [x2, y2] = ring[index + 1];
+    area += x1 * y2 - x2 * y1;
+  }
+
+  return Math.abs(area / 2);
+}
+
+function selectPrimaryPolygon(geometry) {
+  if (!geometry) {
+    return null;
+  }
+
+  if (geometry.type === "Polygon") {
+    return geometry.coordinates;
+  }
+
+  if (geometry.type === "MultiPolygon") {
+    const best = geometry.coordinates
+      .map((polygon) => ({
+        polygon,
+        area: ringArea(polygon[0] ?? []),
+      }))
+      .sort((left, right) => right.area - left.area)[0];
+
+    return best?.polygon ?? null;
+  }
+
+  return null;
+}
+
+function polygonBounds(polygon) {
+  const outerRing = polygon?.[0] ?? [];
+
+  return outerRing.reduce(
+    (bounds, [lng, lat]) => ({
+      minLng: Math.min(bounds.minLng, lng),
+      maxLng: Math.max(bounds.maxLng, lng),
+      minLat: Math.min(bounds.minLat, lat),
+      maxLat: Math.max(bounds.maxLat, lat),
+    }),
+    {
+      minLng: Number.POSITIVE_INFINITY,
+      maxLng: Number.NEGATIVE_INFINITY,
+      minLat: Number.POSITIVE_INFINITY,
+      maxLat: Number.NEGATIVE_INFINITY,
+    },
+  );
+}
+
+function buildArcLabelLineFeature(countryFeature) {
+  const polygon = selectPrimaryPolygon(countryFeature.geometry);
+
+  if (!polygon) {
+    return null;
+  }
+
+  const bounds = polygonBounds(polygon);
+
+  if (!Number.isFinite(bounds.minLng) || !Number.isFinite(bounds.maxLng)) {
+    return null;
+  }
+
+  const width = bounds.maxLng - bounds.minLng;
+  const height = bounds.maxLat - bounds.minLat;
+
+  if (width <= 0 || height <= 0) {
+    return null;
+  }
+
+  const left = bounds.minLng + width * 0.12;
+  const right = bounds.maxLng - width * 0.12;
+  const baseLat = bounds.minLat + height * 0.52;
+  const arcAmplitude = Math.max(0.08, height * 0.14);
+  const coordinates = [];
+
+  for (let step = 0; step <= 6; step += 1) {
+    const t = step / 6;
+    const arc = 1 - (2 * t - 1) ** 2;
+    coordinates.push([
+      left + (right - left) * t,
+      baseLat + arcAmplitude * arc,
+    ]);
+  }
+
+  return {
+    type: "Feature",
+    properties: {
+      ...countryFeature.properties,
+    },
+    geometry: {
+      type: "LineString",
+      coordinates,
+    },
+  };
+}
+
+function buildCountryLabelGuideLayer(countryBoundaryLayer) {
+  return {
+    type: "FeatureCollection",
+    features: (countryBoundaryLayer.features ?? [])
+      .map(buildArcLabelLineFeature)
+      .filter(Boolean),
+  };
+}
+
 // Normalize inconsistent population tag formats into a numeric value when possible.
 function normalizePopulation(value) {
   if (typeof value === "number") {
@@ -1724,6 +1925,8 @@ async function main() {
       fetchJson(sources.seas, "natural-earth/seas"),
       fetchJson(sources.roads, "natural-earth/roads"),
       fetchJson(sources.railways, "natural-earth/railways"),
+      fetchJson(sources.countries, "natural-earth/countries"),
+      fetchJson(sources.countryBoundaryLines, "natural-earth/country-boundary-lines"),
       fetchJson(sources.urbanAreas, "natural-earth/urban-areas"),
     ]);
     console.log("Smoke test completed for static public sources.");
@@ -1784,6 +1987,8 @@ async function main() {
     seas,
     roads,
     railways,
+    countries,
+    countryBoundaryLines,
     urbanAreas,
   ] = await Promise.all([
     fetchJson(adm0Url, "geoboundaries/adm0-geometry"),
@@ -1793,6 +1998,8 @@ async function main() {
     fetchJson(sources.seas, "natural-earth/seas"),
     fetchJson(sources.roads, "natural-earth/roads"),
     fetchJson(sources.railways, "natural-earth/railways"),
+    fetchJson(sources.countries, "natural-earth/countries"),
+    fetchJson(sources.countryBoundaryLines, "natural-earth/country-boundary-lines"),
     fetchJson(sources.urbanAreas, "natural-earth/urban-areas"),
   ]);
 
@@ -1823,12 +2030,16 @@ async function main() {
   let elevationAvailable = false;
   let hillshadeLayerPath = "terrain/hillshade-clipped.png";
 
-  try {
-    const elevationOutputs = await ensureElevationOutputs();
-    hillshadeLayerPath = elevationOutputs?.hillshadeLayerPath ?? hillshadeLayerPath;
-    elevationAvailable = true;
-  } catch (error) {
-    console.warn(`Skipping elevation/hillshade in public build: ${error.message}`);
+  if (!skipElevationMode) {
+    try {
+      const elevationOutputs = await ensureElevationOutputs();
+      hillshadeLayerPath = elevationOutputs?.hillshadeLayerPath ?? hillshadeLayerPath;
+      elevationAvailable = true;
+    } catch (error) {
+      console.warn(`Skipping elevation/hillshade in public build: ${error.message}`);
+    }
+  } else {
+    console.log("Skipping elevation/hillshade in public build due to --skip-elevation.");
   }
 
   const filteredLayers = {
@@ -1841,6 +2052,14 @@ async function main() {
     "layers/forests.geojson": forests,
     "layers/roads.geojson": filterFeatureCollectionToBbox(roads, theaterBbox),
     "layers/railways.geojson": filterFeatureCollectionToBbox(railways, theaterBbox),
+    "layers/country-boundaries.geojson": buildCountryBoundaryLayer(
+      filterFeatureCollectionToBbox(countries, theaterBbox),
+    ),
+    "layers/country-label-guides.geojson": emptyFeatureCollection(),
+    "layers/country-boundary-lines.geojson": filterFeatureCollectionToBbox(
+      countryBoundaryLines,
+      theaterBbox,
+    ),
     "layers/major-city-urban-areas.geojson": filterMajorCityUrbanAreas(
       filterFeatureCollectionToBbox(urbanAreas, theaterBbox),
     ),
@@ -1850,8 +2069,11 @@ async function main() {
     ),
   };
   filteredLayers["layers/settlement-voronoi-cells.geojson"] = buildSettlementVoronoiLayer(
-    oblastBoundaries,
+    filteredLayers["layers/country-boundaries.geojson"],
     filteredLayers["layers/settlements.geojson"],
+  );
+  filteredLayers["layers/country-label-guides.geojson"] = buildCountryLabelGuideLayer(
+    filteredLayers["layers/country-boundaries.geojson"],
   );
 
   for (const [relativePath, data] of Object.entries(filteredLayers)) {
@@ -1872,6 +2094,27 @@ async function main() {
       category: "reference",
       geometryKind: "polygon",
       path: "layers/oblast-boundaries.geojson",
+    },
+    {
+      id: "country-boundaries",
+      label: "Country Boundaries",
+      category: "reference",
+      geometryKind: "polygon",
+      path: "layers/country-boundaries.geojson",
+    },
+    {
+      id: "country-boundary-lines",
+      label: "Country Boundary Lines",
+      category: "reference",
+      geometryKind: "line",
+      path: "layers/country-boundary-lines.geojson",
+    },
+    {
+      id: "country-label-guides",
+      label: "Country Labels",
+      category: "reference",
+      geometryKind: "line",
+      path: "layers/country-label-guides.geojson",
     },
     {
       id: "rivers",

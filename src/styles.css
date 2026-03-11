@@ -128,6 +128,18 @@ select {
   border-bottom: 0;
 }
 
+.cell-layer-mode {
+  margin-top: 0.8rem;
+  padding-top: 0.8rem;
+  border-top: 1px solid rgba(90, 100, 86, 0.12);
+}
+
+.cell-layer-mode__label {
+  margin: 0 0 0.45rem;
+  font-size: 0.82rem;
+  color: #5f685a;
+}
+
 .settlement-level {
   margin-top: 0.45rem;
   display: grid;

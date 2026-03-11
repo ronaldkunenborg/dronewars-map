@@ -227,7 +227,7 @@ function featureLabel(feature, fallback) {
   );
 }
 
-export function buildSettlementVoronoiLayer(oblastBoundaries, settlements) {
+export function buildSettlementVoronoiLayer(countryBoundaries, settlements) {
   const settlementFeatures = (settlements.features ?? []).filter(
     (feature) =>
       feature.geometry?.type === "Point" &&
@@ -237,7 +237,7 @@ export function buildSettlementVoronoiLayer(oblastBoundaries, settlements) {
       typeof feature.geometry.coordinates[1] === "number",
   );
   const features = [];
-  const oblastRecords = (oblastBoundaries.features ?? [])
+  const countryRecords = (countryBoundaries.features ?? [])
     .filter(
       (feature) =>
         feature.geometry &&
@@ -249,11 +249,11 @@ export function buildSettlementVoronoiLayer(oblastBoundaries, settlements) {
     }));
 
   for (const settlementFeature of settlementFeatures) {
-    const containingOblast =
-      oblastRecords.find((record) =>
+    const containingCountry =
+      countryRecords.find((record) =>
         featureContainsPoint(record.feature, settlementFeature.geometry.coordinates),
       ) ??
-      oblastRecords.reduce((best, candidate) => {
+      countryRecords.reduce((best, candidate) => {
         const distance = featureDistanceToPoint(
           candidate.feature,
           settlementFeature.geometry.coordinates,
@@ -269,18 +269,18 @@ export function buildSettlementVoronoiLayer(oblastBoundaries, settlements) {
         return best;
       }, null)?.record;
 
-    containingOblast?.settlements.push(settlementFeature);
+    containingCountry?.settlements.push(settlementFeature);
   }
 
-  for (const { feature: oblastFeature, settlements: oblastSettlements } of oblastRecords) {
-    if (oblastSettlements.length === 0) {
+  for (const { feature: countryFeature, settlements: countrySettlements } of countryRecords) {
+    if (countrySettlements.length === 0) {
       continue;
     }
 
     const uniquePoints = [];
     const seenCoordinates = new Set();
 
-    for (const settlement of oblastSettlements) {
+    for (const settlement of countrySettlements) {
       const [lng, lat] = settlement.geometry.coordinates;
       const coordinateKey = `${lng.toFixed(8)},${lat.toFixed(8)}`;
 
@@ -296,7 +296,7 @@ export function buildSettlementVoronoiLayer(oblastBoundaries, settlements) {
       const geometry = buildVoronoiCellGeometry(
         uniquePoints.map((feature) => feature.geometry.coordinates),
         index,
-        oblastFeature.geometry,
+        countryFeature.geometry,
       );
 
       if (!geometry) {
@@ -316,8 +316,19 @@ export function buildSettlementVoronoiLayer(oblastBoundaries, settlements) {
           nameEn: settlement.properties?.nameEn ?? null,
           place: settlement.properties?.place ?? "settlement",
           population: settlement.properties?.population ?? null,
-          oblastId: oblastFeature.properties?.shapeID ?? oblastFeature.properties?.id ?? null,
-          oblastName: featureLabel(oblastFeature, "Oblast"),
+          countryId:
+            countryFeature.properties?.ISO_A2_EH ??
+            countryFeature.properties?.ISO_A2 ??
+            countryFeature.properties?.ISO_A3_EH ??
+            countryFeature.properties?.ISO_A3 ??
+            countryFeature.properties?.shapeID ??
+            countryFeature.properties?.id ??
+            null,
+          countryName:
+            countryFeature.properties?.nameLabel ??
+            countryFeature.properties?.name ??
+            countryFeature.properties?.NAME ??
+            featureLabel(countryFeature, "Country"),
         },
         geometry,
       });

@@ -11,13 +11,14 @@ import { ukraineTheaterConfig } from "./config";
 import { MapView } from "./map/MapView";
 
 export default function App() {
-  const [visibility, setVisibility] = useState(presetVisibility["operational-cells"]);
-  const [viewMode, setViewMode] = useState<ViewMode>("operational-cells");
+  const [visibility, setVisibility] = useState(presetVisibility.boundaries);
+  const [viewMode, setViewMode] = useState<ViewMode>("boundaries");
   const [cellLayerMode, setCellLayerMode] = useState<CellLayerMode>("hexes");
   const [settlementDisplayLevel, setSettlementDisplayLevel] =
     useState<SettlementDisplayLevel>("villages");
   const [resetToken, setResetToken] = useState(0);
   const [coordinateReadout, setCoordinateReadout] = useState<string | null>(null);
+  const [zoomReadout, setZoomReadout] = useState<string | null>(null);
 
   function handleChangeCellLayerMode(mode: CellLayerMode) {
     setCellLayerMode(mode);
@@ -58,6 +59,7 @@ export default function App() {
         <LayerPanel
           cellLayerMode={cellLayerMode}
           coordinateReadout={coordinateReadout}
+          zoomReadout={zoomReadout}
           settlementDisplayLevel={settlementDisplayLevel}
           onApplyPreset={handleApplyPreset}
           onChangeCellLayerMode={handleChangeCellLayerMode}
@@ -74,6 +76,7 @@ export default function App() {
           layerVisibility={visibility}
           settlementDisplayLevel={settlementDisplayLevel}
           onCoordinateChange={setCoordinateReadout}
+          onZoomChange={setZoomReadout}
           resetToken={resetToken}
         />
       </section>

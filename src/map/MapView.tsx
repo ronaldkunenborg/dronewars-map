@@ -246,6 +246,7 @@ type MapViewProps = {
   layerVisibility: LayerVisibility;
   settlementDisplayLevel: SettlementDisplayLevel;
   onCoordinateChange: (value: string | null) => void;
+  onZoomChange: (value: string | null) => void;
   resetToken: number;
 };
 
@@ -502,6 +503,7 @@ export function MapView({
   layerVisibility,
   settlementDisplayLevel,
   onCoordinateChange,
+  onZoomChange,
   resetToken,
 }: MapViewProps) {
   const containerRef = useRef<HTMLDivElement | null>(null);
@@ -731,6 +733,7 @@ export function MapView({
       applyLayerVisibility(map, layerVisibility);
       applyOperationalCellLayerMode(map, layerVisibility.hexes, cellLayerMode);
       applySettlementDisplayLevel(map, layerVisibility.settlements, settlementDisplayLevel);
+      onZoomChange(`Zoom: ${map.getZoom().toFixed(2)}x`);
     };
 
     const handleMouseMove = (event: MapMouseEvent) => {
@@ -738,8 +741,12 @@ export function MapView({
         `${event.lngLat.lng.toFixed(5)}, ${event.lngLat.lat.toFixed(5)}`,
       );
     };
+    const handleZoom = () => {
+      onZoomChange(`Zoom: ${map.getZoom().toFixed(2)}x`);
+    };
 
     map.on("mousemove", handleMouseMove);
+    map.on("zoom", handleZoom);
 
     loadProcessedMapData()
       .then((processedData: ProcessedMapData) => {
@@ -753,6 +760,7 @@ export function MapView({
         map = createBaseMap(containerRef.current, processedData);
         mapRef.current = map;
         map.on("mousemove", handleMouseMove);
+        map.on("zoom", handleZoom);
         map.once("idle", mountDebugHandler);
         setStatus("Terrain shell loaded from local processed data.");
         setDatasetInfo(
@@ -791,6 +799,7 @@ export function MapView({
             map = createBaseMap(containerRef.current, processedData);
             mapRef.current = map;
             map.on("mousemove", handleMouseMove);
+            map.on("zoom", handleZoom);
             map.once("idle", mountDebugHandler);
 
             setStatus("Processed layer manifest not found yet. Showing offline terrain shell with operational hexes only.");
@@ -815,10 +824,12 @@ export function MapView({
       disposed = true;
       detachDebugHandler?.();
       onCoordinateChange(null);
+      onZoomChange(null);
+      map.off("zoom", handleZoom);
       map.remove();
       mapRef.current = null;
     };
-  }, [onCoordinateChange]);
+  }, [onCoordinateChange, onZoomChange]);
 
   useEffect(() => {
     if (!mapRef.current) {
@@ -843,6 +854,7 @@ export function MapView({
       padding: 48,
       duration: 800,
     });
+    onZoomChange(`Zoom: ${mapRef.current.getZoom().toFixed(2)}x`);
   }, [resetToken]);
 
   return (
