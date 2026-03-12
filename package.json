@@ -22,6 +22,7 @@
     "data:hex:enrich": "node scripts/hex/enrich-hex-grid.mjs",
     "data:analytics": "node scripts/analytics/compute-cell-analytics.mjs",
     "data:analytics:elevation-thresholds": "node scripts/analytics/investigate-elevation-thresholds.mjs",
+    "data:analytics:dem-resolutions": "node scripts/analytics/benchmark-dem-resolutions.mjs",
     "data:export:hex": "node scripts/export/export-hex-dataset.mjs"
   },
   "dependencies": {

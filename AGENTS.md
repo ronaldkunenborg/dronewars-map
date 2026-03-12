@@ -4,6 +4,7 @@
 - Before starting work, review `TASKS.md`, pick the first unfinished task in order, and attempt to complete that task before starting any later task.
 - If an external source is used to provide us with raw data, use it only to populate or refresh a local cache; normal layer builds must read the cache and must not reload them from an external source on every run.
 - When invoking GDAL/OSGeo tools on this machine, use explicit binaries from `C:\OSGeo4W\bin` (or from `OSGEO4W_BIN` when set).
+- Prefer broader OpenStreetMap-derived thematic coverage where useful (including airfields and other special features), and prioritize OSM-informed terrain/landuse inputs when improving hex-cell shading quality.
 
 ## Git commit message format
 - Always use real newlines in commit bodies.

@@ -15,6 +15,12 @@ Elevation threshold impact investigation:
 npm run data:analytics:elevation-thresholds
 ```
 
+DEM resolution benchmark (subset geometry clip of the theater boundary):
+
+```bash
+npm run data:analytics:dem-resolutions
+```
+
 Inputs:
 
 - `data/processed/hex-cells.geojson`
@@ -25,6 +31,8 @@ Output:
 - `data/processed/hex-cells-analytics.geojson`
 - `reports/elevation-threshold-investigation.json`
 - `reports/elevation-threshold-investigation.md`
+- `reports/dem-resolution-benchmark/dem-resolution-benchmark.json`
+- `reports/dem-resolution-benchmark/dem-resolution-benchmark.md`
 
 Current analytics are heuristic and intentionally transparent:
 

@@ -33,6 +33,8 @@ Current analytics scripts:
 
 - `scripts/analytics/compute-cell-analytics.mjs`: derive terrain/infrastructure summaries and initial operational scores for each hex.
 - `scripts/analytics/scoring.mjs`: tunable heuristic scoring constants and formulas for capacity, mobility, and defensibility.
+- `scripts/analytics/investigate-elevation-thresholds.mjs`: compare low-elevation cutoff impacts on cell coverage and connectivity.
+- `scripts/analytics/benchmark-dem-resolutions.mjs`: benchmark 30m/60m/90m DEM outputs on a subset theater geometry for runtime, size, and detail tradeoffs.
 
 Current export scripts:
 

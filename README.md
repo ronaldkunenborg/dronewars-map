@@ -211,6 +211,54 @@ C:\OSGeo4W\bin\projinfo.exe EPSG:3857
 C:\OSGeo4W\bin\gdalinfo.exe --version
 ```
 
+### Report Commands
+
+These commands generate report outputs for analysis and benchmarking.
+
+1. Public source cache status report (console-only):
+
+```bash
+node scripts/layers/fetch-public-layers.mjs --cache-report
+```
+
+Output:
+
+- prints a cache health/status report in the terminal (no file written under `reports/`)
+
+2. Elevation threshold impact report:
+
+```bash
+npm run data:analytics:elevation-thresholds
+```
+
+Outputs:
+
+- `reports/elevation-threshold-investigation.json`
+- `reports/elevation-threshold-investigation.md`
+
+3. DEM resolution benchmark report (Task 53.1):
+
+```bash
+npm run data:analytics:dem-resolutions
+```
+
+Outputs:
+
+- `reports/dem-resolution-benchmark/dem-resolution-benchmark.json`
+- `reports/dem-resolution-benchmark/dem-resolution-benchmark.md`
+- `reports/dem-resolution-benchmark/hillshade-subset-*.png` (quick visual comparison)
+- `reports/dem-resolution-benchmark/subset-cutline.geojson` (benchmark subset geometry)
+
+The files above are regenerable artifacts; rerun the same command to recreate them after cleanup.
+
+Current DEM subset benchmark (`2026-03-12`, subset scale `0.55`, approx area ratio `0.3025`):
+
+- `30m`: `35.4s`, combined DEM+hillshade size `4429.24 MiB` (baseline)
+- `60m`: `17.8s` (`~1.99x` faster), combined `1107.87 MiB` (`~4.00x` smaller), medium-high detail retention
+- `90m`: `10.9s` (`~3.25x` faster), combined `492.79 MiB` (`~8.99x` smaller), medium detail retention
+
+Recommended default target for display/hillshade derivatives: `60m`, while retaining `30m` in raw cache as the high-detail source.
+
 ### 2. Optional Local Pipeline Scaffolding
 
 The repo also contains a local pipeline structure for:
