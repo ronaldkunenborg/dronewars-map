@@ -142,7 +142,7 @@ const gdalTools = {
   tiles: "gdal2tiles.exe",
 };
 const hillshadeTileSize = 1024;
-const hillshadeTileZoomRange = "4-12";
+const hillshadeTileZoomRange = "4-10";
 
 const gdalCommandNames = new Set(Object.values(gdalTools));
 const osgeoBinDir = process.env.OSGEO4W_BIN ?? "C:\\OSGeo4W\\bin";
@@ -993,6 +993,21 @@ async function ensureElevationOutputs() {
   return {
     hillshadeLayerPath,
   };
+}
+
+function detectExistingHillshadeLayerPath() {
+  const tiledRoot = path.join(processedRoot, "terrain", "hillshade-tiles");
+  const pngFallback = "terrain/hillshade-clipped.png";
+
+  if (!existsSync(path.join(processedRoot, pngFallback))) {
+    return null;
+  }
+
+  if (existsSync(path.join(tiledRoot, "10"))) {
+    return "terrain/hillshade-tiles/{z}/{x}/{y}.png";
+  }
+
+  return pngFallback;
 }
 
 // Try multiple Overpass endpoints until one succeeds, then cache the successful payload.
@@ -2040,6 +2055,13 @@ async function main() {
     }
   } else {
     console.log("Skipping elevation/hillshade in public build due to --skip-elevation.");
+    const existingHillshadePath = detectExistingHillshadeLayerPath();
+    const existingElevationPath = path.join(processedRoot, "terrain", "elevation-clipped.tif");
+
+    if (existsSync(existingElevationPath) && existingHillshadePath) {
+      elevationAvailable = true;
+      hillshadeLayerPath = existingHillshadePath;
+    }
   }
 
   const filteredLayers = {

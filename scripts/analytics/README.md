@@ -9,6 +9,12 @@ capacity and scoring outputs.
 npm run data:analytics
 ```
 
+Elevation threshold impact investigation:
+
+```bash
+npm run data:analytics:elevation-thresholds
+```
+
 Inputs:
 
 - `data/processed/hex-cells.geojson`
@@ -17,6 +23,8 @@ Inputs:
 Output:
 
 - `data/processed/hex-cells-analytics.geojson`
+- `reports/elevation-threshold-investigation.json`
+- `reports/elevation-threshold-investigation.md`
 
 Current analytics are heuristic and intentionally transparent:
 
@@ -28,4 +36,3 @@ Current analytics are heuristic and intentionally transparent:
 
 This keeps the scoring pipeline functional now while leaving room for later
 replacement with more exact raster and geometry analysis.
-

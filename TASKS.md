@@ -106,7 +106,12 @@
 
 51. [done] Add one dominant country-name label per country (not multiple repeated labels), rendered much larger and spanning most of the country with arc-like placement similar to stylized fantasy-map labels; for Cyrillic country names, show the English name directly below in a smaller secondary line.
 
-52. [pending] Investigate the impact of excluding cells whose elevation is predominantly sea-level or below 10 meters, including effects on map coverage, connectivity, analytics outputs, and operational usability.
+52. [done] Investigate the impact of excluding low-elevation cells at thresholds below 10m, 50m, and 100m (with sea-level focus), including effects on map coverage, connectivity, analytics outputs, and operational usability.
+52.results [done] Current dataset (`7960` cells) centroid-sampled against `terrain/elevation-clipped.tif` shows:
+ - `<10m`: remove `1062` cells (`13.34%`), remove `59` city/town-like cells, `5` kept-cell components.
+ - `<50m`: remove `1535` cells (`19.28%`), remove `182` city/town-like cells, `11` kept-cell components.
+ - `<100m`: remove `2345` cells (`29.46%`), remove `357` city/town-like cells, `23` kept-cell components.
+ - Conclusion: `<10m` is the least disruptive cutoff; `<50m` and `<100m` remove substantial inhabited lowlands.
 
 53. [pending] Investigate and benchmark options to reduce terrain generation runtime and output size, then recommend defaults with quality/performance tradeoffs documented.
 
@@ -114,7 +119,7 @@
 
 53.2 [pending] Evaluate compressed GeoTIFF outputs for cached theater DEM and derivatives (for example `COMPRESS=DEFLATE`, `PREDICTOR=2`, `TILED=YES`) and compare read/write performance.
 
-53.3 [pending] Benchmark lower hillshade tile max zoom levels (for example cap at z10 instead of z12) and measure tile count, generation time, and in-app zoomed-in quality impact.
+53.3 [done] Cap hillshade tile max zoom to z10 (from z12) and cap map zoom to z10; remove legacy z11/z12 tile folders from local output. Current per-zoom tile counts before pruning were: z10 `2052`, z11 `7844`, z12 `31017` (total z11+z12 removable: `38861` tiles).
 
 53.4 [pending] Evaluate theater extent reduction strategies (tighter bbox) and quantify impact on processing cost versus border-context loss.
 

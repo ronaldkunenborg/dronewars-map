@@ -1,5 +1,5 @@
 {
-  "generatedAt": "2026-03-11T23:27:08.508Z",
+  "generatedAt": "2026-03-12T00:09:49.763Z",
   "layers": [
     {
       "id": "theater-boundary",
@@ -98,6 +98,20 @@
       "category": "settlements",
       "geometryKind": "point",
       "path": "layers/settlements.geojson"
+    },
+    {
+      "id": "terrain-elevation",
+      "label": "Terrain Elevation",
+      "category": "terrain",
+      "geometryKind": "raster",
+      "path": "terrain/elevation-clipped.tif"
+    },
+    {
+      "id": "terrain-hillshade",
+      "label": "Terrain Hillshade",
+      "category": "terrain",
+      "geometryKind": "raster",
+      "path": "terrain/hillshade-tiles/{z}/{x}/{y}.png"
     },
     {
       "id": "settlement-voronoi-cells",

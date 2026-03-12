@@ -1,0 +1,111 @@
+{
+  "generatedAt": "2026-03-11T23:35:38.532Z",
+  "demPath": "C:\\Users\\RonaldKunenborg\\Dropbox\\GrundsatzlichIT\\Projecten\\WebCode\\dronewars-map\\data\\processed\\terrain\\elevation-clipped.tif",
+  "source": "data/processed/hex-cells-analytics.geojson",
+  "sampleMethod": "centroid-point-sampling-wgs84-gdallocationinfo",
+  "baseline": {
+    "totalCells": 7960,
+    "totalAreaKm2": 2978018.88,
+    "means": {
+      "effectiveCapacity": 8695.8,
+      "mobilityScore": 39.82,
+      "defensibilityScore": 60.74
+    },
+    "elevation": {
+      "min": -3.5,
+      "p25": 81.26,
+      "p50": 148.95,
+      "p75": 215.99,
+      "max": 2643.02
+    }
+  },
+  "scenarios": [
+    {
+      "thresholdMeters": 10,
+      "removedCellCount": 1062,
+      "removedCellPct": 13.34,
+      "keptCellCount": 6898,
+      "keptCellPct": 86.66,
+      "removedAreaKm2": 397318.6,
+      "removedAreaPct": 13.34,
+      "keptAreaKm2": 2580700.28,
+      "removedSeaDominantCellCount": 852,
+      "removedSettlementCellCount": 242,
+      "removedCityLikeCellCount": 59,
+      "connectedComponents": 5,
+      "largestComponentCells": 6463,
+      "largestComponentPctOfKept": 93.69,
+      "isolatedKeptCells": 1,
+      "isolatedKeptPct": 0.01,
+      "nonLargestSettlementCells": 307,
+      "baselineMeans": {
+        "effectiveCapacity": 8695.8,
+        "mobilityScore": 39.82,
+        "defensibilityScore": 60.74
+      },
+      "keptMeans": {
+        "effectiveCapacity": 9117.54,
+        "mobilityScore": 41.11,
+        "defensibilityScore": 61.53
+      }
+    },
+    {
+      "thresholdMeters": 50,
+      "removedCellCount": 1535,
+      "removedCellPct": 19.28,
+      "keptCellCount": 6425,
+      "keptCellPct": 80.72,
+      "removedAreaKm2": 574278.77,
+      "removedAreaPct": 19.28,
+      "keptAreaKm2": 2403740.11,
+      "removedSeaDominantCellCount": 860,
+      "removedSettlementCellCount": 684,
+      "removedCityLikeCellCount": 182,
+      "connectedComponents": 11,
+      "largestComponentCells": 6110,
+      "largestComponentPctOfKept": 95.1,
+      "isolatedKeptCells": 4,
+      "isolatedKeptPct": 0.06,
+      "nonLargestSettlementCells": 205,
+      "baselineMeans": {
+        "effectiveCapacity": 8695.8,
+        "mobilityScore": 39.82,
+        "defensibilityScore": 60.74
+      },
+      "keptMeans": {
+        "effectiveCapacity": 9160.5,
+        "mobilityScore": 41.2,
+        "defensibilityScore": 61.49
+      }
+    },
+    {
+      "thresholdMeters": 100,
+      "removedCellCount": 2345,
+      "removedCellPct": 29.46,
+      "keptCellCount": 5615,
+      "keptCellPct": 70.54,
+      "removedAreaKm2": 877318.38,
+      "removedAreaPct": 29.46,
+      "keptAreaKm2": 2100700.5,
+      "removedSeaDominantCellCount": 862,
+      "removedSettlementCellCount": 1414,
+      "removedCityLikeCellCount": 357,
+      "connectedComponents": 23,
+      "largestComponentCells": 5433,
+      "largestComponentPctOfKept": 96.76,
+      "isolatedKeptCells": 15,
+      "isolatedKeptPct": 0.27,
+      "nonLargestSettlementCells": 100,
+      "baselineMeans": {
+        "effectiveCapacity": 8695.8,
+        "mobilityScore": 39.82,
+        "defensibilityScore": 60.74
+      },
+      "keptMeans": {
+        "effectiveCapacity": 9229.52,
+        "mobilityScore": 41.51,
+        "defensibilityScore": 61.28
+      }
+    }
+  ]
+}
