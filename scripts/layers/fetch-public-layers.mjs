@@ -1279,6 +1279,7 @@ function countryLabelInnerBox(countryId, bounds) {
     UKR: { padX: 0.14, padY: 0.18 },
     BLR: { padX: 0.2, padY: 0.24 },
     RUS: { padX: 0.14, padY: 0.08 },
+    BGR: { padX: 0.08, padY: 0.2 },
     POL: { padX: 0.16, padY: 0.22 },
     SVK: { padX: 0.16, padY: 0.22 },
     MDA: { padX: 0.22, padY: 0.24 },
@@ -1301,6 +1302,7 @@ function countryLabelInnerBox(countryId, bounds) {
 function countryLabelAnchorFractions(countryId) {
   const anchors = {
     RUS: { x: 0.8, y: 0.91 },
+    BGR: { x: 0.94, y: 0.46 },
     BLR: { x: 0.5, y: 0.45 },
     POL: { x: 0.55, y: 0.62 },
     SVK: { x: 0.55, y: 0.55 },
@@ -1366,6 +1368,91 @@ function buildCountryLabelGuideLayer(countryBoundaryLayer) {
     type: "FeatureCollection",
     features: (countryBoundaryLayer.features ?? [])
       .map(buildCountryLabelPointFeature)
+      .filter(Boolean),
+  };
+}
+
+function firstStringProperty(properties, keys) {
+  for (const key of keys) {
+    const value = properties?.[key];
+
+    if (typeof value === "string" && value.trim() !== "") {
+      return value.trim();
+    }
+  }
+
+  return null;
+}
+
+function buildAdminLabelPointFeature(feature, options) {
+  const {
+    idFields,
+    nameFields,
+    padX = 0.2,
+    padY = 0.2,
+    anchorX = 0.5,
+    anchorY = 0.55,
+    stripSuffixPattern = null,
+  } = options;
+  const polygon = selectPrimaryPolygon(feature.geometry);
+
+  if (!polygon) {
+    return null;
+  }
+
+  const fullBounds = polygonBounds(polygon);
+  const inTheaterBounds = polygonBoundsWithinBbox(polygon, theaterBbox);
+  const bounds = inTheaterBounds ?? clampBoundsToBbox(fullBounds, theaterBbox) ?? fullBounds;
+  const width = bounds.maxLng - bounds.minLng;
+  const height = bounds.maxLat - bounds.minLat;
+
+  if (!Number.isFinite(width) || !Number.isFinite(height) || width <= 0 || height <= 0) {
+    return null;
+  }
+
+  const minLng = bounds.minLng + width * padX;
+  const maxLng = bounds.maxLng - width * padX;
+  const minLat = bounds.minLat + height * padY;
+  const maxLat = bounds.maxLat - height * padY;
+
+  if (maxLng <= minLng || maxLat <= minLat) {
+    return null;
+  }
+
+  const properties = feature.properties ?? {};
+  const id =
+    firstStringProperty(properties, idFields) ??
+    String(properties.shapeID ?? properties.id ?? Math.random());
+  const rawName = firstStringProperty(properties, nameFields);
+
+  if (!rawName) {
+    return null;
+  }
+
+  const nameLabel = stripSuffixPattern ? rawName.replace(stripSuffixPattern, "").trim() : rawName;
+  const longitude = minLng + (maxLng - minLng) * anchorX;
+  const latitude = minLat + (maxLat - minLat) * anchorY;
+
+  return {
+    type: "Feature",
+    properties: {
+      ...properties,
+      id,
+      nameLabel,
+      labelScript: detectLabelScript(nameLabel),
+    },
+    geometry: {
+      type: "Point",
+      coordinates: [longitude, latitude],
+    },
+  };
+}
+
+function buildAdminLabelPointLayer(featureCollection, options) {
+  return {
+    type: "FeatureCollection",
+    features: (featureCollection.features ?? [])
+      .map((feature) => buildAdminLabelPointFeature(feature, options))
       .filter(Boolean),
   };
 }
@@ -2267,10 +2354,12 @@ async function main() {
   const filteredLayers = {
     "layers/theater-boundary.geojson": theaterBoundary,
     "layers/oblast-boundaries.geojson": oblastBoundaries,
+    "layers/oblast-label-points.geojson": emptyFeatureCollection(),
     "layers/oblast-subdivisions.geojson": filterFeatureCollectionToBbox(
       oblastSubdivisions,
       theaterBbox,
     ),
+    "layers/oblast-subdivision-label-points.geojson": emptyFeatureCollection(),
     "layers/rivers.geojson": filterFeatureCollectionToBbox(rivers, theaterBbox),
     "layers/water-bodies.geojson": filterFeatureCollectionToBbox(lakes, theaterBbox),
     "layers/water-bodies-osm-prototype.geojson": osmWaterBodiesPrototype,
@@ -2302,6 +2391,30 @@ async function main() {
   filteredLayers["layers/country-label-guides.geojson"] = buildCountryLabelGuideLayer(
     filteredLayers["layers/country-boundaries.geojson"],
   );
+  filteredLayers["layers/oblast-label-points.geojson"] = buildAdminLabelPointLayer(
+    filteredLayers["layers/oblast-boundaries.geojson"],
+    {
+      idFields: ["shapeISO", "shapeID", "id"],
+      nameFields: ["shapeName", "NAME_1", "name"],
+      padX: 0.2,
+      padY: 0.2,
+      anchorX: 0.5,
+      anchorY: 0.56,
+      stripSuffixPattern: /\s+Oblast$/iu,
+    },
+  );
+  filteredLayers["layers/oblast-subdivision-label-points.geojson"] = buildAdminLabelPointLayer(
+    filteredLayers["layers/oblast-subdivisions.geojson"],
+    {
+      idFields: ["shapeID", "shapeISO", "id"],
+      nameFields: ["shapeName", "NAME_2", "name"],
+      padX: 0.22,
+      padY: 0.22,
+      anchorX: 0.5,
+      anchorY: 0.56,
+      stripSuffixPattern: /\s+Raion$/iu,
+    },
+  );
 
   for (const [relativePath, data] of Object.entries(filteredLayers)) {
     await writeGeoJson(relativePath, data);
@@ -2323,11 +2436,25 @@ async function main() {
       path: "layers/oblast-boundaries.geojson",
     },
     {
+      id: "oblast-label-points",
+      label: "Oblast Labels",
+      category: "reference",
+      geometryKind: "point",
+      path: "layers/oblast-label-points.geojson",
+    },
+    {
       id: "oblast-subdivisions",
       label: "Oblast Subdivisions",
       category: "reference",
       geometryKind: "polygon",
       path: "layers/oblast-subdivisions.geojson",
+    },
+    {
+      id: "oblast-subdivision-label-points",
+      label: "Oblast Subdivision Labels",
+      category: "reference",
+      geometryKind: "point",
+      path: "layers/oblast-subdivision-label-points.geojson",
     },
     {
       id: "country-boundaries",

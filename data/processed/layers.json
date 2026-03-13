@@ -1,5 +1,5 @@
 {
-  "generatedAt": "2026-03-13T18:29:12.201Z",
+  "generatedAt": "2026-03-13T21:41:49.638Z",
   "layers": [
     {
       "id": "theater-boundary",
@@ -16,11 +16,25 @@
       "path": "layers/oblast-boundaries.geojson"
     },
     {
+      "id": "oblast-label-points",
+      "label": "Oblast Labels",
+      "category": "reference",
+      "geometryKind": "point",
+      "path": "layers/oblast-label-points.geojson"
+    },
+    {
       "id": "oblast-subdivisions",
       "label": "Oblast Subdivisions",
       "category": "reference",
       "geometryKind": "polygon",
       "path": "layers/oblast-subdivisions.geojson"
+    },
+    {
+      "id": "oblast-subdivision-label-points",
+      "label": "Oblast Subdivision Labels",
+      "category": "reference",
+      "geometryKind": "point",
+      "path": "layers/oblast-subdivision-label-points.geojson"
     },
     {
       "id": "country-boundaries",

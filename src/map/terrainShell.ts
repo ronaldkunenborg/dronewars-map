@@ -182,10 +182,17 @@ function raiseCountryLabelLayers(map: Map) {
     "country-label-latin",
     "country-label-cyrillic",
     "oblast-label",
+    "oblast-subdivision-label",
   ]) {
     if (map.getLayer(layerId)) {
       map.moveLayer(layerId);
     }
+  }
+}
+
+function raiseCountryBoundaryLayer(map: Map) {
+  if (map.getLayer("country-boundaries-line")) {
+    map.moveLayer("country-boundaries-line");
   }
 }
 
@@ -276,6 +283,7 @@ export function mountTerrainShell(
   mountOperationalHexLayer(map);
   // Keep hillshade visible over terrain/hex fills while leaving labels above it.
   raiseHillshadeLayer(map);
+  raiseCountryBoundaryLayer(map);
   raiseCountryLabelLayers(map);
   raiseSettlementLayers(map);
   mountOverlayManager(map);
