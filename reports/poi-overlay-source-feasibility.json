@@ -1,0 +1,58 @@
+{
+  "generatedAt": "2026-03-13",
+  "task": "54.2",
+  "theaterBbox": {
+    "west": 22.0,
+    "south": 44.0,
+    "east": 40.5,
+    "north": 52.5
+  },
+  "overpassCoverageSignal": {
+    "airfields": { "total": 1030, "named": 949, "namedPct": 92.14 },
+    "mines": { "total": 5825, "named": 1470, "namedPct": 25.24 },
+    "factories": { "total": 8793, "named": 5241, "namedPct": 59.6 },
+    "harbours": { "total": 79, "named": 62, "namedPct": 78.48 },
+    "powerplants": { "total": 2586, "named": 1058, "namedPct": 40.91 }
+  },
+  "suitability": {
+    "airfields": {
+      "osmSuitability": "high",
+      "primaryRecommendation": "osm",
+      "secondaryCandidates": ["ourairports"]
+    },
+    "mines": {
+      "osmSuitability": "medium",
+      "primaryRecommendation": "osm",
+      "secondaryCandidates": ["usgs-mrds"]
+    },
+    "factories": {
+      "osmSuitability": "medium-low",
+      "primaryRecommendation": "osm-with-strict-filtering",
+      "secondaryCandidates": ["open-supply-hub"]
+    },
+    "harbours": {
+      "osmSuitability": "high",
+      "primaryRecommendation": "osm",
+      "secondaryCandidates": ["natural-earth-ports"]
+    },
+    "powerplants": {
+      "osmSuitability": "medium",
+      "primaryRecommendation": "osm-plus-external-metadata",
+      "secondaryCandidates": ["wri-gppd"]
+    }
+  },
+  "verdict": {
+    "overall": "osm-primary-hybrid-recommended",
+    "note": "No single non-OSM provider is best across all requested POI categories."
+  },
+  "sources": [
+    "https://operations.osmfoundation.org/policies/api/",
+    "https://wiki.openstreetmap.org/wiki/API_v0.6",
+    "https://wiki.openstreetmap.org/wiki/Overpass_API",
+    "https://overpass-api.de/api/status",
+    "https://ourairports.com/data/",
+    "https://github.com/wri/global-power-plant-database",
+    "https://www.naturalearthdata.com/downloads/10m-cultural-vectors/",
+    "https://info.opensupplyhub.org/"
+  ]
+}

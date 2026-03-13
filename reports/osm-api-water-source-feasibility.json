@@ -1,0 +1,56 @@
+{
+  "generatedAt": "2026-03-13",
+  "task": "54.1",
+  "theaterBbox": {
+    "west": 22.0,
+    "south": 44.0,
+    "east": 40.5,
+    "north": 52.5,
+    "areaDeg2": 157.25
+  },
+  "observedLimits": {
+    "osmApiCapabilities": {
+      "url": "https://api.openstreetmap.org/api/0.6/capabilities",
+      "areaMaximumDeg2": 0.25,
+      "timeoutSeconds": 300
+    },
+    "overpassStatusSample": {
+      "url": "https://overpass-api.de/api/status",
+      "observedRateLimit": 2,
+      "observedAvailableSlots": 2
+    }
+  },
+  "derived": {
+    "minOsmApiMapCallsForTheater": 629
+  },
+  "comparison": {
+    "coverage": {
+      "osmApi": "Can return raw primitives but requires heavy tiling at this extent.",
+      "overpass": "Supports direct thematic extraction for water tags."
+    },
+    "queryPracticality": {
+      "osmApi": "No thematic tag-filtered extraction equivalent to Overpass QL for map reads; requires broad fetch + local filtering.",
+      "overpass": "Server-side thematic filters reduce payload and simplify ingestion."
+    },
+    "rateLimitAndPolicyFit": {
+      "osmApi": "Policy states Editing API is for editing, not read-only projects; large/frequent users should use planet/extract alternatives.",
+      "overpass": "Read-only extraction API intended for query use, but with instance-specific limits."
+    },
+    "cacheability": {
+      "osmApi": "Cacheable but expensive cache misses due to high request fan-out and large unfiltered data volume.",
+      "overpass": "Cacheable with lower fan-out and better thematic payload targeting."
+    }
+  },
+  "verdict": {
+    "feasibility": "low",
+    "recommendedPrimarySource": "overpass",
+    "osmApiRole": "optional-small-bbox-debug-only"
+  },
+  "sources": [
+    "https://operations.osmfoundation.org/policies/api/",
+    "https://wiki.openstreetmap.org/wiki/API_v0.6",
+    "https://api.openstreetmap.org/api/0.6/capabilities",
+    "https://wiki.openstreetmap.org/wiki/Overpass_API",
+    "https://overpass-api.de/api/status"
+  ]
+}

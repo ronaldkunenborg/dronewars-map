@@ -125,31 +125,9 @@ function mountOperationalHexLayer(map: Map) {
       type: "fill",
       source: "operational-hexes",
       paint: {
-        "fill-color": [
-          "case",
-          ["==", ["coalesce", ["get", "dominantTerrain"], "open"], "sea"],
-          "#5f8fb3",
-          [">=", ["coalesce", ["get", "strongestPlaceScore"], 0], 4],
-          "#9a6f66",
-          ["==", ["coalesce", ["get", "dominantTerrain"], "open"], "wetland"],
-          "#8a6f46",
-          ["==", ["coalesce", ["get", "dominantTerrain"], "open"], "forest"],
-          "#3f5c3a",
-          "#8b8578",
-        ],
-        "fill-opacity": [
-          "interpolate",
-          ["linear"],
-          ["zoom"],
-          4,
-          0.16,
-          6,
-          0.24,
-          8,
-          0.36,
-          10,
-          0.48,
-        ],
+        // Keep a transparent fill so clicks still work while removing terrain tint from the hex layer.
+        "fill-color": "#000000",
+        "fill-opacity": 0,
       },
     });
   }
@@ -163,39 +141,51 @@ function mountOperationalHexLayer(map: Map) {
         "line-join": "round",
       },
       paint: {
-        "line-color": "#53604f",
+        "line-color": "#4e5a49",
         "line-opacity": [
-          "interpolate",
-          ["linear"],
-          ["zoom"],
-          4,
-          0.06,
-          6,
-          0.12,
-          8,
-          0.24,
-          10,
-          0.48,
-          12,
-          0.7,
-        ],
-        "line-width": [
           "interpolate",
           ["linear"],
           ["zoom"],
           4,
           0.2,
           6,
-          0.35,
+          0.3,
           8,
-          0.7,
+          0.44,
           10,
-          1.05,
+          0.56,
           12,
-          1.4,
+          0.64,
+        ],
+        "line-width": [
+          "interpolate",
+          ["linear"],
+          ["zoom"],
+          4,
+          0.4,
+          6,
+          0.56,
+          8,
+          0.8,
+          10,
+          1.02,
+          12,
+          1.2,
         ],
       },
     });
+  }
+}
+
+function raiseCountryLabelLayers(map: Map) {
+  for (const layerId of [
+    "country-label-latin",
+    "country-label-cyrillic",
+    "oblast-label",
+  ]) {
+    if (map.getLayer(layerId)) {
+      map.moveLayer(layerId);
+    }
   }
 }
 
@@ -286,6 +276,7 @@ export function mountTerrainShell(
   mountOperationalHexLayer(map);
   // Keep hillshade visible over terrain/hex fills while leaving labels above it.
   raiseHillshadeLayer(map);
+  raiseCountryLabelLayers(map);
   raiseSettlementLayers(map);
   mountOverlayManager(map);
 }

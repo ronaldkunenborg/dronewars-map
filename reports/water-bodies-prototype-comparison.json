@@ -1,0 +1,81 @@
+{
+  "generatedAt": "2026-03-13T12:25:07.167Z",
+  "nearSeaThresholdsMeters": [
+    2,
+    5,
+    10
+  ],
+  "inputs": {
+    "naturalEarthWaterBodies": "data\\processed\\layers\\water-bodies.geojson",
+    "osmWaterBodiesPrototype": "data\\processed\\layers\\water-bodies-osm-prototype.geojson",
+    "seas": "data\\processed\\layers\\seas.geojson",
+    "hexCellsAnalytics": "data\\processed\\hex-cells-analytics.geojson",
+    "elevationRaster": "data\\processed\\terrain\\elevation-clipped.tif",
+    "gdallocationinfo": "C:\\OSGeo4W\\bin\\gdallocationinfo.exe"
+  },
+  "corridorModel": {
+    "seaSeedHexCount": 865,
+    "corridorHexCoverage": {
+      "2": {
+        "hexCount": 957,
+        "pctOfAllHexes": 12.02
+      },
+      "5": {
+        "hexCount": 998,
+        "pctOfAllHexes": 12.54
+      },
+      "10": {
+        "hexCount": 1037,
+        "pctOfAllHexes": 13.03
+      }
+    }
+  },
+  "layers": {
+    "naturalEarth": {
+      "layer": "natural-earth-lakes",
+      "featureCount": 8,
+      "totalAreaKm2": 8125.07,
+      "inlandFeatureCount": 8,
+      "inlandAreaKm2": 8125.07,
+      "representativePointsInPeerCount": 0,
+      "representativePointsInPeerPct": 0,
+      "inlandNearSeaCorridor": {
+        "2": {
+          "count": 1,
+          "pct": 12.5
+        },
+        "5": {
+          "count": 1,
+          "pct": 12.5
+        },
+        "10": {
+          "count": 1,
+          "pct": 12.5
+        }
+      }
+    },
+    "osmPrototype": {
+      "layer": "osm-water-prototype",
+      "featureCount": 100185,
+      "totalAreaKm2": 9220.54,
+      "inlandFeatureCount": 99490,
+      "inlandAreaKm2": 8473.54,
+      "representativePointsInPeerCount": 342,
+      "representativePointsInPeerPct": 0.34,
+      "inlandNearSeaCorridor": {
+        "2": {
+          "count": 3148,
+          "pct": 3.16
+        },
+        "5": {
+          "count": 4132,
+          "pct": 4.15
+        },
+        "10": {
+          "count": 4721,
+          "pct": 4.75
+        }
+      }
+    }
+  }
+}

@@ -1,5 +1,5 @@
 {
-  "generatedAt": "2026-03-12T00:09:49.763Z",
+  "generatedAt": "2026-03-13T18:29:12.201Z",
   "layers": [
     {
       "id": "theater-boundary",
@@ -14,6 +14,13 @@
       "category": "reference",
       "geometryKind": "polygon",
       "path": "layers/oblast-boundaries.geojson"
+    },
+    {
+      "id": "oblast-subdivisions",
+      "label": "Oblast Subdivisions",
+      "category": "reference",
+      "geometryKind": "polygon",
+      "path": "layers/oblast-subdivisions.geojson"
     },
     {
       "id": "country-boundaries",
@@ -49,6 +56,13 @@
       "category": "hydrology",
       "geometryKind": "polygon",
       "path": "layers/water-bodies.geojson"
+    },
+    {
+      "id": "water-bodies-osm-prototype",
+      "label": "Water Bodies (OSM Prototype)",
+      "category": "hydrology",
+      "geometryKind": "polygon",
+      "path": "layers/water-bodies-osm-prototype.geojson"
     },
     {
       "id": "seas",

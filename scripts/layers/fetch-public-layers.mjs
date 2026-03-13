@@ -27,6 +27,7 @@ import {
  * - `data/processed/layers/oblast-boundaries.geojson`
  * - `data/processed/layers/rivers.geojson`
  * - `data/processed/layers/water-bodies.geojson`
+ * - `data/processed/layers/water-bodies-osm-prototype.geojson`
  * - `data/processed/layers/seas.geojson`
  * - `data/processed/layers/wetlands.geojson`
  * - `data/processed/layers/forests.geojson`
@@ -71,6 +72,8 @@ import {
  *   Fetches only the tiled Overpass wetland payloads, mainly to populate or validate that cache slice.
  * - `--smoke-test=forests`
  *   Fetches only the tiled Overpass forest payloads, mainly to populate or validate that cache slice.
+ * - `--smoke-test=water-bodies`
+ *   Fetches only tiled Overpass water-body polygons used for OSM prototype comparison.
  *
  * Cache invalidation rules:
  * - Entries expire after `cacheTtlMs`.
@@ -109,6 +112,7 @@ const theaterBbox = {
 const sources = {
   adm0Api: "https://www.geoboundaries.org/api/current/gbOpen/UKR/ADM0/",
   adm1Api: "https://www.geoboundaries.org/api/current/gbOpen/UKR/ADM1/",
+  adm2Api: "https://www.geoboundaries.org/api/current/gbOpen/UKR/ADM2/",
   overpassApi: "https://overpass-api.de/api/interpreter",
   terrainOverpassApi: "https://overpass.kumi.systems/api/interpreter",
   overpassFallbackApi: "https://lz4.overpass-api.de/api/interpreter",
@@ -339,15 +343,17 @@ function cachePathForBinary(relativePath) {
 
 // Define the full set of cache keys this script may populate for reporting and refresh targeting.
 function getKnownCacheKeys() {
-  const tiledLayerKeys = ["forests", "wetlands"].flatMap((layerId) =>
+  const tiledLayerKeys = ["forests", "wetlands", "water-bodies"].flatMap((layerId) =>
     buildBboxGrid(theaterBbox, 3, 3).map((_, tileIndex) => `overpass/${layerId}/tile-${tileIndex}`),
   );
 
   return [
     "geoboundaries/adm0-metadata",
     "geoboundaries/adm1-metadata",
+    "geoboundaries/adm2-metadata",
     "geoboundaries/adm0-geometry",
     "geoboundaries/adm1-geometry",
+    "geoboundaries/adm2-geometry",
     "natural-earth/rivers",
     "natural-earth/lakes",
     "natural-earth/seas",
@@ -1092,6 +1098,28 @@ function geometryPrimaryBounds(geometry) {
   return polygonBounds(polygon);
 }
 
+function clampBoundsToBbox(bounds, bbox) {
+  if (!bounds) {
+    return null;
+  }
+
+  const minLng = Math.max(bounds.minLng, bbox.west);
+  const maxLng = Math.min(bounds.maxLng, bbox.east);
+  const minLat = Math.max(bounds.minLat, bbox.south);
+  const maxLat = Math.min(bounds.maxLat, bbox.north);
+
+  if (maxLng <= minLng || maxLat <= minLat) {
+    return null;
+  }
+
+  return {
+    minLng,
+    maxLng,
+    minLat,
+    maxLat,
+  };
+}
+
 function normalizeCountryNameProperties(feature) {
   const properties = feature.properties ?? {};
   const name =
@@ -1114,7 +1142,10 @@ function normalizeCountryNameProperties(feature) {
     nameEn ??
     null;
   const labelCandidate = typeof nameUk === "string" && nameUk.trim() !== "" ? nameUk : nameEn;
-  const bounds = geometryPrimaryBounds(feature.geometry);
+  const polygon = selectPrimaryPolygon(feature.geometry);
+  const rawBounds = geometryPrimaryBounds(feature.geometry);
+  const inTheaterBounds = polygonBoundsWithinBbox(polygon, theaterBbox);
+  const bounds = inTheaterBounds ?? clampBoundsToBbox(rawBounds, theaterBbox) ?? rawBounds;
   const labelWidthDeg = bounds ? Math.max(0, bounds.maxLng - bounds.minLng) : 0;
   const labelHeightDeg = bounds ? Math.max(0, bounds.maxLat - bounds.minLat) : 0;
   const labelCentroidLng = bounds ? bounds.minLng + labelWidthDeg / 2 : null;
@@ -1210,14 +1241,86 @@ function polygonBounds(polygon) {
   );
 }
 
-function buildArcLabelLineFeature(countryFeature) {
+function polygonBoundsWithinBbox(polygon, bbox) {
+  const outerRing = polygon?.[0] ?? [];
+  const inBboxCoordinates = outerRing.filter(
+    ([lng, lat]) =>
+      lng >= bbox.west &&
+      lng <= bbox.east &&
+      lat >= bbox.south &&
+      lat <= bbox.north,
+  );
+
+  if (inBboxCoordinates.length === 0) {
+    return null;
+  }
+
+  return inBboxCoordinates.reduce(
+    (bounds, [lng, lat]) => ({
+      minLng: Math.min(bounds.minLng, lng),
+      maxLng: Math.max(bounds.maxLng, lng),
+      minLat: Math.min(bounds.minLat, lat),
+      maxLat: Math.max(bounds.maxLat, lat),
+    }),
+    {
+      minLng: Number.POSITIVE_INFINITY,
+      maxLng: Number.NEGATIVE_INFINITY,
+      minLat: Number.POSITIVE_INFINITY,
+      maxLat: Number.NEGATIVE_INFINITY,
+    },
+  );
+}
+
+function countryLabelInnerBox(countryId, bounds) {
+  const width = bounds.maxLng - bounds.minLng;
+  const height = bounds.maxLat - bounds.minLat;
+  const defaults = { padX: 0.18, padY: 0.2 };
+  const overrides = {
+    UKR: { padX: 0.14, padY: 0.18 },
+    BLR: { padX: 0.2, padY: 0.24 },
+    RUS: { padX: 0.14, padY: 0.08 },
+    POL: { padX: 0.16, padY: 0.22 },
+    SVK: { padX: 0.16, padY: 0.22 },
+    MDA: { padX: 0.22, padY: 0.24 },
+    ROU: { padX: 0.2, padY: 0.22 },
+  };
+  const config = { ...defaults, ...(overrides[countryId] ?? {}) };
+  const minLng = bounds.minLng + width * config.padX;
+  const maxLng = bounds.maxLng - width * config.padX;
+  const minLat = bounds.minLat + height * config.padY;
+  const maxLat = bounds.maxLat - height * config.padY;
+
+  return {
+    minLng,
+    maxLng,
+    minLat,
+    maxLat,
+  };
+}
+
+function countryLabelAnchorFractions(countryId) {
+  const anchors = {
+    RUS: { x: 0.8, y: 0.91 },
+    BLR: { x: 0.5, y: 0.45 },
+    POL: { x: 0.55, y: 0.62 },
+    SVK: { x: 0.55, y: 0.55 },
+    MDA: { x: 0.52, y: 0.58 },
+    ROU: { x: 0.4, y: 0.62 },
+  };
+
+  return anchors[countryId] ?? { x: 0.5, y: 0.55 };
+}
+
+function buildCountryLabelPointFeature(countryFeature) {
   const polygon = selectPrimaryPolygon(countryFeature.geometry);
 
   if (!polygon) {
     return null;
   }
 
-  const bounds = polygonBounds(polygon);
+  const fullBounds = polygonBounds(polygon);
+  const inTheaterBounds = polygonBoundsWithinBbox(polygon, theaterBbox);
+  const bounds = inTheaterBounds ?? clampBoundsToBbox(fullBounds, theaterBbox) ?? fullBounds;
 
   if (!Number.isFinite(bounds.minLng) || !Number.isFinite(bounds.maxLng)) {
     return null;
@@ -1230,20 +1333,21 @@ function buildArcLabelLineFeature(countryFeature) {
     return null;
   }
 
-  const left = bounds.minLng + width * 0.12;
-  const right = bounds.maxLng - width * 0.12;
-  const baseLat = bounds.minLat + height * 0.52;
-  const arcAmplitude = Math.max(0.08, height * 0.14);
-  const coordinates = [];
+  const countryId = String(countryFeature.properties?.id ?? "");
+  const innerBox = countryLabelInnerBox(countryId, bounds);
 
-  for (let step = 0; step <= 6; step += 1) {
-    const t = step / 6;
-    const arc = 1 - (2 * t - 1) ** 2;
-    coordinates.push([
-      left + (right - left) * t,
-      baseLat + arcAmplitude * arc,
-    ]);
+  if (
+    innerBox.maxLng <= innerBox.minLng ||
+    innerBox.maxLat <= innerBox.minLat
+  ) {
+    return null;
   }
+
+  const innerWidth = innerBox.maxLng - innerBox.minLng;
+  const innerHeight = innerBox.maxLat - innerBox.minLat;
+  const anchor = countryLabelAnchorFractions(countryId);
+  const longitude = innerBox.minLng + innerWidth * anchor.x;
+  const latitude = innerBox.minLat + innerHeight * anchor.y;
 
   return {
     type: "Feature",
@@ -1251,8 +1355,8 @@ function buildArcLabelLineFeature(countryFeature) {
       ...countryFeature.properties,
     },
     geometry: {
-      type: "LineString",
-      coordinates,
+      type: "Point",
+      coordinates: [longitude, latitude],
     },
   };
 }
@@ -1261,7 +1365,7 @@ function buildCountryLabelGuideLayer(countryBoundaryLayer) {
   return {
     type: "FeatureCollection",
     features: (countryBoundaryLayer.features ?? [])
-      .map(buildArcLabelLineFeature)
+      .map(buildCountryLabelPointFeature)
       .filter(Boolean),
   };
 }
@@ -1475,41 +1579,108 @@ function pointToPointDistanceKm(left, right) {
   return Math.hypot(lx - rx, ly - ry);
 }
 
-// Collapse duplicate settlement records that represent the same named place nearby.
-function dedupeSettlements(features) {
-  const grouped = new Map();
+function settlementCanonicalName(feature) {
+  return (
+    normalizeSettlementName(feature.properties.nameUk) ??
+    normalizeSettlementName(feature.properties.nameEn) ??
+    normalizeSettlementName(feature.properties.name)
+  );
+}
 
-  for (const feature of features) {
-    const key = `${feature.properties.nameUk}|${feature.properties.place}`;
-    const group = grouped.get(key) ?? [];
-    const existingIndex = group.findIndex((candidate) =>
-      pointToPointDistanceKm(candidate.geometry.coordinates, feature.geometry.coordinates) <= 10,
-    );
+function choosePreferredSettlement(left, right) {
+  const leftRank = placeRank(left.properties.place);
+  const rightRank = placeRank(right.properties.place);
 
-    if (existingIndex === -1) {
-      group.push(feature);
-      grouped.set(key, group);
-      continue;
-    }
-
-    const existing = group[existingIndex];
-    const currentPreference = settlementTypePreference(feature.properties.id);
-    const existingPreference = settlementTypePreference(existing.properties.id);
-
-    if (currentPreference < existingPreference) {
-      group[existingIndex] = feature;
-      continue;
-    }
-
-    if (
-      currentPreference === existingPreference &&
-      (feature.properties.population ?? 0) > (existing.properties.population ?? 0)
-    ) {
-      group[existingIndex] = feature;
-    }
+  if (leftRank !== rightRank) {
+    return leftRank < rightRank ? left : right;
   }
 
-  return [...grouped.values()].flat();
+  const leftPopulation = left.properties.population ?? 0;
+  const rightPopulation = right.properties.population ?? 0;
+
+  if (leftPopulation !== rightPopulation) {
+    return leftPopulation > rightPopulation ? left : right;
+  }
+
+  const leftTypePreference = settlementTypePreference(left.properties.id);
+  const rightTypePreference = settlementTypePreference(right.properties.id);
+
+  if (leftTypePreference !== rightTypePreference) {
+    return leftTypePreference < rightTypePreference ? left : right;
+  }
+
+  return left;
+}
+
+function settlementDuplicateDistanceKm(feature) {
+  switch (feature.properties.place) {
+    case "city":
+      return 12;
+    case "town":
+      return 8;
+    case "village":
+      return 3;
+    case "hamlet":
+      return 2;
+    default:
+      return 2;
+  }
+}
+
+function duplicateDistanceBetweenSettlements(left, right) {
+  const leftPlace = left.properties.place;
+  const rightPlace = right.properties.place;
+  const leftPopulation = left.properties.population ?? 0;
+  const rightPopulation = right.properties.population ?? 0;
+  const leftIsMajorCity = leftPlace === "city" && leftPopulation >= 300000;
+  const rightIsMajorCity = rightPlace === "city" && rightPopulation >= 300000;
+  const isCityTownPair =
+    (leftPlace === "city" && rightPlace === "town") ||
+    (leftPlace === "town" && rightPlace === "city");
+
+  if (isCityTownPair && (leftIsMajorCity || rightIsMajorCity)) {
+    return 250;
+  }
+
+  return Math.max(
+    settlementDuplicateDistanceKm(left),
+    settlementDuplicateDistanceKm(right),
+  );
+}
+
+// Collapse near-overlapping same-name settlements (node/way/relation and place-class duplicates).
+function dedupeSettlements(features) {
+  const groupedByName = new Map();
+
+  for (const feature of features) {
+    const canonicalName = settlementCanonicalName(feature);
+    const key = canonicalName ?? `id:${feature.properties.id}`;
+    const group = groupedByName.get(key) ?? [];
+    let merged = false;
+
+    for (let index = 0; index < group.length; index += 1) {
+      const candidate = group[index];
+
+      if (
+        pointToPointDistanceKm(candidate.geometry.coordinates, feature.geometry.coordinates) >
+        duplicateDistanceBetweenSettlements(candidate, feature)
+      ) {
+        continue;
+      }
+
+      group[index] = choosePreferredSettlement(candidate, feature);
+      merged = true;
+      break;
+    }
+
+    if (!merged) {
+      group.push(feature);
+    }
+
+    groupedByName.set(key, group);
+  }
+
+  return [...groupedByName.values()].flat();
 }
 
 // Reuse the strongest known city population for duplicate city names when a sibling record is missing one.
@@ -1882,10 +2053,10 @@ async function writeGeoJson(relativePath, data) {
 }
 
 // Resolve the actual GeoBoundaries GeoJSON download URL from the metadata endpoint.
-async function resolveGeoBoundariesDownload(apiUrl) {
+async function resolveGeoBoundariesDownload(apiUrl, metadataCacheKey) {
   const metadata = await fetchJson(
     apiUrl,
-    apiUrl.includes("/ADM0/") ? "geoboundaries/adm0-metadata" : "geoboundaries/adm1-metadata",
+    metadataCacheKey,
   );
   return metadata.simplifiedGeometryGeoJSON ?? metadata.gjDownloadURL;
 }
@@ -1927,14 +2098,16 @@ async function main() {
   }
 
   if (smokeTestMode === "static") {
-    const [adm0Url, adm1Url] = await Promise.all([
-      resolveGeoBoundariesDownload(sources.adm0Api),
-      resolveGeoBoundariesDownload(sources.adm1Api),
+    const [adm0Url, adm1Url, adm2Url] = await Promise.all([
+      resolveGeoBoundariesDownload(sources.adm0Api, "geoboundaries/adm0-metadata"),
+      resolveGeoBoundariesDownload(sources.adm1Api, "geoboundaries/adm1-metadata"),
+      resolveGeoBoundariesDownload(sources.adm2Api, "geoboundaries/adm2-metadata"),
     ]);
 
     await Promise.all([
       fetchJson(adm0Url, "geoboundaries/adm0-geometry"),
       fetchJson(adm1Url, "geoboundaries/adm1-geometry"),
+      fetchJson(adm2Url, "geoboundaries/adm2-geometry"),
       fetchJson(sources.rivers, "natural-earth/rivers"),
       fetchJson(sources.lakes, "natural-earth/lakes"),
       fetchJson(sources.seas, "natural-earth/seas"),
@@ -1986,17 +2159,32 @@ async function main() {
     return;
   }
 
-  const [
-    adm0Url,
-    adm1Url,
-  ] = await Promise.all([
-    resolveGeoBoundariesDownload(sources.adm0Api),
-    resolveGeoBoundariesDownload(sources.adm1Api),
+  if (smokeTestMode === "water-bodies") {
+    await fetchTiledAreaLayer(
+      "water-bodies",
+      ['["natural"="water"]', "[water]", '["waterway"="riverbank"]', '["landuse"="reservoir"]'],
+      (tags) => ({
+        type: tags.water ?? tags.natural ?? tags.waterway ?? tags.landuse ?? "water",
+      }),
+      {
+        minApproxAreaKm2: 0.05,
+        maxVertices: 160,
+      },
+    );
+    console.log("Smoke test completed for Overpass water-body polygons.");
+    return;
+  }
+
+  const [adm0Url, adm1Url, adm2Url] = await Promise.all([
+    resolveGeoBoundariesDownload(sources.adm0Api, "geoboundaries/adm0-metadata"),
+    resolveGeoBoundariesDownload(sources.adm1Api, "geoboundaries/adm1-metadata"),
+    resolveGeoBoundariesDownload(sources.adm2Api, "geoboundaries/adm2-metadata"),
   ]);
 
   const [
     theaterBoundary,
     oblastBoundaries,
+    oblastSubdivisions,
     rivers,
     lakes,
     seas,
@@ -2008,6 +2196,7 @@ async function main() {
   ] = await Promise.all([
     fetchJson(adm0Url, "geoboundaries/adm0-geometry"),
     fetchJson(adm1Url, "geoboundaries/adm1-geometry"),
+    fetchJson(adm2Url, "geoboundaries/adm2-geometry"),
     fetchJson(sources.rivers, "natural-earth/rivers"),
     fetchJson(sources.lakes, "natural-earth/lakes"),
     fetchJson(sources.seas, "natural-earth/seas"),
@@ -2041,6 +2230,17 @@ async function main() {
       maxVertices: 32,
     },
   );
+  const osmWaterBodiesPrototype = await fetchTiledAreaLayer(
+    "water-bodies",
+    ['["natural"="water"]', "[water]", '["waterway"="riverbank"]', '["landuse"="reservoir"]'],
+    (tags) => ({
+      type: tags.water ?? tags.natural ?? tags.waterway ?? tags.landuse ?? "water",
+    }),
+    {
+      minApproxAreaKm2: 0.05,
+      maxVertices: 120,
+    },
+  );
 
   let elevationAvailable = false;
   let hillshadeLayerPath = "terrain/hillshade-clipped.png";
@@ -2067,8 +2267,13 @@ async function main() {
   const filteredLayers = {
     "layers/theater-boundary.geojson": theaterBoundary,
     "layers/oblast-boundaries.geojson": oblastBoundaries,
+    "layers/oblast-subdivisions.geojson": filterFeatureCollectionToBbox(
+      oblastSubdivisions,
+      theaterBbox,
+    ),
     "layers/rivers.geojson": filterFeatureCollectionToBbox(rivers, theaterBbox),
     "layers/water-bodies.geojson": filterFeatureCollectionToBbox(lakes, theaterBbox),
+    "layers/water-bodies-osm-prototype.geojson": osmWaterBodiesPrototype,
     "layers/seas.geojson": filterFeatureCollectionToBbox(seas, theaterBbox),
     "layers/wetlands.geojson": wetlands,
     "layers/forests.geojson": forests,
@@ -2118,6 +2323,13 @@ async function main() {
       path: "layers/oblast-boundaries.geojson",
     },
     {
+      id: "oblast-subdivisions",
+      label: "Oblast Subdivisions",
+      category: "reference",
+      geometryKind: "polygon",
+      path: "layers/oblast-subdivisions.geojson",
+    },
+    {
       id: "country-boundaries",
       label: "Country Boundaries",
       category: "reference",
@@ -2151,6 +2363,13 @@ async function main() {
       category: "hydrology",
       geometryKind: "polygon",
       path: "layers/water-bodies.geojson",
+    },
+    {
+      id: "water-bodies-osm-prototype",
+      label: "Water Bodies (OSM Prototype)",
+      category: "hydrology",
+      geometryKind: "polygon",
+      path: "layers/water-bodies-osm-prototype.geojson",
     },
     {
       id: "seas",

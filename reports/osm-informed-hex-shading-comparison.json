@@ -1,0 +1,363 @@
+{
+  "generatedAt": "2026-03-13T15:48:10.483Z",
+  "inputs": {
+    "hexAnalytics": "data\\processed\\hex-cells-analytics.geojson",
+    "osmWater": "data\\processed\\layers\\water-bodies-osm-prototype.geojson"
+  },
+  "outputs": {
+    "prototypeHexLayer": "data\\processed\\hex-cells-osm-shading-prototype.geojson"
+  },
+  "totalHexes": 7960,
+  "changedHexes": 484,
+  "changedPct": 6.08,
+  "classOrder": [
+    "sea",
+    "inland-water",
+    "urban",
+    "wetland",
+    "forest",
+    "open",
+    "mixed"
+  ],
+  "currentClassCounts": {
+    "forest": 5763,
+    "urban": 154,
+    "wetland": 892,
+    "open": 380,
+    "sea": 771
+  },
+  "prototypeClassCounts": {
+    "forest": 5386,
+    "urban": 147,
+    "wetland": 1178,
+    "inland-water": 47,
+    "open": 329,
+    "sea": 865,
+    "mixed": 8
+  },
+  "changedByRegion": {
+    "unassigned": 484
+  },
+  "sampleChangedHexes": [
+    {
+      "id": "HX-W36-N76",
+      "region": "unassigned",
+      "currentClass": "forest",
+      "prototypeClass": "wetland",
+      "seaCoverage": 0,
+      "strongestPlaceScore": 2
+    },
+    {
+      "id": "HX-W29-N68",
+      "region": "unassigned",
+      "currentClass": "forest",
+      "prototypeClass": "wetland",
+      "seaCoverage": 0,
+      "strongestPlaceScore": 2
+    },
+    {
+      "id": "HX-W28-N59",
+      "region": "unassigned",
+      "currentClass": "forest",
+      "prototypeClass": "wetland",
+      "seaCoverage": 0,
+      "strongestPlaceScore": 3
+    },
+    {
+      "id": "HX-W28-N60",
+      "region": "unassigned",
+      "currentClass": "forest",
+      "prototypeClass": "wetland",
+      "seaCoverage": 0,
+      "strongestPlaceScore": 2
+    },
+    {
+      "id": "HX-W28-N61",
+      "region": "unassigned",
+      "currentClass": "forest",
+      "prototypeClass": "wetland",
+      "seaCoverage": 0,
+      "strongestPlaceScore": 3
+    },
+    {
+      "id": "HX-W28-N71",
+      "region": "unassigned",
+      "currentClass": "forest",
+      "prototypeClass": "wetland",
+      "seaCoverage": 0,
+      "strongestPlaceScore": 2
+    },
+    {
+      "id": "HX-W28-N73",
+      "region": "unassigned",
+      "currentClass": "forest",
+      "prototypeClass": "wetland",
+      "seaCoverage": 0,
+      "strongestPlaceScore": 2
+    },
+    {
+      "id": "HX-W28-N74",
+      "region": "unassigned",
+      "currentClass": "forest",
+      "prototypeClass": "inland-water",
+      "seaCoverage": 0,
+      "strongestPlaceScore": 2
+    },
+    {
+      "id": "HX-W27-N71",
+      "region": "unassigned",
+      "currentClass": "forest",
+      "prototypeClass": "wetland",
+      "seaCoverage": 0,
+      "strongestPlaceScore": 3
+    },
+    {
+      "id": "HX-W27-N73",
+      "region": "unassigned",
+      "currentClass": "forest",
+      "prototypeClass": "inland-water",
+      "seaCoverage": 0,
+      "strongestPlaceScore": 2
+    },
+    {
+      "id": "HX-W26-N73",
+      "region": "unassigned",
+      "currentClass": "forest",
+      "prototypeClass": "wetland",
+      "seaCoverage": 0,
+      "strongestPlaceScore": 2
+    },
+    {
+      "id": "HX-W26-N78",
+      "region": "unassigned",
+      "currentClass": "forest",
+      "prototypeClass": "wetland",
+      "seaCoverage": 0,
+      "strongestPlaceScore": 0
+    },
+    {
+      "id": "HX-W26-N79",
+      "region": "unassigned",
+      "currentClass": "forest",
+      "prototypeClass": "wetland",
+      "seaCoverage": 0,
+      "strongestPlaceScore": 2
+    },
+    {
+      "id": "HX-W25-N54",
+      "region": "unassigned",
+      "currentClass": "forest",
+      "prototypeClass": "inland-water",
+      "seaCoverage": 0,
+      "strongestPlaceScore": 3
+    },
+    {
+      "id": "HX-W25-N67",
+      "region": "unassigned",
+      "currentClass": "forest",
+      "prototypeClass": "wetland",
+      "seaCoverage": 0,
+      "strongestPlaceScore": 2
+    },
+    {
+      "id": "HX-W25-N69",
+      "region": "unassigned",
+      "currentClass": "open",
+      "prototypeClass": "forest",
+      "seaCoverage": 0,
+      "strongestPlaceScore": 2
+    },
+    {
+      "id": "HX-W25-N72",
+      "region": "unassigned",
+      "currentClass": "forest",
+      "prototypeClass": "wetland",
+      "seaCoverage": 0,
+      "strongestPlaceScore": 3
+    },
+    {
+      "id": "HX-W25-N75",
+      "region": "unassigned",
+      "currentClass": "forest",
+      "prototypeClass": "wetland",
+      "seaCoverage": 0,
+      "strongestPlaceScore": 2
+    },
+    {
+      "id": "HX-W25-N78",
+      "region": "unassigned",
+      "currentClass": "forest",
+      "prototypeClass": "wetland",
+      "seaCoverage": 0,
+      "strongestPlaceScore": 2
+    },
+    {
+      "id": "HX-W24-N59",
+      "region": "unassigned",
+      "currentClass": "forest",
+      "prototypeClass": "wetland",
+      "seaCoverage": 0,
+      "strongestPlaceScore": 3
+    },
+    {
+      "id": "HX-W24-N67",
+      "region": "unassigned",
+      "currentClass": "forest",
+      "prototypeClass": "wetland",
+      "seaCoverage": 0,
+      "strongestPlaceScore": 2
+    },
+    {
+      "id": "HX-W24-N76",
+      "region": "unassigned",
+      "currentClass": "forest",
+      "prototypeClass": "wetland",
+      "seaCoverage": 0,
+      "strongestPlaceScore": 2
+    },
+    {
+      "id": "HX-W23-N73",
+      "region": "unassigned",
+      "currentClass": "forest",
+      "prototypeClass": "wetland",
+      "seaCoverage": 0,
+      "strongestPlaceScore": 2
+    },
+    {
+      "id": "HX-W23-N74",
+      "region": "unassigned",
+      "currentClass": "wetland",
+      "prototypeClass": "inland-water",
+      "seaCoverage": 0,
+      "strongestPlaceScore": 2
+    },
+    {
+      "id": "HX-W23-N75",
+      "region": "unassigned",
+      "currentClass": "forest",
+      "prototypeClass": "wetland",
+      "seaCoverage": 0,
+      "strongestPlaceScore": 2
+    },
+    {
+      "id": "HX-W20-N60",
+      "region": "unassigned",
+      "currentClass": "forest",
+      "prototypeClass": "wetland",
+      "seaCoverage": 0,
+      "strongestPlaceScore": 2
+    },
+    {
+      "id": "HX-W20-N61",
+      "region": "unassigned",
+      "currentClass": "forest",
+      "prototypeClass": "wetland",
+      "seaCoverage": 0,
+      "strongestPlaceScore": 2
+    },
+    {
+      "id": "HX-W20-N74",
+      "region": "unassigned",
+      "currentClass": "forest",
+      "prototypeClass": "wetland",
+      "seaCoverage": 0,
+      "strongestPlaceScore": 0
+    },
+    {
+      "id": "HX-W19-N62",
+      "region": "unassigned",
+      "currentClass": "forest",
+      "prototypeClass": "wetland",
+      "seaCoverage": 0,
+      "strongestPlaceScore": 2
+    },
+    {
+      "id": "HX-W19-N63",
+      "region": "unassigned",
+      "currentClass": "forest",
+      "prototypeClass": "wetland",
+      "seaCoverage": 0,
+      "strongestPlaceScore": 3
+    },
+    {
+      "id": "HX-W19-N68",
+      "region": "unassigned",
+      "currentClass": "forest",
+      "prototypeClass": "wetland",
+      "seaCoverage": 0,
+      "strongestPlaceScore": 2
+    },
+    {
+      "id": "HX-W19-N71",
+      "region": "unassigned",
+      "currentClass": "forest",
+      "prototypeClass": "wetland",
+      "seaCoverage": 0,
+      "strongestPlaceScore": 2
+    },
+    {
+      "id": "HX-W19-N79",
+      "region": "unassigned",
+      "currentClass": "forest",
+      "prototypeClass": "wetland",
+      "seaCoverage": 0,
+      "strongestPlaceScore": 2
+    },
+    {
+      "id": "HX-W18-N58",
+      "region": "unassigned",
+      "currentClass": "open",
+      "prototypeClass": "forest",
+      "seaCoverage": 0,
+      "strongestPlaceScore": 3
+    },
+    {
+      "id": "HX-W18-N59",
+      "region": "unassigned",
+      "currentClass": "forest",
+      "prototypeClass": "wetland",
+      "seaCoverage": 0,
+      "strongestPlaceScore": 2
+    },
+    {
+      "id": "HX-W18-N62",
+      "region": "unassigned",
+      "currentClass": "forest",
+      "prototypeClass": "wetland",
+      "seaCoverage": 0,
+      "strongestPlaceScore": 2
+    },
+    {
+      "id": "HX-W18-N75",
+      "region": "unassigned",
+      "currentClass": "forest",
+      "prototypeClass": "wetland",
+      "seaCoverage": 0,
+      "strongestPlaceScore": 2
+    },
+    {
+      "id": "HX-W18-N78",
+      "region": "unassigned",
+      "currentClass": "forest",
+      "prototypeClass": "wetland",
+      "seaCoverage": 0,
+      "strongestPlaceScore": 2
+    },
+    {
+      "id": "HX-W17-N61",
+      "region": "unassigned",
+      "currentClass": "forest",
+      "prototypeClass": "wetland",
+      "seaCoverage": 0,
+      "strongestPlaceScore": 2
+    },
+    {
+      "id": "HX-W17-N68",
+      "region": "unassigned",
+      "currentClass": "forest",
+      "prototypeClass": "wetland",
+      "seaCoverage": 0,
+      "strongestPlaceScore": 2
+    }
+  ]
+}

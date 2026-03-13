@@ -21,6 +21,20 @@ DEM resolution benchmark (subset geometry clip of the theater boundary):
 npm run data:analytics:dem-resolutions
 ```
 
+Water-body source prototype comparison (Natural Earth vs OSM water polygons, plus
+near-sea-level corridor plausibility):
+
+```bash
+npm run data:analytics:water-sources
+```
+
+OSM-informed hex-shading prototype comparison versus current terrain-driven
+display classes:
+
+```bash
+npm run data:analytics:hex-shading
+```
+
 Inputs:
 
 - `data/processed/hex-cells.geojson`
@@ -33,6 +47,11 @@ Output:
 - `reports/elevation-threshold-investigation.md`
 - `reports/dem-resolution-benchmark/dem-resolution-benchmark.json`
 - `reports/dem-resolution-benchmark/dem-resolution-benchmark.md`
+- `reports/water-bodies-prototype-comparison.json`
+- `reports/water-bodies-prototype-comparison.md`
+- `reports/osm-informed-hex-shading-comparison.json`
+- `reports/osm-informed-hex-shading-comparison.md`
+- `data/processed/hex-cells-osm-shading-prototype.geojson`
 
 Current analytics are heuristic and intentionally transparent:
 

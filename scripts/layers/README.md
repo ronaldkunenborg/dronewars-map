@@ -21,6 +21,7 @@ Builds the initial processed layers:
 - `layers/oblast-boundaries.geojson`
 - `layers/rivers.geojson`
 - `layers/water-bodies.geojson`
+- `layers/water-bodies-osm-prototype.geojson` (OSM prototype comparison layer)
 - `layers/wetlands.geojson`
 - `layers/forests.geojson`
 - `layers/roads.geojson`

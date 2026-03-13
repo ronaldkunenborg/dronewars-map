@@ -30,12 +30,22 @@
 
 53.3 [done] Cap hillshade tile max zoom to z10 (from z12) and cap map zoom to z10; remove legacy z11/z12 tile folders from local output. Current per-zoom tile counts before pruning were: z10 `2052`, z11 `7844`, z12 `31017` (total z11+z12 removable: `38861` tiles).
 
-54. [pending] Prototype an OSM water-polygon based `water-bodies` layer (for example `natural=water`, `water=*`, `waterway=riverbank`, `landuse=reservoir`) and compare map accuracy against the current Natural Earth lake-based layer; also compare against hillshade/elevation-derived near-sea-level corridors for sea-connected inland water plausibility.
+54. [done] Prototyped a cache-first OSM water-polygon layer at `data/processed/layers/water-bodies-osm-prototype.geojson` (Overpass tags: `natural=water`, `water=*`, `waterway=riverbank`, `landuse=reservoir`) and generated comparison outputs in `reports/water-bodies-prototype-comparison.{json,md}` versus Natural Earth lakes plus DEM-derived sea-connected near-sea-level corridor checks (`2/5/10m` thresholds).
 
-54.1 [pending] Evaluate OpenStreetMap API as an additional source path for water features (coverage, query practicality, rate limits, and cacheability) and compare feasibility versus current Overpass-based sourcing.
+54.1 [done] Evaluated OpenStreetMap Editing API versus current Overpass sourcing for water features; documented coverage/query/rate-limit/cacheability findings in `reports/osm-api-water-source-feasibility.{md,json}` and concluded OSM API is low-feasibility for theater-scale read extraction (retain Overpass as primary, optional small-bbox debug use only).
 
-54.2 [pending] Prototype broader OSM feature ingestion for operational overlays/reference layers (starting with airfields and selected special features) using cache-first sourcing.
+54.2 [done] Evaluated OSM suitability for special-POI overlay categories (airfields, mines, large factories, harbours, powerplants) and compared alternatives in `reports/poi-overlay-source-feasibility.{md,json}`. Conclusion: OSM remains the best primary geometry source with category-specific supplemental providers (OurAirports, WRI GPPD, Natural Earth ports, Open Supply Hub / MRDS where applicable).
 
-54.3 [pending] Prototype OSM-informed terrain/landuse styling inputs to improve hex-cell shading quality, and compare visual/readability impact against the current terrain-driven hex styling.
+54.3 [done] Prototyped OSM-informed hex shading inputs (including inland OSM-water signal) with `scripts/analytics/prototype-osm-informed-hex-shading.mjs`, wrote `data/processed/hex-cells-osm-shading-prototype.geojson`, and compared visual/readability impact versus current terrain-driven classes in `reports/osm-informed-hex-shading-comparison.{md,json}`.
 
-55. [pending] Add one dominant country-name label per country (not multiple repeated labels), rendered much larger and spanning most of the country with arc-like placement similar to stylized fantasy-map labels; for Cyrillic country names, show the English name directly below in a smaller secondary line.
+55. [done] Updated country labeling to a single dominant arc-label treatment per country by removing fallback duplicate label layers and scaling the line-placed country labels significantly larger; Cyrillic labels keep English on a smaller secondary line.
+
+56. [done] Changed operational hex rendering to grid-only overlay by making hex fills fully transparent while preserving hex click interaction, so analytics can use the tiling without terrain color tint.
+
+57. [done] Reworked country labeling to render a single dominant in-theater label per country (including edge-intersecting countries such as Russia and Poland), removed repeated in-country duplicates, and tuned vertical anchor placement to keep labels in visible theater space.
+
+58. [done] Added zoom-behavior label hierarchy: country names remain visible but become more subdued on zoom-in, and oblast names appear inside provinces at a smaller, secondary label size.
+
+59. [done] Increased country-border stroke width to roughly double prior thickness to improve boundary legibility at operational zoom levels.
+
+60. [done] Added province subdivisions (ADM2/raion-level fallback layer) and rendered them as thin dashed boundaries at medium-to-high zoom.

@@ -50,8 +50,11 @@ With the current processed data, the app should show:
 - a terrain/reference map of Ukraine
 - operational hex cells
 - water, seas, forests, wetlands, roads, railways, settlements, theater boundary, and oblast boundaries
+- raion-level oblast subdivisions at medium/high zoom
 - major-city urban extents beneath city labels
 - optional city-seeded Voronoi operational cells (when `Cell Layer` is set to `Voronoi`)
+- single dominant country labels (with Ukraine emphasized) that stay visible but become more subdued on zoom-in
+- oblast labels that appear at higher zoom and are smaller/subordinate to country labels
 - sidebar controls for visibility and presets
 - a cell inspector in the top-left after clicking a hex
 - a hex debug panel in the top-right
@@ -60,6 +63,7 @@ At the moment, the processed layers provide:
 
 - theater boundary
 - oblast boundaries
+- oblast subdivisions (ADM2 / raion fallback)
 - rivers
 - water bodies
 - seas
@@ -90,7 +94,7 @@ This downloads or reuses cached public Ukraine boundary, Natural Earth, and Over
 
 This is what the app uses for visible thematic content. The public builder combines:
 
-- GeoBoundaries for national and oblast boundaries
+- GeoBoundaries for national (ADM0), oblast (ADM1), and raion subdivision (ADM2) boundaries
 - Natural Earth for rivers, lakes, seas, roads, railways, and urban areas
 - OSM Overpass for settlements, forests, and wetlands
 - ESA WorldCover raster fallback for landcover visualization in the map shell
@@ -115,6 +119,7 @@ node scripts/layers/fetch-public-layers.mjs --smoke-test=static
 node scripts/layers/fetch-public-layers.mjs --smoke-test=settlements
 node scripts/layers/fetch-public-layers.mjs --smoke-test=wetlands
 node scripts/layers/fetch-public-layers.mjs --smoke-test=forests
+node scripts/layers/fetch-public-layers.mjs --smoke-test=water-bodies
 ```
 
 Raw intake bootstrap command (clean checkout preparation for local preprocess/layer builds):
@@ -259,6 +264,17 @@ Current DEM subset benchmark (`2026-03-12`, subset scale `0.55`, approx area rat
 
 Recommended default target for display/hillshade derivatives: `60m`, while retaining `30m` in raw cache as the high-detail source.
 
+4. Water-body source prototype comparison (Task 54):
+
+```bash
+npm run data:analytics:water-sources
+```
+
+Outputs:
+
+- `reports/water-bodies-prototype-comparison.json`
+- `reports/water-bodies-prototype-comparison.md`
+
 ### 2. Optional Local Pipeline Scaffolding
 
 The repo also contains a local pipeline structure for:
@@ -385,6 +401,9 @@ Implemented:
 - major-city urban extent fills under settlement labels
 - Ukrainian settlement names with English names below in parentheses when available
 - city-seeded Voronoi cells for alternative operational cell display
+- single dominant in-theater country labels (no repeated duplicates) with thicker country border lines
+- zoom-based label hierarchy where country labels become subdued and oblast labels appear inside provinces
+- ADM2 (raion) subdivision boundary overlay inside oblasts
 
 Not yet complete:
 
