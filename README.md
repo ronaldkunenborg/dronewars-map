@@ -98,7 +98,7 @@ This downloads or reuses cached public Ukraine boundary, Natural Earth, and Over
 
 This is what the app uses for visible thematic content. The public builder combines:
 
-- GeoBoundaries for national (ADM0), oblast (ADM1), and raion subdivision (ADM2) boundaries
+- GeoBoundaries metadata/endpoints for ADM0/ADM1 support inputs, with rendered Ukraine administrative linework built from cached GADM ADM2 topology (ADM0 outer, ADM1 shared, ADM2 internal) for cross-level coherence
 - Natural Earth for rivers, lakes, seas, roads, railways, and urban areas
 - OSM Overpass for settlements, forests, and wetlands
 - ESA WorldCover raster fallback for landcover visualization in the map shell
@@ -279,6 +279,41 @@ Outputs:
 - `reports/water-bodies-prototype-comparison.json`
 - `reports/water-bodies-prototype-comparison.md`
 
+5. OSM read-source feasibility report for water extraction (Task 54.1):
+
+Outputs (documentation artifacts):
+
+- `reports/osm-api-water-source-feasibility.json`
+- `reports/osm-api-water-source-feasibility.md`
+
+Conclusion snapshot:
+
+- OSM Editing API is not suitable for theater-scale read extraction.
+- Overpass remains the primary OSM read source for this project.
+
+6. Special-POI overlay source feasibility report (Task 54.2):
+
+Outputs (documentation artifacts):
+
+- `reports/poi-overlay-source-feasibility.json`
+- `reports/poi-overlay-source-feasibility.md`
+
+Conclusion snapshot:
+
+- OSM is primary for special POI geometry (airfields, mines, factories, harbours, powerplants), with category-specific supplemental sources as needed.
+
+7. OSM-informed hex shading prototype comparison (Task 54.3):
+
+```bash
+npm run data:analytics:hex-shading
+```
+
+Outputs:
+
+- `reports/osm-informed-hex-shading-comparison.json`
+- `reports/osm-informed-hex-shading-comparison.md`
+- `data/processed/hex-cells-osm-shading-prototype.geojson`
+
 ### 2. Optional Local Pipeline Scaffolding
 
 The repo also contains a local pipeline structure for:
@@ -408,6 +443,29 @@ Implemented:
 - single dominant in-theater country labels (no repeated duplicates) with thicker country border lines
 - zoom-based label hierarchy where country labels become subdued and oblast labels appear inside provinces
 - ADM2 (raion) subdivision boundary overlay inside oblasts
+
+Boundary-stack decision (Task 62 progress):
+
+- Ukraine ADM0/ADM1/ADM2 visible border overlays are now derived from one topology source path (cached GADM ADM2) so borders align across levels.
+- Ukraine ADM0 boundary geometry is simplified (currently about `0.6 km` minimum segment target) to reduce low-zoom anti-aliasing/flicker without reintroducing cross-level mismatch.
+- Natural Earth country-border fallback for UKR was removed from visible rendering because mixed-source switching caused noticeable mismatch/jump behavior versus ADM1/ADM2.
+- Maritime-segment suppression for ADM0 has been implemented as an interim approach; a more topology-aware coastal correction prototype is tracked as Task `62.3`.
+
+### Map Interaction Notes
+
+- The settlement search centers on selected matches and highlights the containing hex when available.
+- The cell panel is unified under `Cell Information`, with a `Detailed` toggle for debug-level inspection.
+- The detailed panel focuses on generated true center, click location, and deltas (pixel and kilometer) instead of noisier legacy debug fields.
+
+### Label and Styling Notes
+
+- Priority city stars are aligned to the settlement point locations for Kyiv, Kharkiv, and Odesa.
+- Fallback population values are used for major city scaling to keep marker sizing stable when source population is missing.
+- Country labels use a single dominant in-theater treatment with zoom-based hierarchy, and country borders are intentionally thicker for readability.
+- Oblast subdivision (ADM2) lines are intentionally subordinate to ADM1: dashed, lighter color, and thinner-width hierarchy.
+- Village/town-only settlement presence no longer forces reddish terrain tinting; terrain style remains terrain-driven unless stronger urban signals apply.
+- Forest presentation was restored to finer fidelity relative to an earlier coarse simplification.
+- Mixed coastal hex terrain classification was adjusted so part-land/part-sea urbanized cells do not default to `sea` inappropriately.
 
 Not yet complete:
 

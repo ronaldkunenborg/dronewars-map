@@ -1,0 +1,93 @@
+{
+  "generatedAt": "2026-03-14T11:18:46.098Z",
+  "source": {
+    "provider": "World Bank Official Boundaries (WBOB) Medium Resolution",
+    "itemId": "c030a96882e84205897973ed44b12cf2",
+    "serviceUrl": "https://services.arcgis.com/iQ1dY19aHwbSDYIF/arcgis/rest/services/WB_GAD_Medium_Resolution/FeatureServer",
+    "queryFilter": "ISO_A3 = 'UKR'",
+    "layers": {
+      "adm0": 5,
+      "adm1": 4,
+      "adm2": 3
+    }
+  },
+  "wbob": {
+    "summary": {
+      "adm0FeatureCount": 1,
+      "adm1FeatureCount": 24,
+      "adm2FeatureCount": 24,
+      "adm0Area": 73.64146811492867,
+      "adm1Area": 70.66578242488231,
+      "adm2Area": 70.66578242488231,
+      "adm1Vertices": {
+        "count": 24,
+        "min": 203,
+        "p50": 315,
+        "p90": 370,
+        "max": 517,
+        "average": 316.4166666666667
+      },
+      "adm2Vertices": {
+        "count": 24,
+        "min": 203,
+        "p50": 315,
+        "p90": 370,
+        "max": 517,
+        "average": 316.4166666666667
+      }
+    },
+    "adm2ContainmentVsAdm1": {
+      "count": 24,
+      "min": 1,
+      "p50": 1,
+      "p90": 1,
+      "perfectShare": 1
+    },
+    "adm2UnavailableNameShare": 1
+  },
+  "current": {
+    "summary": {
+      "adm0FeatureCount": 1,
+      "adm1FeatureCount": 27,
+      "adm2FeatureCount": 629,
+      "adm0Area": 78.40699698104072,
+      "adm1Area": 78.40699698104049,
+      "adm2Area": 72.24974853796982,
+      "adm1Vertices": {
+        "count": 27,
+        "min": 916,
+        "p50": 5309,
+        "p90": 7014,
+        "max": 9793,
+        "average": 5110.777777777777
+      },
+      "adm2Vertices": {
+        "count": 629,
+        "min": 7,
+        "p50": 276,
+        "p90": 803,
+        "max": 13385,
+        "average": 462.43402225755165
+      }
+    },
+    "adm2ContainmentVsAdm1": {
+      "count": 629,
+      "min": 0.9999999999946637,
+      "p50": 1,
+      "p90": 1,
+      "perfectShare": 1
+    }
+  },
+  "comparison": {
+    "detailParity": {
+      "adm2FeatureCountRatio": 0.03815580286168521,
+      "adm2MedianVertexRatio": 1.141304347826087,
+      "adm2P90VertexRatio": 0.46077210460772106
+    }
+  },
+  "verdict": {
+    "coherenceCheck": "pass",
+    "detailParityCheck": "fail",
+    "recommendation": "Do not switch to WBOB medium-resolution ADM0/ADM1/ADM2 for production in current form; ADM2 granularity for Ukraine is too coarse versus current stack."
+  }
+}

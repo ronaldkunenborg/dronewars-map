@@ -1805,6 +1805,511 @@ function alignOblastSubdivisionBoundaries(oblastBoundaryLayer, subdivisionLayer)
   };
 }
 
+function roundCoordinate(value, precision = 6) {
+  const factor = 10 ** precision;
+  return Math.round(value * factor) / factor;
+}
+
+function normalizedSegmentKey(a, b, precision = 6) {
+  const aRounded = [roundCoordinate(a[0], precision), roundCoordinate(a[1], precision)];
+  const bRounded = [roundCoordinate(b[0], precision), roundCoordinate(b[1], precision)];
+  const aKey = `${aRounded[0]},${aRounded[1]}`;
+  const bKey = `${bRounded[0]},${bRounded[1]}`;
+
+  return aKey <= bKey
+    ? `${aKey}|${bKey}`
+    : `${bKey}|${aKey}`;
+}
+
+function extractPolygonSegments(geometry, options = {}) {
+  const { includeInteriorRings = true } = options;
+
+  if (geometry.type === "Polygon") {
+    const rings = includeInteriorRings
+      ? geometry.coordinates
+      : geometry.coordinates.slice(0, 1);
+
+    return rings.flatMap((ring) => {
+      const segments = [];
+
+      for (let index = 1; index < ring.length; index += 1) {
+        segments.push([ring[index - 1], ring[index]]);
+      }
+
+      return segments;
+    });
+  }
+
+  if (geometry.type === "MultiPolygon") {
+    return geometry.coordinates.flatMap((polygon) =>
+      extractPolygonSegments(
+        { type: "Polygon", coordinates: polygon },
+        { includeInteriorRings },
+      ),
+    );
+  }
+
+  return [];
+}
+
+function extractLineSegments(geometry) {
+  if (!geometry) {
+    return [];
+  }
+
+  if (geometry.type === "LineString") {
+    const segments = [];
+
+    for (let index = 1; index < geometry.coordinates.length; index += 1) {
+      segments.push([geometry.coordinates[index - 1], geometry.coordinates[index]]);
+    }
+
+    return segments;
+  }
+
+  if (geometry.type === "MultiLineString") {
+    return geometry.coordinates.flatMap((line) =>
+      extractLineSegments({ type: "LineString", coordinates: line }),
+    );
+  }
+
+  return [];
+}
+
+function pointsEqual2D(a, b) {
+  return Array.isArray(a) &&
+    Array.isArray(b) &&
+    a.length >= 2 &&
+    b.length >= 2 &&
+    a[0] === b[0] &&
+    a[1] === b[1];
+}
+
+function pointDistanceKm(a, b) {
+  const referenceLatitude = (a[1] + b[1]) / 2;
+  const [ax, ay] = toKilometers(a, referenceLatitude);
+  const [bx, by] = toKilometers(b, referenceLatitude);
+
+  return Math.hypot(bx - ax, by - ay);
+}
+
+function simplifyRingByMinSegmentKm(ring, minSegmentKm) {
+  if (!Array.isArray(ring) || ring.length < 4 || minSegmentKm <= 0) {
+    return ring;
+  }
+
+  const isClosed = pointsEqual2D(ring[0], ring[ring.length - 1]);
+  const vertices = isClosed ? ring.slice(0, -1) : ring.slice();
+
+  if (vertices.length < 3) {
+    return ring;
+  }
+
+  const simplified = [vertices[0]];
+
+  for (let index = 1; index < vertices.length - 1; index += 1) {
+    const current = vertices[index];
+    const previousKept = simplified[simplified.length - 1];
+
+    if (pointDistanceKm(previousKept, current) >= minSegmentKm) {
+      simplified.push(current);
+    }
+  }
+
+  const lastVertex = vertices[vertices.length - 1];
+  if (!pointsEqual2D(simplified[simplified.length - 1], lastVertex)) {
+    simplified.push(lastVertex);
+  }
+
+  if (isClosed) {
+    if (!pointsEqual2D(simplified[0], simplified[simplified.length - 1])) {
+      simplified.push(simplified[0]);
+    }
+
+    if (simplified.length < 4) {
+      return ring;
+    }
+  } else if (simplified.length < 2) {
+    return ring;
+  }
+
+  return simplified;
+}
+
+function simplifyPolygonGeometryByMinSegmentKm(geometry, minSegmentKm) {
+  if (!geometry || minSegmentKm <= 0) {
+    return geometry;
+  }
+
+  if (geometry.type === "Polygon") {
+    return {
+      ...geometry,
+      coordinates: geometry.coordinates.map((ring) =>
+        simplifyRingByMinSegmentKm(ring, minSegmentKm)
+      ),
+    };
+  }
+
+  if (geometry.type === "MultiPolygon") {
+    return {
+      ...geometry,
+      coordinates: geometry.coordinates.map((polygon) =>
+        polygon.map((ring) => simplifyRingByMinSegmentKm(ring, minSegmentKm))
+      ),
+    };
+  }
+
+  return geometry;
+}
+
+function buildSegmentStatsFromPolygonLayer(featureCollection, propertyExtractor, options = {}) {
+  const { includeInteriorRings = true } = options;
+  const segmentStats = new Map();
+
+  for (const feature of featureCollection.features ?? []) {
+    if (feature.geometry?.type !== "Polygon" && feature.geometry?.type !== "MultiPolygon") {
+      continue;
+    }
+
+    const parentKey = propertyExtractor(feature);
+    const segments = extractPolygonSegments(feature.geometry, { includeInteriorRings });
+
+    for (const [start, end] of segments) {
+      if (
+        !Array.isArray(start) ||
+        !Array.isArray(end) ||
+        start.length < 2 ||
+        end.length < 2 ||
+        (start[0] === end[0] && start[1] === end[1])
+      ) {
+        continue;
+      }
+
+      const key = normalizedSegmentKey(start, end);
+      const existing = segmentStats.get(key);
+
+      if (existing) {
+        existing.count += 1;
+        if (parentKey) {
+          existing.parentKeys.add(parentKey);
+        }
+      } else {
+        segmentStats.set(key, {
+          count: 1,
+          parentKeys: new Set(parentKey ? [parentKey] : []),
+          coordinates: [start, end],
+        });
+      }
+    }
+  }
+
+  return segmentStats;
+}
+
+function buildLineLayerFromSegmentStats(segmentStats, filterFn, propertyBuilder) {
+  return {
+    type: "FeatureCollection",
+    features: Array.from(segmentStats.values())
+      .filter(filterFn)
+      .map((segment, index) => ({
+        type: "Feature",
+        id: index + 1,
+        properties: propertyBuilder(segment),
+        geometry: {
+          type: "LineString",
+          coordinates: segment.coordinates,
+        },
+      })),
+  };
+}
+
+function buildOuterBoundaryLineLayerFromPolygonGeometry(geometry, properties = {}) {
+  if (!geometry) {
+    return {
+      type: "FeatureCollection",
+      features: [],
+    };
+  }
+
+  const polygons = geometry.type === "Polygon"
+    ? [geometry.coordinates]
+    : geometry.type === "MultiPolygon"
+      ? geometry.coordinates
+      : [];
+
+  return {
+    type: "FeatureCollection",
+    features: polygons
+      .map((polygon, index) => {
+        const outerRing = polygon?.[0];
+
+        if (!Array.isArray(outerRing) || outerRing.length < 2) {
+          return null;
+        }
+
+        return {
+          type: "Feature",
+          id: index + 1,
+          properties,
+          geometry: {
+            type: "LineString",
+            coordinates: outerRing,
+          },
+        };
+      })
+      .filter(Boolean),
+  };
+}
+
+function isMaritimeBoundarySegment(start, end, seaLayer, maxSeaDistanceKm = 0.12) {
+  if (!Array.isArray(start) || !Array.isArray(end)) {
+    return false;
+  }
+
+  const midpoint = [
+    (start[0] + end[0]) / 2,
+    (start[1] + end[1]) / 2,
+  ];
+
+  return (seaLayer.features ?? []).some((feature) =>
+    pointDistanceToGeometryKm(midpoint, feature.geometry) <= maxSeaDistanceKm,
+  );
+}
+
+function suppressMaritimeSegments(lineLayer, seaLayer) {
+  if (!lineLayer || !Array.isArray(lineLayer.features) || !seaLayer) {
+    return lineLayer;
+  }
+
+  let nextId = 1;
+
+  return {
+    type: "FeatureCollection",
+    features: lineLayer.features.flatMap((feature) => {
+      const coordinates = feature.geometry?.coordinates;
+
+      if (!Array.isArray(coordinates) || coordinates.length < 2) {
+        return [];
+      }
+
+      const chunks = [];
+      let currentChunk = [coordinates[0]];
+
+      for (let index = 1; index < coordinates.length; index += 1) {
+        const start = coordinates[index - 1];
+        const end = coordinates[index];
+        const maritime = isMaritimeBoundarySegment(start, end, seaLayer);
+
+        if (maritime) {
+          if (currentChunk.length >= 2) {
+            chunks.push(currentChunk);
+          }
+          currentChunk = [end];
+          continue;
+        }
+
+        currentChunk.push(end);
+      }
+
+      if (currentChunk.length >= 2) {
+        chunks.push(currentChunk);
+      }
+
+      return chunks.map((chunk) => ({
+        type: "Feature",
+        id: nextId++,
+        properties: feature.properties ?? {},
+        geometry: {
+          type: "LineString",
+          coordinates: chunk,
+        },
+      }));
+    }),
+  };
+}
+
+function minDistanceToLineLayerKm(point, lineLayer) {
+  let minDistance = Number.POSITIVE_INFINITY;
+
+  for (const feature of lineLayer.features ?? []) {
+    for (const [segmentStart, segmentEnd] of extractLineSegments(feature.geometry)) {
+      minDistance = Math.min(
+        minDistance,
+        pointToSegmentDistanceKm(point, segmentStart, segmentEnd),
+      );
+    }
+  }
+
+  return minDistance;
+}
+
+function dissolveAdm2ByOblast(adm2PolygonLayer) {
+  const grouped = new Map();
+
+  for (const feature of adm2PolygonLayer.features ?? []) {
+    const geometryMultiPolygon = toClipMultiPolygon(feature.geometry);
+
+    if (!geometryMultiPolygon) {
+      continue;
+    }
+
+    const oblastName =
+      feature.properties?.parentOblast ??
+      feature.properties?.NAME_1 ??
+      feature.properties?.shapeName ??
+      "unknown";
+    const existing = grouped.get(oblastName);
+
+    if (!existing) {
+      grouped.set(oblastName, geometryMultiPolygon);
+      continue;
+    }
+
+    try {
+      grouped.set(oblastName, polygonClipping.union(existing, geometryMultiPolygon));
+    } catch {
+      grouped.set(oblastName, existing);
+    }
+  }
+
+  return {
+    type: "FeatureCollection",
+    features: Array.from(grouped.entries())
+      .map(([oblastName, clipGeometry], index) => {
+        const geometry = fromClipMultiPolygon(clipGeometry);
+
+        if (!geometry) {
+          return null;
+        }
+
+        return {
+          type: "Feature",
+          id: index + 1,
+          properties: {
+            shapeName: oblastName,
+          },
+          geometry,
+        };
+      })
+      .filter(Boolean),
+  };
+}
+
+function dissolveUkraineFromOblasts(oblastPolygonLayer) {
+  const multipolygons = oblastPolygonLayer.features
+    .map((feature) => toClipMultiPolygon(feature.geometry))
+    .filter(Boolean);
+
+  if (multipolygons.length === 0) {
+    return null;
+  }
+
+  let unioned = multipolygons[0];
+
+  for (let index = 1; index < multipolygons.length; index += 1) {
+    try {
+      unioned = polygonClipping.union(unioned, multipolygons[index]);
+    } catch {
+      // Keep previous union on occasional clipping robustness failures.
+    }
+  }
+
+  return fromClipMultiPolygon(unioned);
+}
+
+// Derive ADM0/ADM1/ADM2 boundary line layers from one ADM2 polygon source using dissolve-first topology.
+function buildBoundaryLineTopologyFromAdm2(adm2PolygonLayer, seaLayer = null) {
+  const dissolvedOblastPolygons = dissolveAdm2ByOblast(adm2PolygonLayer);
+  const ukraineGeometry = dissolveUkraineFromOblasts(dissolvedOblastPolygons);
+  const theaterBoundaryMinSegmentKm = 0.6;
+  const simplifiedUkraineGeometry = simplifyPolygonGeometryByMinSegmentKm(
+    ukraineGeometry,
+    theaterBoundaryMinSegmentKm,
+  );
+  const ukrainePolygonLayer = {
+    type: "FeatureCollection",
+    features: simplifiedUkraineGeometry
+      ? [{
+        type: "Feature",
+        properties: {
+          name: "Ukraine",
+          id: "UKR",
+        },
+        geometry: simplifiedUkraineGeometry,
+      }]
+      : [],
+  };
+
+  const adm0Raw = buildOuterBoundaryLineLayerFromPolygonGeometry(
+    simplifiedUkraineGeometry,
+    { level: "ADM0" },
+  );
+  const adm0Outer = seaLayer ? suppressMaritimeSegments(adm0Raw, seaLayer) : adm0Raw;
+
+  const adm1Stats = buildSegmentStatsFromPolygonLayer(
+    dissolvedOblastPolygons,
+    (feature) => feature.properties?.shapeName ?? null,
+  );
+  const adm1Shared = buildLineLayerFromSegmentStats(
+    adm1Stats,
+    (segment) => segment.count === 2 && segment.parentKeys.size === 2,
+    (segment) => {
+      const [oblastA, oblastB] = Array.from(segment.parentKeys);
+      return {
+        level: "ADM1",
+        leftOblast: oblastA ?? null,
+        rightOblast: oblastB ?? null,
+      };
+    },
+  );
+
+  const adm2Stats = buildSegmentStatsFromPolygonLayer(
+    adm2PolygonLayer,
+    (feature) =>
+      feature.properties?.parentOblast ??
+      feature.properties?.NAME_1 ??
+      feature.properties?.shapeName ??
+      null,
+  );
+  const adm2InternalRaw = buildLineLayerFromSegmentStats(
+    adm2Stats,
+    (segment) => segment.count === 2 && segment.parentKeys.size === 1,
+    (segment) => ({
+      level: "ADM2",
+      parentOblast: Array.from(segment.parentKeys)[0] ?? null,
+    }),
+  );
+
+  const boundaryExclusionThresholdKm = 0.06;
+  const adm2Internal = {
+    type: "FeatureCollection",
+    features: (adm2InternalRaw.features ?? []).filter((feature) => {
+      const [start, end] = feature.geometry?.coordinates ?? [];
+
+      if (!start || !end) {
+        return false;
+      }
+
+      const midpoint = [
+        (start[0] + end[0]) / 2,
+        (start[1] + end[1]) / 2,
+      ];
+
+      const nearAdm0 = minDistanceToLineLayerKm(midpoint, adm0Outer) <= boundaryExclusionThresholdKm;
+      const nearAdm1 = minDistanceToLineLayerKm(midpoint, adm1Shared) <= boundaryExclusionThresholdKm;
+
+      return !nearAdm0 && !nearAdm1;
+    }),
+  };
+
+  return {
+    adm0Outer,
+    adm1Shared,
+    adm2Internal,
+    dissolvedOblastPolygons,
+  };
+}
+
 // Convert lon/lat deltas near a reference latitude into approximate kilometer coordinates.
 function toKilometers(point, referenceLatitude) {
   const kmPerDegreeLatitude = 111.32;
@@ -2615,10 +3120,16 @@ async function main() {
       theaterBoundary,
     ),
   };
-  filteredLayers["layers/oblast-subdivisions.geojson"] = alignOblastSubdivisionBoundaries(
-    filteredLayers["layers/oblast-boundaries.geojson"],
-    filterFeatureCollectionToBbox(oblastSubdivisions, theaterBbox),
+  const clippedOblastBoundaries = filterFeatureCollectionToBbox(oblastBoundaries, theaterBbox);
+  const clippedAdm2Polygons = filterFeatureCollectionToBbox(oblastSubdivisions, theaterBbox);
+  const alignedOblastSubdivisions = alignOblastSubdivisionBoundaries(
+    clippedOblastBoundaries,
+    clippedAdm2Polygons,
   );
+  const admBoundaryTopology = buildBoundaryLineTopologyFromAdm2(oblastSubdivisions, seas);
+  filteredLayers["layers/theater-boundary.geojson"] = admBoundaryTopology.adm0Outer;
+  filteredLayers["layers/oblast-boundaries.geojson"] = admBoundaryTopology.adm1Shared;
+  filteredLayers["layers/oblast-subdivisions.geojson"] = admBoundaryTopology.adm2Internal;
   filteredLayers["layers/settlement-voronoi-cells.geojson"] = buildSettlementVoronoiLayer(
     filteredLayers["layers/country-boundaries.geojson"],
     filteredLayers["layers/settlements.geojson"],
@@ -2627,7 +3138,7 @@ async function main() {
     filteredLayers["layers/country-boundaries.geojson"],
   );
   filteredLayers["layers/oblast-label-points.geojson"] = buildAdminLabelPointLayer(
-    filteredLayers["layers/oblast-boundaries.geojson"],
+    admBoundaryTopology.dissolvedOblastPolygons,
     {
       idFields: ["shapeISO", "shapeID", "id"],
       nameFields: ["shapeName", "NAME_1", "name"],
@@ -2639,7 +3150,7 @@ async function main() {
     },
   );
   filteredLayers["layers/oblast-subdivision-label-points.geojson"] = buildAdminLabelPointLayer(
-    filteredLayers["layers/oblast-subdivisions.geojson"],
+    alignedOblastSubdivisions,
     {
       idFields: ["shapeID", "shapeISO", "id"],
       nameFields: ["shapeName", "NAME_2", "name"],
@@ -2660,14 +3171,14 @@ async function main() {
       id: "theater-boundary",
       label: "Theater Boundary",
       category: "reference",
-      geometryKind: "polygon",
+      geometryKind: "line",
       path: "layers/theater-boundary.geojson",
     },
     {
       id: "oblast-boundaries",
       label: "Oblast Boundaries",
       category: "reference",
-      geometryKind: "polygon",
+      geometryKind: "line",
       path: "layers/oblast-boundaries.geojson",
     },
     {
@@ -2681,7 +3192,7 @@ async function main() {
       id: "oblast-subdivisions",
       label: "Oblast Subdivisions",
       category: "reference",
-      geometryKind: "polygon",
+      geometryKind: "line",
       path: "layers/oblast-subdivisions.geojson",
     },
     {

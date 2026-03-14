@@ -1,18 +1,18 @@
 {
-  "generatedAt": "2026-03-14T00:29:48.791Z",
+  "generatedAt": "2026-03-14T19:17:30.010Z",
   "layers": [
     {
       "id": "theater-boundary",
       "label": "Theater Boundary",
       "category": "reference",
-      "geometryKind": "polygon",
+      "geometryKind": "line",
       "path": "layers/theater-boundary.geojson"
     },
     {
       "id": "oblast-boundaries",
       "label": "Oblast Boundaries",
       "category": "reference",
-      "geometryKind": "polygon",
+      "geometryKind": "line",
       "path": "layers/oblast-boundaries.geojson"
     },
     {
@@ -26,7 +26,7 @@
       "id": "oblast-subdivisions",
       "label": "Oblast Subdivisions",
       "category": "reference",
-      "geometryKind": "polygon",
+      "geometryKind": "line",
       "path": "layers/oblast-subdivisions.geojson"
     },
     {

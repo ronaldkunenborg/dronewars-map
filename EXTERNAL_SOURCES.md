@@ -6,8 +6,8 @@ This project is built on public-source geodata. External payloads are cached loc
 
 | Source | Primary Use | Current Role |
 | --- | --- | --- |
-| GeoBoundaries (ADM0, ADM1) | Theater and oblast boundaries | Active primary |
-| GADM (ADM2 local cache) | Raion/subdivision boundaries | Active primary for ADM2 |
+| GeoBoundaries (ADM0, ADM1) | Support/reference boundary inputs and metadata | Active supporting |
+| GADM (ADM2 local cache) | Topology source for rendered UKR ADM0/ADM1/ADM2 boundary lines | Active primary for UKR boundary stack |
 | Natural Earth | Rivers/lakes/seas/roads/railways/urban areas/country lines | Active primary |
 | OSM via Overpass API | Settlements + thematic polygons + prototype water/POI pulls | Active primary |
 | Geofabrik (OSM extract) | Optional raw OSM `.pbf` intake | Optional supporting |
@@ -22,20 +22,21 @@ This project is built on public-source geodata. External payloads are cached loc
 - Use in repo: Ukraine theater boundary (ADM0) and oblast boundaries (ADM1).
 - Consumption: metadata endpoint -> GeoJSON URL -> cached local copy.
 - License/fair-use: follow GeoBoundaries gbOpen terms and attribution requirements.
-- Fit for purpose: suitable as primary for ADM0/ADM1 in this project.
+- Fit for purpose: suitable as permissive support/reference source. Current visible UKR boundary line rendering is topology-derived from GADM ADM2 to preserve cross-level coherence.
 
 ### GADM (ADM2 local cache)
 
-- Use in repo: ADM2/raion subdivisions.
+- Use in repo: ADM2/raion subdivisions and derived UKR ADM0/ADM1/ADM2 rendered line topology.
 - Consumption: local cached file `data/cache/public-sources/gadm41_UKR_ADM2.geojson` (preferred for subdivision detail).
 - License/fair-use: more restrictive than gbOpen/CC-BY style sources; commercial use and redistribution are typically permission-gated under GADM terms. Avoid redistributing raw bundles beyond allowed scope.
-- Fit for purpose: currently preferred for ADM2 detail quality in this project.
+- Fit for purpose: currently preferred for UKR boundary detail/coherence in this project. A simplified ADM0 line derivative (targeting ~`1.0 km` minimum segment spacing) is used to improve low-zoom rendering stability while keeping topology alignment with ADM1/ADM2.
 
 ### Natural Earth
 
 - Use in repo: rivers, lakes, seas, roads, railways, urban areas, country polygons/border lines.
 - Consumption: cached GeoJSON downloads filtered to theater bbox.
 - License/fair-use: public domain; attribution still recommended.
+- Boundary note: UKR country-border fallback line rendering was removed from the visible border stack because mixed-source switching versus ADM-derived lines caused mismatch/jump artifacts.
 - Fit-for-purpose conclusions from reports:
   - From `reports/water-bodies-prototype-comparison.md`: Natural Earth lakes are useful as coarse baseline context, but not sufficient as sole inland-water source for detailed theater water depiction.
   - From `reports/poi-overlay-source-feasibility.md`: Natural Earth ports are useful as a major-port fallback/baseline, not as a replacement for OSM local-detail harbour mapping.
@@ -93,7 +94,12 @@ This project is built on public-source geodata. External payloads are cached loc
 
 - Why considered: candidate for coherent ADM0/ADM1/ADM2 hierarchy with licensing that is generally easier for redistribution/commercial use than GADM.
 - Expected strengths: one provider across levels, consistent schema, and potentially GADM-like geometric detail depending on country/version.
-- Fit-for-purpose status in this repo: not yet prototyped locally; planned as a small-scope benchmark against current GeoBoundaries+GADM mix.
+- Prototype executed (Task 69):
+  - Source tested: WBOB medium-resolution FeatureServer item `c030a96882e84205897973ed44b12cf2` (Ukraine subset, `ISO_A3='UKR'`), layers ADM0/ADM1/ADM2.
+  - Output report: `reports/wbob-boundary-prototype-comparison.{md,json}`.
+  - Measured result: cross-level coherence passed, but ADM2 detail parity failed for our use case.
+  - Key evidence: WBOB ADM2 returned `24` features for Ukraine (vs current `629`), and `NAM_2` was `Administrative unit not available` for all returned ADM2 features.
+- Fit-for-purpose status in this repo: not selected for current production replacement of ADM2; retain current stack unless a higher-detail WBOB slice/version is identified and validated.
 
 ### OSM Administrative Boundaries (admin_level relations)
 
@@ -103,8 +109,10 @@ This project is built on public-source geodata. External payloads are cached loc
 
 ### Current Position (ADM0/ADM1/ADM2)
 
-- ADM0/ADM1 remain on GeoBoundaries (gbOpen) due to stable integration and permissive reuse model.
-- ADM2 is currently sourced from cached GADM for geometry detail, with awareness of licensing restrictions.
+- Visible UKR ADM0/ADM1/ADM2 boundaries are now topology-derived from cached GADM ADM2 so shared edges stay coherent across levels.
+- GeoBoundaries ADM0/ADM1 remain available as cached support/reference inputs, but not as the active visible UKR boundary line source.
+- Natural Earth country lines continue for non-UKR borders; UKR line fallback was removed to avoid mixed-source zoom instability.
+- GADM licensing restrictions still apply; current choice is a technical quality/coherence tradeoff pending any future permissive high-detail replacement.
 - WBOB is the next candidate to test for a coherent and permissive single-provider hierarchy.
 
 ## Operational Rules In This Repo
