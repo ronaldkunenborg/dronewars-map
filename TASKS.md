@@ -50,6 +50,20 @@
 
 60. [done] Added province subdivisions (ADM2/raion-level fallback layer) and rendered them as thin dashed boundaries at medium-to-high zoom.
 
-61. [done] Created `EXTERNAL_SOURCES.md` with a concise register of all active external data providers, what each source is used for, how it is consumed (cache-first), and license/fair-use attribution guidance; linked this document from `README.md`.
+61. [done] Created and expanded `EXTERNAL_SOURCES.md`: includes a full external-source register, per-source usage/consumption and license/fair-use guidance, plus per-source fit-for-purpose conclusions distilled from `reports/osm-api-water-source-feasibility.md`, `reports/poi-overlay-source-feasibility.md`, `reports/water-bodies-prototype-comparison.md`, and `reports/osm-informed-hex-shading-comparison.md`; linked from `README.md`.
 
 62. [pending] Improve ADM1/ADM2 boundary alignment and subdivision quality: clipping ADM2 to best-matching ADM1 masks successfully stopped cross-oblast spillover, but GeoBoundaries ADM2 geometry remained too coarse for acceptable map quality; current change switches ADM2 intake to cached local GADM (`data/cache/public-sources/gadm41_UKR_ADM2.geojson`) while keeping ADM1 from GeoBoundaries, then reapplies ADM1 mask clipping for alignment.
+
+63. [pending] Add a typed attribution configuration module (`src/config/attribution.ts`) defining source id, provider name, required attribution text, canonical link, and show/hide conditions for the app.
+
+64. [pending] Implement a centralized layer-to-source attribution mapping so every visible map layer resolves to one or more source attributions from the shared config.
+
+65. [pending] Add an in-app `Data Attribution` UI panel (sidebar section or modal) that lists full attribution entries for currently active/visible layers.
+
+66. [pending] Add a persistent compact attribution footer in the map UI that always shows minimum required attribution for active layers and links to the full `Data Attribution` panel.
+
+67. [pending] Add a reusable attribution export helper that generates a plain-text attribution block for screenshots/exports using the same shared attribution config and layer mapping logic.
+
+68. [pending] Update README with an `Attribution In App` section and add tests for attribution resolution logic (layer visibility -> required attribution set), plus a short manual verification checklist.
+
+69. [pending] Prototype World Bank Official Boundaries (WBOB) as an alternative boundary stack on a small test subset: ingest ADM0/ADM1/ADM2 into local cache, build comparison layers, and evaluate (a) cross-level boundary coherence (same shared boundaries across ADM levels without drift) and (b) geometry detail parity versus the current GeoBoundaries+GADM stack.
