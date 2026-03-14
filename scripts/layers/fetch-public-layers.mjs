@@ -3,6 +3,7 @@ import { existsSync } from "node:fs";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 import { spawn } from "node:child_process";
+import polygonClipping from "polygon-clipping";
 import {
   buildSettlementVoronoiLayer,
   settlementVoronoiCatalogEntry,
@@ -113,6 +114,7 @@ const sources = {
   adm0Api: "https://www.geoboundaries.org/api/current/gbOpen/UKR/ADM0/",
   adm1Api: "https://www.geoboundaries.org/api/current/gbOpen/UKR/ADM1/",
   adm2Api: "https://www.geoboundaries.org/api/current/gbOpen/UKR/ADM2/",
+  adm2LocalGeoJson: path.join(cacheRoot, "gadm41_UKR_ADM2.geojson"),
   overpassApi: "https://overpass-api.de/api/interpreter",
   terrainOverpassApi: "https://overpass.kumi.systems/api/interpreter",
   overpassFallbackApi: "https://lz4.overpass-api.de/api/interpreter",
@@ -611,6 +613,16 @@ async function fetchJsonWithCache(cacheKey, url, init) {
 // Convenience wrapper for cache-backed GET requests.
 async function fetchJson(url, cacheKey) {
   return fetchJsonWithCache(cacheKey, url);
+}
+
+async function readLocalGeoJson(filePath, sourceLabel) {
+  const raw = await readFile(filePath, "utf8");
+
+  try {
+    return JSON.parse(raw);
+  } catch (error) {
+    throw new Error(`Failed to parse ${sourceLabel}: ${error.message}`);
+  }
 }
 
 // Fetch the settlement query through the shared Overpass fallback and cache path.
@@ -1582,6 +1594,217 @@ function pointInPolygonGeometry(point, geometry) {
   return false;
 }
 
+function toClipMultiPolygon(geometry) {
+  if (geometry.type === "Polygon") {
+    return [geometry.coordinates];
+  }
+
+  if (geometry.type === "MultiPolygon") {
+    return geometry.coordinates;
+  }
+
+  return null;
+}
+
+function fromClipMultiPolygon(clipGeometry) {
+  const polygons = (clipGeometry ?? [])
+    .map((polygon) =>
+      polygon
+        .map((ring) => closeRing(ring.map(([lng, lat]) => [Number(lng), Number(lat)])))
+        .filter((ring) => ring.length >= 4),
+    )
+    .filter((polygon) => polygon.length > 0);
+
+  if (polygons.length === 0) {
+    return null;
+  }
+
+  if (polygons.length === 1) {
+    return {
+      type: "Polygon",
+      coordinates: polygons[0],
+    };
+  }
+
+  return {
+    type: "MultiPolygon",
+    coordinates: polygons,
+  };
+}
+
+function clipPolygonArea(polygon) {
+  if (!Array.isArray(polygon) || polygon.length === 0) {
+    return 0;
+  }
+
+  const outerArea = ringArea(polygon[0] ?? []);
+  const holeArea = polygon
+    .slice(1)
+    .reduce((sum, ring) => sum + ringArea(ring), 0);
+
+  return Math.max(0, outerArea - holeArea);
+}
+
+function clipMultiPolygonArea(clipGeometry) {
+  return (clipGeometry ?? []).reduce(
+    (sum, polygon) => sum + clipPolygonArea(polygon),
+    0,
+  );
+}
+
+function geometryRepresentativePoint(geometry) {
+  const bounds = geometryBounds(geometry);
+
+  if (!Number.isFinite(bounds.west) || !Number.isFinite(bounds.east)) {
+    return null;
+  }
+
+  return [
+    (bounds.west + bounds.east) / 2,
+    (bounds.south + bounds.north) / 2,
+  ];
+}
+
+function pointDistanceToGeometryKm(point, geometry) {
+  if (pointInPolygonGeometry(point, geometry)) {
+    return 0;
+  }
+
+  if (geometry.type === "Polygon") {
+    return geometry.coordinates.reduce(
+      (best, ring) => Math.min(best, minDistanceToRingKm(point, ring)),
+      Number.POSITIVE_INFINITY,
+    );
+  }
+
+  if (geometry.type === "MultiPolygon") {
+    return geometry.coordinates.reduce(
+      (best, polygon) =>
+        Math.min(best, pointDistanceToGeometryKm(point, { type: "Polygon", coordinates: polygon })),
+      Number.POSITIVE_INFINITY,
+    );
+  }
+
+  return Number.POSITIVE_INFINITY;
+}
+
+function bestMatchingOblastForSubdivision(subdivisionFeature, oblastFeatures) {
+  const subdivisionMultiPolygon = toClipMultiPolygon(subdivisionFeature.geometry);
+
+  if (subdivisionMultiPolygon) {
+    const overlapWinner = oblastFeatures.reduce((best, oblastFeature) => {
+      const oblastMultiPolygon = toClipMultiPolygon(oblastFeature.geometry);
+
+      if (!oblastMultiPolygon) {
+        return best;
+      }
+
+      const overlap = polygonClipping.intersection(subdivisionMultiPolygon, oblastMultiPolygon);
+      const overlapArea = clipMultiPolygonArea(overlap);
+
+      if (!best || overlapArea > best.overlapArea) {
+        return {
+          feature: oblastFeature,
+          overlapArea,
+        };
+      }
+
+      return best;
+    }, null);
+
+    if (overlapWinner?.feature && overlapWinner.overlapArea > 0) {
+      return overlapWinner.feature;
+    }
+  }
+
+  const point = geometryRepresentativePoint(subdivisionFeature.geometry);
+
+  if (!point) {
+    return null;
+  }
+
+  const containingOblast = oblastFeatures.find((oblastFeature) =>
+    pointInPolygonGeometry(point, oblastFeature.geometry),
+  );
+
+  if (containingOblast) {
+    return containingOblast;
+  }
+
+  return oblastFeatures.reduce((best, oblastFeature) => {
+    const distance = pointDistanceToGeometryKm(point, oblastFeature.geometry);
+
+    if (!best || distance < best.distance) {
+      return {
+        feature: oblastFeature,
+        distance,
+      };
+    }
+
+    return best;
+  }, null)?.feature ?? null;
+}
+
+function clipGeometryToMask(geometry, maskGeometry) {
+  const geometryMultiPolygon = toClipMultiPolygon(geometry);
+  const maskMultiPolygon = toClipMultiPolygon(maskGeometry);
+
+  if (!geometryMultiPolygon || !maskMultiPolygon) {
+    return geometry;
+  }
+
+  const clipped = polygonClipping.intersection(geometryMultiPolygon, maskMultiPolygon);
+
+  if (!clipped || clipped.length === 0) {
+    return null;
+  }
+
+  return fromClipMultiPolygon(clipped);
+}
+
+// Snap ADM2 presentation to ADM1 by clipping each subdivision to its best-matching oblast polygon.
+function alignOblastSubdivisionBoundaries(oblastBoundaryLayer, subdivisionLayer) {
+  const oblastFeatures = (oblastBoundaryLayer.features ?? []).filter(
+    (feature) =>
+      feature.geometry?.type === "Polygon" || feature.geometry?.type === "MultiPolygon",
+  );
+  const subdivisionFeatures = (subdivisionLayer.features ?? []).filter(
+    (feature) =>
+      feature.geometry?.type === "Polygon" || feature.geometry?.type === "MultiPolygon",
+  );
+
+  return {
+    type: "FeatureCollection",
+    features: subdivisionFeatures
+      .map((subdivisionFeature) => {
+        const matchingOblast = bestMatchingOblastForSubdivision(subdivisionFeature, oblastFeatures);
+
+        if (!matchingOblast) {
+          return subdivisionFeature;
+        }
+
+        const clippedGeometry = clipGeometryToMask(
+          subdivisionFeature.geometry,
+          matchingOblast.geometry,
+        );
+
+        if (!clippedGeometry) {
+          return null;
+        }
+
+        return {
+          ...subdivisionFeature,
+          properties: {
+            ...subdivisionFeature.properties,
+            parentOblast: matchingOblast.properties?.shapeName ?? null,
+          },
+          geometry: clippedGeometry,
+        };
+      })
+      .filter(Boolean),
+  };
+}
+
 // Convert lon/lat deltas near a reference latitude into approximate kilometer coordinates.
 function toKilometers(point, referenceLatitude) {
   const kmPerDegreeLatitude = 111.32;
@@ -2145,7 +2368,20 @@ async function resolveGeoBoundariesDownload(apiUrl, metadataCacheKey) {
     apiUrl,
     metadataCacheKey,
   );
-  return metadata.simplifiedGeometryGeoJSON ?? metadata.gjDownloadURL;
+  return metadata.gjDownloadURL ?? metadata.simplifiedGeometryGeoJSON;
+}
+
+async function loadAdm2Subdivisions() {
+  if (existsSync(sources.adm2LocalGeoJson)) {
+    console.log("local hit  gadm/adm2-geometry");
+    return readLocalGeoJson(sources.adm2LocalGeoJson, "gadm/adm2-geometry");
+  }
+
+  const adm2Url = await resolveGeoBoundariesDownload(
+    sources.adm2Api,
+    "geoboundaries/adm2-metadata",
+  );
+  return fetchJson(adm2Url, "geoboundaries/adm2-geometry");
 }
 
 // Print a read-only report of every known cache entry and its freshness metadata.
@@ -2185,16 +2421,15 @@ async function main() {
   }
 
   if (smokeTestMode === "static") {
-    const [adm0Url, adm1Url, adm2Url] = await Promise.all([
+    const [adm0Url, adm1Url] = await Promise.all([
       resolveGeoBoundariesDownload(sources.adm0Api, "geoboundaries/adm0-metadata"),
       resolveGeoBoundariesDownload(sources.adm1Api, "geoboundaries/adm1-metadata"),
-      resolveGeoBoundariesDownload(sources.adm2Api, "geoboundaries/adm2-metadata"),
     ]);
 
     await Promise.all([
       fetchJson(adm0Url, "geoboundaries/adm0-geometry"),
       fetchJson(adm1Url, "geoboundaries/adm1-geometry"),
-      fetchJson(adm2Url, "geoboundaries/adm2-geometry"),
+      loadAdm2Subdivisions(),
       fetchJson(sources.rivers, "natural-earth/rivers"),
       fetchJson(sources.lakes, "natural-earth/lakes"),
       fetchJson(sources.seas, "natural-earth/seas"),
@@ -2262,10 +2497,9 @@ async function main() {
     return;
   }
 
-  const [adm0Url, adm1Url, adm2Url] = await Promise.all([
+  const [adm0Url, adm1Url] = await Promise.all([
     resolveGeoBoundariesDownload(sources.adm0Api, "geoboundaries/adm0-metadata"),
     resolveGeoBoundariesDownload(sources.adm1Api, "geoboundaries/adm1-metadata"),
-    resolveGeoBoundariesDownload(sources.adm2Api, "geoboundaries/adm2-metadata"),
   ]);
 
   const [
@@ -2283,7 +2517,7 @@ async function main() {
   ] = await Promise.all([
     fetchJson(adm0Url, "geoboundaries/adm0-geometry"),
     fetchJson(adm1Url, "geoboundaries/adm1-geometry"),
-    fetchJson(adm2Url, "geoboundaries/adm2-geometry"),
+    loadAdm2Subdivisions(),
     fetchJson(sources.rivers, "natural-earth/rivers"),
     fetchJson(sources.lakes, "natural-earth/lakes"),
     fetchJson(sources.seas, "natural-earth/seas"),
@@ -2355,10 +2589,7 @@ async function main() {
     "layers/theater-boundary.geojson": theaterBoundary,
     "layers/oblast-boundaries.geojson": oblastBoundaries,
     "layers/oblast-label-points.geojson": emptyFeatureCollection(),
-    "layers/oblast-subdivisions.geojson": filterFeatureCollectionToBbox(
-      oblastSubdivisions,
-      theaterBbox,
-    ),
+    "layers/oblast-subdivisions.geojson": emptyFeatureCollection(),
     "layers/oblast-subdivision-label-points.geojson": emptyFeatureCollection(),
     "layers/rivers.geojson": filterFeatureCollectionToBbox(rivers, theaterBbox),
     "layers/water-bodies.geojson": filterFeatureCollectionToBbox(lakes, theaterBbox),
@@ -2384,6 +2615,10 @@ async function main() {
       theaterBoundary,
     ),
   };
+  filteredLayers["layers/oblast-subdivisions.geojson"] = alignOblastSubdivisionBoundaries(
+    filteredLayers["layers/oblast-boundaries.geojson"],
+    filterFeatureCollectionToBbox(oblastSubdivisions, theaterBbox),
+  );
   filteredLayers["layers/settlement-voronoi-cells.geojson"] = buildSettlementVoronoiLayer(
     filteredLayers["layers/country-boundaries.geojson"],
     filteredLayers["layers/settlements.geojson"],
