@@ -49,3 +49,7 @@
 59. [done] Increased country-border stroke width to roughly double prior thickness to improve boundary legibility at operational zoom levels.
 
 60. [done] Added province subdivisions (ADM2/raion-level fallback layer) and rendered them as thin dashed boundaries at medium-to-high zoom.
+
+61. [done] Created `EXTERNAL_SOURCES.md` with a concise register of all active external data providers, what each source is used for, how it is consumed (cache-first), and license/fair-use attribution guidance; linked this document from `README.md`.
+
+62. [pending] Improve ADM1/ADM2 boundary alignment and subdivision quality: clipping ADM2 to best-matching ADM1 masks successfully stopped cross-oblast spillover, but GeoBoundaries ADM2 geometry remained too coarse for acceptable map quality; current change switches ADM2 intake to cached local GADM (`data/cache/public-sources/gadm41_UKR_ADM2.geojson`) while keeping ADM1 from GeoBoundaries, then reapplies ADM1 mask clipping for alignment.

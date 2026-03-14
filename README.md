@@ -79,6 +79,10 @@ At the moment, the processed layers provide:
 
 There are currently two data paths in the repository.
 
+External source inventory, usage purpose, and fair-use/licensing notes are documented in:
+
+- [EXTERNAL_SOURCES.md](EXTERNAL_SOURCES.md)
+
 ### 1. Primary Public-Source Pipeline
 
 This is the primary pipeline for this project and the recommended way to build map content.
