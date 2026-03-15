@@ -24,6 +24,7 @@
     "data:analytics:elevation-thresholds": "node scripts/analytics/investigate-elevation-thresholds.mjs",
     "data:analytics:dem-resolutions": "node scripts/analytics/benchmark-dem-resolutions.mjs",
     "data:analytics:water-sources": "node scripts/analytics/compare-water-body-sources.mjs",
+    "data:analytics:river-gaps": "node scripts/analytics/report-river-water-gaps.mjs",
     "data:analytics:hex-shading": "node scripts/analytics/prototype-osm-informed-hex-shading.mjs",
     "data:export:hex": "node scripts/export/export-hex-dataset.mjs"
   },

@@ -2,6 +2,7 @@ import type { CSSProperties } from "react";
 
 export type LayerControlId =
   | "water"
+  | "rivers"
   | "wetlands"
   | "forests"
   | "roads"
@@ -10,6 +11,7 @@ export type LayerControlId =
   | "settlements"
   | "oblasts"
   | "hexes"
+  | "riverGapHexes"
   | "contours"
   | "hillshade";
 
@@ -28,7 +30,8 @@ type LayerControl = {
 };
 
 const terrainLayerControls: LayerControl[] = [
-  { id: "water", label: "Water", description: "Rivers, seas, and water bodies", color: "#6f8fab", available: true },
+  { id: "water", label: "Water", description: "Seas and inland water bodies", color: "#6f8fab", available: true },
+  { id: "rivers", label: "Rivers", description: "River and stream overlay", color: "#88a8c1", available: true },
   { id: "wetlands", label: "Wetlands", description: "Wetland layer", color: "#91a98f", available: true },
   { id: "forests", label: "Forests", description: "Forest cover", color: "#7f9572", available: true },
   { id: "contours", label: "Contours", description: "Not generated yet", color: "#9f9f9f", available: false },
@@ -48,10 +51,12 @@ const settlementsLayerControls: LayerControl[] = [
 const boundariesLayerControls: LayerControl[] = [
   { id: "oblasts", label: "Oblasts", description: "Reference boundaries", color: "#73796d", available: true },
   { id: "hexes", label: "Hexes", description: "Operational hex layer", color: "#55614f", available: true },
+  { id: "riverGapHexes", label: "River Gap Hexes", description: "Temporary review overlay", color: "#d62828", available: true },
 ];
 
 export const defaultLayerVisibility: LayerVisibility = {
   water: true,
+  rivers: true,
   wetlands: false,
   forests: false,
   roads: true,
@@ -60,6 +65,7 @@ export const defaultLayerVisibility: LayerVisibility = {
   settlements: false,
   oblasts: true,
   hexes: true,
+  riverGapHexes: false,
   contours: false,
   hillshade: false,
 };
@@ -68,6 +74,7 @@ export const presetVisibility: Record<ViewMode, LayerVisibility> = {
   terrain: {
     ...defaultLayerVisibility,
     water: true,
+    rivers: true,
     wetlands: true,
     forests: true,
     contours: false,
@@ -77,10 +84,12 @@ export const presetVisibility: Record<ViewMode, LayerVisibility> = {
     settlements: false,
     oblasts: false,
     hexes: false,
+    riverGapHexes: false,
   },
   logistics: {
     ...defaultLayerVisibility,
     water: false,
+    rivers: false,
     wetlands: false,
     forests: false,
     hillshade: false,
@@ -89,10 +98,12 @@ export const presetVisibility: Record<ViewMode, LayerVisibility> = {
     settlements: false,
     oblasts: false,
     hexes: false,
+    riverGapHexes: false,
   },
   settlements: {
     ...defaultLayerVisibility,
     water: false,
+    rivers: false,
     wetlands: false,
     forests: false,
     roads: true,
@@ -100,11 +111,13 @@ export const presetVisibility: Record<ViewMode, LayerVisibility> = {
     settlements: true,
     oblasts: true,
     hexes: false,
+    riverGapHexes: false,
     hillshade: false,
   },
   boundaries: {
     ...defaultLayerVisibility,
     water: false,
+    rivers: false,
     wetlands: false,
     forests: false,
     roads: false,
@@ -112,6 +125,7 @@ export const presetVisibility: Record<ViewMode, LayerVisibility> = {
     settlements: false,
     oblasts: true,
     hexes: true,
+    riverGapHexes: false,
     hillshade: false,
   },
 };
@@ -327,7 +341,7 @@ export function LayerPanel({
       <section className="panel">
         <h2>Legend</h2>
         <ul className="legend-list">
-          <li><span className="legend-swatch legend-swatch--water" />Water</li>
+          <li><span className="legend-swatch legend-swatch--water" />Water bodies + rivers</li>
           <li><span className="legend-swatch legend-swatch--forest" />Forest</li>
           <li><span className="legend-swatch legend-swatch--wetland" />Wetland</li>
           <li><span className="legend-swatch legend-swatch--road" />Road</li>

@@ -42,6 +42,8 @@ type SettlementSearchEntry = {
   coordinates: Point;
 };
 
+const riverGapChecklistReportPath = "reports/river-water-gap-checklist.json";
+
 function toRadians(value: number) {
   return (value * Math.PI) / 180;
 }
@@ -434,6 +436,98 @@ function setSearchResultHexFeature(
   });
 }
 
+async function loadRiverGapHexIds() {
+  const response = await fetch(riverGapChecklistReportPath, {
+    headers: {
+      Accept: "application/json",
+    },
+  });
+
+  if (!response.ok) {
+    throw new Error(`Failed to load ${riverGapChecklistReportPath}: ${response.status}`);
+  }
+
+  const report = (await response.json()) as {
+    flaggedHexes?: Array<{
+      hexId?: unknown;
+    }>;
+  };
+
+  return new Set(
+    (report.flaggedHexes ?? [])
+      .map((entry) => (typeof entry.hexId === "string" ? entry.hexId : null))
+      .filter((value): value is string => value !== null),
+  );
+}
+
+function ensureRiverGapHexLayers(map: MapLibreMap) {
+  if (!map.getSource("river-gap-hexes")) {
+    map.addSource("river-gap-hexes", {
+      type: "geojson",
+      data: {
+        type: "FeatureCollection",
+        features: [],
+      },
+    });
+  }
+
+  if (!map.getLayer("river-gap-hex-outline")) {
+    map.addLayer({
+      id: "river-gap-hex-outline",
+      type: "line",
+      source: "river-gap-hexes",
+      paint: {
+        "line-color": "#d62828",
+        "line-opacity": 0.96,
+        "line-width": [
+          "interpolate",
+          ["linear"],
+          ["zoom"],
+          4,
+          1.6,
+          8,
+          2.8,
+          11,
+          4.2,
+        ],
+      },
+    });
+  }
+}
+
+function setRiverGapHexFeatures(map: MapLibreMap, hexFeatures: HexPolygonGeoJson["features"]) {
+  const source = map.getSource("river-gap-hexes") as GeoJSONSource | undefined;
+
+  if (!source) {
+    return;
+  }
+
+  source.setData({
+    type: "FeatureCollection",
+    features: hexFeatures,
+  });
+}
+
+async function populateRiverGapHexOverlay(
+  map: MapLibreMap,
+  hexGeoJson: HexPolygonGeoJson | null,
+) {
+  if (!hexGeoJson) {
+    setRiverGapHexFeatures(map, []);
+    return;
+  }
+
+  try {
+    const flaggedHexIds = await loadRiverGapHexIds();
+    const flaggedHexFeatures = hexGeoJson.features.filter((feature) =>
+      flaggedHexIds.has(String(feature.properties?.id ?? "")),
+    );
+    setRiverGapHexFeatures(map, flaggedHexFeatures);
+  } catch {
+    setRiverGapHexFeatures(map, []);
+  }
+}
+
 function buildHexInspectorData(feature: MapGeoJSONFeature): HexInspectorData {
   const terrainSummary = parseJsonObject<{
     dominantTerrain?: unknown;
@@ -730,6 +824,8 @@ export function MapView({
       detachDebugHandler?.();
       detachDebugHandler = attachHexDebugHandler(map);
       ensureSearchResultHexLayers(map);
+      ensureRiverGapHexLayers(map);
+      void populateRiverGapHexOverlay(map, hexGeoJsonRef.current);
       applyLayerVisibility(map, layerVisibility);
       applyOperationalCellLayerMode(map, layerVisibility.hexes, cellLayerMode);
       applySettlementDisplayLevel(map, layerVisibility.settlements, settlementDisplayLevel);

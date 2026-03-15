@@ -43,11 +43,13 @@ function addSourceIfMissing(
   map: Map,
   sourceId: string,
   data: SourceData,
+  options: Partial<GeoJSONSourceSpecification> = {},
 ) {
   if (!map.getSource(sourceId)) {
     map.addSource(sourceId, {
       type: "geojson",
       data,
+      ...options,
     });
   }
 }
@@ -222,6 +224,14 @@ function raiseSettlementLayers(map: Map) {
   }
 }
 
+function placeRiversBelowWaterBodies(map: Map) {
+  if (map.getLayer("rivers-line") && map.getLayer("water-bodies-fill")) {
+    // Keep rivers as a fallback/operational hint, but avoid visual mismatch
+    // where detailed water polygons already represent the same channel.
+    map.moveLayer("rivers-line", "water-bodies-fill");
+  }
+}
+
 function raiseHillshadeLayer(map: Map) {
   if (map.getLayer("hillshade-raster")) {
     map.moveLayer("hillshade-raster");
@@ -237,7 +247,16 @@ function mountManifestLayer(map: Map, layer: LayerManifest) {
       addRasterImageSourceIfMissing(map, sourceId, layer.sourcePath);
     }
   } else {
-    addSourceIfMissing(map, sourceId, layer.sourcePath);
+    const sourceOptions: Partial<GeoJSONSourceSpecification> =
+      layer.id === "water-bodies"
+        ? {
+            // Balance geometry stability with browser memory usage.
+            tolerance: 0.08,
+            buffer: 128,
+            maxzoom: 12,
+          }
+        : {};
+    addSourceIfMissing(map, sourceId, layer.sourcePath, sourceOptions);
   }
 
   const definition = getOrderedLayerRegistry().find((entry) => entry.id === layer.id);
@@ -281,6 +300,7 @@ export function mountTerrainShell(
     },
   );
   mountOperationalHexLayer(map);
+  placeRiversBelowWaterBodies(map);
   // Keep hillshade visible over terrain/hex fills while leaving labels above it.
   raiseHillshadeLayer(map);
   raiseCountryBoundaryLayer(map);

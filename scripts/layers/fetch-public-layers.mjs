@@ -1,4 +1,4 @@
-import { access, copyFile, mkdir, readFile, writeFile } from "node:fs/promises";
+import { access, copyFile, mkdir, readFile, stat, unlink, writeFile } from "node:fs/promises";
 import { existsSync } from "node:fs";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
@@ -146,6 +146,8 @@ const gdalTools = {
   dem: "gdaldem",
   translate: "gdal_translate",
   tiles: "gdal2tiles.exe",
+  ogr2ogr: "ogr2ogr",
+  locationInfo: "gdallocationinfo",
 };
 const hillshadeTileSize = 1024;
 const hillshadeTileZoomRange = "4-10";
@@ -153,6 +155,37 @@ const hillshadeTileZoomRange = "4-10";
 const gdalCommandNames = new Set(Object.values(gdalTools));
 const osgeoBinDir = process.env.OSGEO4W_BIN ?? "C:\\OSGeo4W\\bin";
 const osgeoRootDir = path.dirname(osgeoBinDir);
+const gdalDataCandidates = [
+  path.join(osgeoRootDir, "apps", "gdal", "share", "gdal"),
+  path.join(osgeoRootDir, "share", "gdal"),
+];
+const projLibCandidates = [
+  path.join(osgeoRootDir, "share", "proj"),
+  path.join(osgeoRootDir, "apps", "proj", "share", "proj"),
+  path.join(osgeoRootDir, "apps", "proj", "projlib"),
+];
+
+function pickExistingPath(candidates) {
+  return candidates.find((candidate) => existsSync(candidate)) ?? null;
+}
+
+function commandEnv(command) {
+  const baseEnv = { ...process.env };
+  if (process.platform !== "win32" || !gdalCommandNames.has(command)) {
+    return baseEnv;
+  }
+
+  const gdalData = baseEnv.GDAL_DATA ?? pickExistingPath(gdalDataCandidates);
+  const projLib = baseEnv.PROJ_LIB ?? pickExistingPath(projLibCandidates);
+  const pathSeparator = process.platform === "win32" ? ";" : ":";
+
+  return {
+    ...baseEnv,
+    PATH: `${osgeoBinDir}${pathSeparator}${baseEnv.PATH ?? ""}`,
+    GDAL_DATA: gdalData ?? baseEnv.GDAL_DATA,
+    PROJ_LIB: projLib ?? baseEnv.PROJ_LIB,
+  };
+}
 
 function resolveCommand(command) {
   if (process.platform !== "win32" || !gdalCommandNames.has(command)) {
@@ -365,6 +398,8 @@ function getKnownCacheKeys() {
     "natural-earth/country-boundary-lines",
     "natural-earth/urban-areas",
     "overpass/settlements",
+    "osm/rivers/pbf-lines",
+    "osm/water-bodies/pbf-extract",
     "elevation/fabdem/index",
     "elevation/fabdem/theater-extent",
     "elevation/copernicus/theater-extent",
@@ -436,6 +471,7 @@ function runCommand(command, args) {
     const child = spawn(resolvedCommand, args, {
       stdio: "inherit",
       shell: false,
+      env: commandEnv(command),
     });
 
     child.on("exit", (code) => {
@@ -451,6 +487,38 @@ function runCommand(command, args) {
   });
 }
 
+function runCommandCapture(command, args) {
+  const resolvedCommand = resolveCommand(command);
+
+  return new Promise((resolve, reject) => {
+    const child = spawn(resolvedCommand, args, {
+      stdio: ["ignore", "pipe", "pipe"],
+      shell: false,
+      env: commandEnv(command),
+    });
+    let stdout = "";
+    let stderr = "";
+
+    child.stdout?.on("data", (chunk) => {
+      stdout += chunk.toString();
+    });
+    child.stderr?.on("data", (chunk) => {
+      stderr += chunk.toString();
+    });
+
+    child.on("exit", (code) => {
+      if (code === 0) {
+        resolve({ stdout, stderr });
+        return;
+      }
+
+      reject(new Error(`${command} exited with code ${code}: ${stderr.trim()}`));
+    });
+
+    child.on("error", reject);
+  });
+}
+
 function runCommandWithExitCode(command, args) {
   const resolvedCommand = resolveCommand(command);
 
@@ -458,6 +526,7 @@ function runCommandWithExitCode(command, args) {
     const child = spawn(resolvedCommand, args, {
       stdio: "ignore",
       shell: false,
+      env: commandEnv(command),
     });
 
     child.on("exit", (code) => {
@@ -1076,6 +1145,7 @@ function overpassAreaQuery(selectors, bbox) {
 [out:json][timeout:90];
 (
 ${selectors.map((selector) => `  way${selector}(${bbox.south},${bbox.west},${bbox.north},${bbox.east});`).join("\n")}
+${selectors.map((selector) => `  relation${selector}(${bbox.south},${bbox.west},${bbox.north},${bbox.east});`).join("\n")}
 );
 out tags geom;
 `.trim();
@@ -1936,6 +2006,31 @@ function simplifyRingByMinSegmentKm(ring, minSegmentKm) {
   return simplified;
 }
 
+function simplifyLineByMinSegmentKm(line, minSegmentKm) {
+  if (!Array.isArray(line) || line.length < 2 || minSegmentKm <= 0) {
+    return line;
+  }
+
+  const simplified = [line[0]];
+
+  for (let index = 1; index < line.length - 1; index += 1) {
+    const previousKept = simplified[simplified.length - 1];
+    const current = line[index];
+
+    if (pointDistanceKm(previousKept, current) >= minSegmentKm) {
+      simplified.push(current);
+    }
+  }
+
+  const lastVertex = line[line.length - 1];
+
+  if (!pointsEqual2D(simplified[simplified.length - 1], lastVertex)) {
+    simplified.push(lastVertex);
+  }
+
+  return simplified.length >= 2 ? simplified : line;
+}
+
 function simplifyPolygonGeometryByMinSegmentKm(geometry, minSegmentKm) {
   if (!geometry || minSegmentKm <= 0) {
     return geometry;
@@ -2128,6 +2223,149 @@ function suppressMaritimeSegments(lineLayer, seaLayer) {
   };
 }
 
+function correctSeaLayerWithAdm0Geometry(seaLayer, adm0Geometry) {
+  const seaFeatures = seaLayer?.features ?? [];
+  const adm0MultiPolygon = toClipMultiPolygon(adm0Geometry);
+
+  if (!adm0MultiPolygon || seaFeatures.length === 0) {
+    return seaLayer;
+  }
+
+  let nextId = 1;
+
+  return {
+    type: "FeatureCollection",
+    features: seaFeatures
+      .map((feature) => {
+        const seaMultiPolygon = toClipMultiPolygon(feature.geometry);
+
+        if (!seaMultiPolygon) {
+          return null;
+        }
+
+        try {
+          const corrected = polygonClipping.difference(seaMultiPolygon, adm0MultiPolygon);
+          const geometry = fromClipMultiPolygon(corrected);
+
+          if (!geometry) {
+            return null;
+          }
+
+          return {
+            type: "Feature",
+            id: nextId++,
+            properties: {
+              ...(feature.properties ?? {}),
+              coastlineCorrection: "adm0-difference",
+            },
+            geometry,
+          };
+        } catch {
+          return {
+            ...feature,
+            id: nextId++,
+            properties: {
+              ...(feature.properties ?? {}),
+              coastlineCorrection: "fallback-original",
+            },
+          };
+        }
+      })
+      .filter(Boolean),
+  };
+}
+
+function filterPointFeaturesOutsidePolygons(pointLayer, polygonLayer) {
+  if (!pointLayer || !Array.isArray(pointLayer.features)) {
+    return pointLayer;
+  }
+
+  return {
+    type: "FeatureCollection",
+    features: pointLayer.features.filter((feature) => {
+      if (feature.geometry?.type !== "Point") {
+        return true;
+      }
+
+      const [longitude, latitude] = feature.geometry.coordinates ?? [];
+
+      if (!Number.isFinite(longitude) || !Number.isFinite(latitude)) {
+        return false;
+      }
+
+      const point = [longitude, latitude];
+
+      return !(polygonLayer?.features ?? []).some((polygonFeature) =>
+        pointInPolygonGeometry(point, polygonFeature.geometry),
+      );
+    }),
+  };
+}
+
+function minDistanceToFeatureCollectionKm(point, featureCollection) {
+  let minDistance = Number.POSITIVE_INFINITY;
+
+  for (const feature of featureCollection?.features ?? []) {
+    minDistance = Math.min(
+      minDistance,
+      pointDistanceToGeometryKm(point, feature.geometry),
+    );
+  }
+
+  return minDistance;
+}
+
+function buildCoastalSeaSuppressionMask(seaLayer, osmWaterLayer, adm0LineLayer) {
+  const seaFeatures = seaLayer?.features ?? [];
+  const osmFeatures = (osmWaterLayer?.features ?? []).filter(
+    (feature) =>
+      feature.geometry?.type === "Polygon" || feature.geometry?.type === "MultiPolygon",
+  );
+
+  if (seaFeatures.length === 0 || osmFeatures.length === 0) {
+    return seaLayer;
+  }
+
+  const coastalBorderThresholdKm = 2.0;
+  const coastalSeaThresholdKm = 2.0;
+  const coastalOsmFeatures = osmFeatures.filter((feature) => {
+    const point = geometryRepresentativePoint(feature.geometry);
+
+    if (!point) {
+      return false;
+    }
+
+    const nearBorder = minDistanceToLineLayerKm(point, adm0LineLayer) <= coastalBorderThresholdKm;
+    const nearSea = minDistanceToFeatureCollectionKm(point, seaLayer) <= coastalSeaThresholdKm;
+
+    return nearBorder && nearSea;
+  });
+
+  let nextId = 1;
+
+  return {
+    type: "FeatureCollection",
+    features: [
+      ...seaFeatures.map((feature) => ({
+        ...feature,
+        id: nextId++,
+        properties: {
+          ...(feature.properties ?? {}),
+          maskSource: "natural-earth-sea",
+        },
+      })),
+      ...coastalOsmFeatures.map((feature) => ({
+        ...feature,
+        id: nextId++,
+        properties: {
+          ...(feature.properties ?? {}),
+          maskSource: "osm-coastal-water",
+        },
+      })),
+    ],
+  };
+}
+
 function minDistanceToLineLayerKm(point, lineLayer) {
   let minDistance = Number.POSITIVE_INFINITY;
 
@@ -2218,7 +2456,7 @@ function dissolveUkraineFromOblasts(oblastPolygonLayer) {
 }
 
 // Derive ADM0/ADM1/ADM2 boundary line layers from one ADM2 polygon source using dissolve-first topology.
-function buildBoundaryLineTopologyFromAdm2(adm2PolygonLayer, seaLayer = null) {
+function buildBoundaryLineTopologyFromAdm2(adm2PolygonLayer) {
   const dissolvedOblastPolygons = dissolveAdm2ByOblast(adm2PolygonLayer);
   const ukraineGeometry = dissolveUkraineFromOblasts(dissolvedOblastPolygons);
   const theaterBoundaryMinSegmentKm = 0.6;
@@ -2240,11 +2478,10 @@ function buildBoundaryLineTopologyFromAdm2(adm2PolygonLayer, seaLayer = null) {
       : [],
   };
 
-  const adm0Raw = buildOuterBoundaryLineLayerFromPolygonGeometry(
+  const adm0Outer = buildOuterBoundaryLineLayerFromPolygonGeometry(
     simplifiedUkraineGeometry,
     { level: "ADM0" },
   );
-  const adm0Outer = seaLayer ? suppressMaritimeSegments(adm0Raw, seaLayer) : adm0Raw;
 
   const adm1Stats = buildSegmentStatsFromPolygonLayer(
     dissolvedOblastPolygons,
@@ -2307,6 +2544,7 @@ function buildBoundaryLineTopologyFromAdm2(adm2PolygonLayer, seaLayer = null) {
     adm1Shared,
     adm2Internal,
     dissolvedOblastPolygons,
+    ukraineGeometry,
   };
 }
 
@@ -2319,6 +2557,27 @@ function toKilometers(point, referenceLatitude) {
     point[0] * kmPerDegreeLongitude,
     point[1] * kmPerDegreeLatitude,
   ];
+}
+
+function fromKilometers(point, referenceLatitude) {
+  const kmPerDegreeLatitude = 111.32;
+  const kmPerDegreeLongitude = 111.32 * Math.cos((referenceLatitude * Math.PI) / 180);
+  const safeKmPerDegreeLongitude = Math.max(0.000001, Math.abs(kmPerDegreeLongitude));
+
+  return [
+    point[0] / safeKmPerDegreeLongitude,
+    point[1] / kmPerDegreeLatitude,
+  ];
+}
+
+function kilometersToLatitudeDegrees(km) {
+  return km / 111.32;
+}
+
+function kilometersToLongitudeDegrees(km, latitude) {
+  const kmPerDegreeLongitude = 111.32 * Math.cos((latitude * Math.PI) / 180);
+  const safeKmPerDegreeLongitude = Math.max(0.000001, Math.abs(kmPerDegreeLongitude));
+  return km / safeKmPerDegreeLongitude;
 }
 
 // Approximate the shortest kilometer distance from a point to a line segment.
@@ -2695,6 +2954,53 @@ function addOverpassWayFeatures(featuresById, elements, propertiesBuilder, optio
   }
 }
 
+function addOverpassRelationFeatures(featuresById, elements, propertiesBuilder, options = {}) {
+  const {
+    minApproxAreaKm2 = 0,
+    maxVertices = 160,
+  } = options;
+
+  for (const element of elements) {
+    if (element.type !== "relation" || !Array.isArray(element.members) || element.members.length === 0) {
+      continue;
+    }
+
+    const outers = element.members.filter(
+      (member) =>
+        member.type === "way" &&
+        member.role === "outer" &&
+        Array.isArray(member.geometry) &&
+        member.geometry.length >= 3,
+    );
+
+    for (const [outerIndex, outer] of outers.entries()) {
+      const coordinates = simplifyRing(closeRing(
+        outer.geometry.map((point) => [point.lon, point.lat]),
+      ), maxVertices);
+
+      if (coordinates.length < 4) {
+        continue;
+      }
+
+      if (approximateBoundsAreaKm2(coordinates) < minApproxAreaKm2) {
+        continue;
+      }
+
+      featuresById.set(`relation/${element.id}/${outerIndex}`, {
+        type: "Feature",
+        properties: {
+          id: `relation/${element.id}/${outerIndex}`,
+          ...propertiesBuilder(element.tags ?? {}),
+        },
+        geometry: {
+          type: "Polygon",
+          coordinates: [coordinates],
+        },
+      });
+    }
+  }
+}
+
 // Fetch a tiled polygon layer from Overpass and merge deduplicated way features across tiles.
 async function fetchTiledAreaLayer(layerId, selectors, propertiesBuilder, options) {
   const tiles = buildBboxGrid(theaterBbox, 3, 3);
@@ -2708,6 +3014,7 @@ async function fetchTiledAreaLayer(layerId, selectors, propertiesBuilder, option
     );
 
     addOverpassWayFeatures(featuresById, response.elements ?? [], propertiesBuilder, options);
+    addOverpassRelationFeatures(featuresById, response.elements ?? [], propertiesBuilder, options);
   }
 
   return {
@@ -2860,6 +3167,956 @@ function filterFeatureCollectionToBbox(featureCollection, bbox) {
   };
 }
 
+function representativePointForGeometry(geometry) {
+  if (!geometry) {
+    return null;
+  }
+
+  if (geometry.type === "Point") {
+    return geometry.coordinates;
+  }
+
+  if (geometry.type === "Polygon" && Array.isArray(geometry.coordinates?.[0]?.[0])) {
+    return geometry.coordinates[0][0];
+  }
+
+  if (geometry.type === "MultiPolygon" && Array.isArray(geometry.coordinates?.[0]?.[0]?.[0])) {
+    return geometry.coordinates[0][0][0];
+  }
+
+  const bounds = geometryBounds(geometry);
+  if (!Number.isFinite(bounds.west) || !Number.isFinite(bounds.south)) {
+    return null;
+  }
+
+  return [(bounds.west + bounds.east) / 2, (bounds.south + bounds.north) / 2];
+}
+
+function segmentMidpoint(segmentStart, segmentEnd) {
+  return [
+    (segmentStart[0] + segmentEnd[0]) / 2,
+    (segmentStart[1] + segmentEnd[1]) / 2,
+  ];
+}
+
+function bufferLineSegmentToPolygon(segmentStart, segmentEnd, halfWidthKm) {
+  const referenceLatitude = (segmentStart[1] + segmentEnd[1]) / 2;
+  const [ax, ay] = toKilometers(segmentStart, referenceLatitude);
+  const [bx, by] = toKilometers(segmentEnd, referenceLatitude);
+  const dx = bx - ax;
+  const dy = by - ay;
+  const segmentLength = Math.hypot(dx, dy);
+
+  if (segmentLength <= 0) {
+    return null;
+  }
+
+  const normalX = -dy / segmentLength;
+  const normalY = dx / segmentLength;
+  const leftStart = fromKilometers(
+    [ax + normalX * halfWidthKm, ay + normalY * halfWidthKm],
+    referenceLatitude,
+  );
+  const leftEnd = fromKilometers(
+    [bx + normalX * halfWidthKm, by + normalY * halfWidthKm],
+    referenceLatitude,
+  );
+  const rightEnd = fromKilometers(
+    [bx - normalX * halfWidthKm, by - normalY * halfWidthKm],
+    referenceLatitude,
+  );
+  const rightStart = fromKilometers(
+    [ax - normalX * halfWidthKm, ay - normalY * halfWidthKm],
+    referenceLatitude,
+  );
+
+  return {
+    type: "Polygon",
+    coordinates: [[
+      leftStart,
+      leftEnd,
+      rightEnd,
+      rightStart,
+      leftStart,
+    ]],
+  };
+}
+
+function bboxAroundPointKm(point, radiusKm) {
+  return {
+    west: point[0] - kilometersToLongitudeDegrees(radiusKm, point[1]),
+    east: point[0] + kilometersToLongitudeDegrees(radiusKm, point[1]),
+    south: point[1] - kilometersToLatitudeDegrees(radiusKm),
+    north: point[1] + kilometersToLatitudeDegrees(radiusKm),
+  };
+}
+
+function minDistanceToWaterEntriesNearPointKm(point, waterEntries, searchRadiusKm) {
+  const searchBounds = bboxAroundPointKm(point, searchRadiusKm);
+  let minDistance = Number.POSITIVE_INFINITY;
+
+  for (const entry of waterEntries) {
+    if (!bboxIntersects(entry.bounds, searchBounds)) {
+      continue;
+    }
+
+    minDistance = Math.min(
+      minDistance,
+      pointDistanceToGeometryKm(point, entry.feature.geometry),
+    );
+
+    if (minDistance === 0) {
+      return 0;
+    }
+  }
+
+  return minDistance;
+}
+
+function buildBoundsSpatialIndex(entries, cellSizeDegrees = 0.18) {
+  const buckets = new Map();
+
+  for (const [entryIndex, entry] of entries.entries()) {
+    const bounds = entry.bounds;
+
+    if (
+      !Number.isFinite(bounds.west) ||
+      !Number.isFinite(bounds.east) ||
+      !Number.isFinite(bounds.south) ||
+      !Number.isFinite(bounds.north)
+    ) {
+      continue;
+    }
+
+    const westCell = Math.floor(bounds.west / cellSizeDegrees);
+    const eastCell = Math.floor(bounds.east / cellSizeDegrees);
+    const southCell = Math.floor(bounds.south / cellSizeDegrees);
+    const northCell = Math.floor(bounds.north / cellSizeDegrees);
+
+    for (let x = westCell; x <= eastCell; x += 1) {
+      for (let y = southCell; y <= northCell; y += 1) {
+        const key = `${x}:${y}`;
+        const bucket = buckets.get(key);
+
+        if (bucket) {
+          bucket.push(entryIndex);
+        } else {
+          buckets.set(key, [entryIndex]);
+        }
+      }
+    }
+  }
+
+  return {
+    entries,
+    buckets,
+    cellSizeDegrees,
+  };
+}
+
+function queryBoundsSpatialIndex(index, bounds) {
+  const {
+    entries,
+    buckets,
+    cellSizeDegrees,
+  } = index;
+  const westCell = Math.floor(bounds.west / cellSizeDegrees);
+  const eastCell = Math.floor(bounds.east / cellSizeDegrees);
+  const southCell = Math.floor(bounds.south / cellSizeDegrees);
+  const northCell = Math.floor(bounds.north / cellSizeDegrees);
+  const candidateIndexes = new Set();
+
+  for (let x = westCell; x <= eastCell; x += 1) {
+    for (let y = southCell; y <= northCell; y += 1) {
+      const bucket = buckets.get(`${x}:${y}`);
+
+      if (!bucket) {
+        continue;
+      }
+
+      for (const entryIndex of bucket) {
+        candidateIndexes.add(entryIndex);
+      }
+    }
+  }
+
+  return [...candidateIndexes].map((entryIndex) => entries[entryIndex]);
+}
+
+function buildMajorRiverCorridorGapLayer(waterLayer, riverLineLayer, coverageGeometry) {
+  const riverHalfWidthKm = 0.085;
+  const minSegmentLengthKm = 0.1;
+  const maxSegmentLengthKm = 0.75;
+  const endpointAnchorDistanceKm = 0.07;
+  const minMidpointGapDistanceKm = 0.004;
+  const maxMidpointGapDistanceKm = 0.22;
+  const queryRadiusKm = 0.32;
+  const maxCorridorFeatures = 30000;
+
+  const waterEntries = (waterLayer.features ?? [])
+    .filter(
+      (feature) =>
+        feature.geometry?.type === "Polygon" || feature.geometry?.type === "MultiPolygon",
+    )
+    .map((feature) => ({
+      feature,
+      bounds: geometryBounds(feature.geometry),
+    }));
+
+  if (waterEntries.length === 0) {
+    return emptyFeatureCollection();
+  }
+
+  const waterIndex = buildBoundsSpatialIndex(waterEntries);
+  let nextId = 1;
+  const corridorFeatures = [];
+
+  for (const riverFeature of riverLineLayer?.features ?? []) {
+    const waterway = String(riverFeature?.properties?.waterway ?? "").toLowerCase();
+
+    if (waterway !== "river" && waterway !== "canal") {
+      continue;
+    }
+
+    for (const [segmentStart, segmentEnd] of extractLineSegments(riverFeature.geometry)) {
+      const segmentLengthKm = pointDistanceKm(segmentStart, segmentEnd);
+
+      if (segmentLengthKm < minSegmentLengthKm || segmentLengthKm > maxSegmentLengthKm) {
+        continue;
+      }
+
+      const midpoint = segmentMidpoint(segmentStart, segmentEnd);
+
+      if (
+        coverageGeometry &&
+        !pointInPolygonGeometry(midpoint, coverageGeometry)
+      ) {
+        continue;
+      }
+
+      const searchBounds = bboxAroundPointKm(midpoint, queryRadiusKm);
+      const nearbyWaterEntries = queryBoundsSpatialIndex(waterIndex, searchBounds);
+
+      if (nearbyWaterEntries.length === 0) {
+        continue;
+      }
+
+      const startAnchorDistanceKm = minDistanceToWaterEntriesNearPointKm(
+        segmentStart,
+        nearbyWaterEntries,
+        queryRadiusKm,
+      );
+      const endAnchorDistanceKm = minDistanceToWaterEntriesNearPointKm(
+        segmentEnd,
+        nearbyWaterEntries,
+        queryRadiusKm,
+      );
+
+      if (
+        !Number.isFinite(startAnchorDistanceKm) ||
+        !Number.isFinite(endAnchorDistanceKm) ||
+        startAnchorDistanceKm > endpointAnchorDistanceKm ||
+        endAnchorDistanceKm > endpointAnchorDistanceKm
+      ) {
+        continue;
+      }
+
+      const midpointGapDistanceKm = minDistanceToWaterEntriesNearPointKm(
+        midpoint,
+        nearbyWaterEntries,
+        queryRadiusKm,
+      );
+
+      if (
+        !Number.isFinite(midpointGapDistanceKm) ||
+        midpointGapDistanceKm < minMidpointGapDistanceKm ||
+        midpointGapDistanceKm > maxMidpointGapDistanceKm
+      ) {
+        continue;
+      }
+
+      const bufferedGeometry = bufferLineSegmentToPolygon(
+        segmentStart,
+        segmentEnd,
+        riverHalfWidthKm,
+      );
+
+      if (!bufferedGeometry) {
+        continue;
+      }
+
+      corridorFeatures.push({
+        type: "Feature",
+        id: nextId,
+        properties: {
+          id: `river-corridor/${nextId}`,
+          type: "river-corridor",
+          waterway,
+          source: "osm-lines-gap-fill",
+          name: riverFeature?.properties?.name ?? null,
+        },
+        geometry: bufferedGeometry,
+      });
+      nextId += 1;
+
+      if (corridorFeatures.length >= maxCorridorFeatures) {
+        console.warn("Major river corridor fill reached feature cap; truncating output.");
+        return {
+          type: "FeatureCollection",
+          features: corridorFeatures,
+        };
+      }
+    }
+  }
+
+  if (corridorFeatures.length > 0) {
+    console.log(`Major river corridor fill appended ${corridorFeatures.length} features.`);
+  }
+
+  return {
+    type: "FeatureCollection",
+    features: corridorFeatures,
+  };
+}
+
+function appendRiverCorridorGapFeatures(waterLayer, corridorLayer) {
+  if (!corridorLayer || !Array.isArray(corridorLayer.features) || corridorLayer.features.length === 0) {
+    return waterLayer;
+  }
+
+  return {
+    type: "FeatureCollection",
+    features: [
+      ...(waterLayer.features ?? []),
+      ...corridorLayer.features,
+    ],
+  };
+}
+
+function normalizeRiverName(value) {
+  if (typeof value !== "string") {
+    return "";
+  }
+
+  return value.trim().toLowerCase();
+}
+
+function pointKey(point) {
+  return `${roundCoordinate(point[0], 6)},${roundCoordinate(point[1], 6)}`;
+}
+
+function buildLineEdgeGraph(segments) {
+  const nodes = new Map();
+  const edges = segments.map((segment, index) => {
+    const startKey = pointKey(segment.segmentStart);
+    const endKey = pointKey(segment.segmentEnd);
+
+    if (!nodes.has(startKey)) {
+      nodes.set(startKey, segment.segmentStart);
+    }
+
+    if (!nodes.has(endKey)) {
+      nodes.set(endKey, segment.segmentEnd);
+    }
+
+    return {
+      id: `edge/${index + 1}`,
+      startKey,
+      endKey,
+      segmentStart: nodes.get(startKey),
+      segmentEnd: nodes.get(endKey),
+      synthetic: false,
+    };
+  });
+  const adjacency = new Map();
+
+  for (const edge of edges) {
+    const startEdges = adjacency.get(edge.startKey) ?? [];
+    startEdges.push(edge);
+    adjacency.set(edge.startKey, startEdges);
+    const endEdges = adjacency.get(edge.endKey) ?? [];
+    endEdges.push(edge);
+    adjacency.set(edge.endKey, endEdges);
+  }
+
+  return { nodes, edges, adjacency };
+}
+
+function computeGraphComponents(nodes, adjacency) {
+  const visited = new Set();
+  const components = [];
+
+  for (const nodeKey of nodes.keys()) {
+    if (visited.has(nodeKey)) {
+      continue;
+    }
+
+    const queue = [nodeKey];
+    const componentNodeKeys = [];
+    visited.add(nodeKey);
+
+    while (queue.length > 0) {
+      const current = queue.shift();
+      componentNodeKeys.push(current);
+
+      for (const edge of adjacency.get(current) ?? []) {
+        const next = edge.startKey === current ? edge.endKey : edge.startKey;
+
+        if (!visited.has(next)) {
+          visited.add(next);
+          queue.push(next);
+        }
+      }
+    }
+
+    components.push(componentNodeKeys);
+  }
+
+  return components;
+}
+
+function componentCentroidLongitude(componentNodeKeys, nodes) {
+  if (componentNodeKeys.length === 0) {
+    return 0;
+  }
+
+  const sum = componentNodeKeys.reduce(
+    (total, nodeKey) => total + (nodes.get(nodeKey)?.[0] ?? 0),
+    0,
+  );
+
+  return sum / componentNodeKeys.length;
+}
+
+function nodeKeysForComponentEnds(componentNodeKeys, adjacency) {
+  const endpoints = componentNodeKeys.filter(
+    (nodeKey) => (adjacency.get(nodeKey)?.length ?? 0) <= 1,
+  );
+
+  return endpoints.length > 0 ? endpoints : componentNodeKeys;
+}
+
+function edgeMidpoint(edge) {
+  return [
+    (edge.segmentStart[0] + edge.segmentEnd[0]) / 2,
+    (edge.segmentStart[1] + edge.segmentEnd[1]) / 2,
+  ];
+}
+
+async function createElevationSampler(elevationRasterPath) {
+  if (!elevationRasterPath || !existsSync(elevationRasterPath)) {
+    return null;
+  }
+
+  const locationInfoAvailable = await commandExists(gdalTools.locationInfo);
+
+  if (!locationInfoAvailable) {
+    return null;
+  }
+
+  const cache = new Map();
+
+  return async (point) => {
+    const cacheKey = pointKey(point);
+
+    if (cache.has(cacheKey)) {
+      return cache.get(cacheKey);
+    }
+
+    try {
+      const { stdout } = await runCommandCapture(gdalTools.locationInfo, [
+        "-valonly",
+        "-wgs84",
+        elevationRasterPath,
+        `${point[0]}`,
+        `${point[1]}`,
+      ]);
+      const firstToken = stdout.trim().split(/\s+/u)[0];
+      const value = Number.parseFloat(firstToken);
+      const parsed = Number.isFinite(value) ? value : null;
+      cache.set(cacheKey, parsed);
+      return parsed;
+    } catch {
+      cache.set(cacheKey, null);
+      return null;
+    }
+  };
+}
+
+async function chooseBestComponentConnector(
+  leftComponentNodeKeys,
+  rightComponentNodeKeys,
+  nodes,
+  adjacency,
+  options,
+) {
+  const {
+    maxBridgeKm,
+    sampleElevation,
+    dominantDirection,
+  } = options;
+  const leftCandidates = nodeKeysForComponentEnds(leftComponentNodeKeys, adjacency);
+  const rightCandidates = nodeKeysForComponentEnds(rightComponentNodeKeys, adjacency);
+  const pairs = [];
+
+  for (const leftNodeKey of leftCandidates) {
+    const leftPoint = nodes.get(leftNodeKey);
+
+    for (const rightNodeKey of rightCandidates) {
+      const rightPoint = nodes.get(rightNodeKey);
+      pairs.push({
+        leftNodeKey,
+        rightNodeKey,
+        leftPoint,
+        rightPoint,
+        distanceKm: pointDistanceKm(leftPoint, rightPoint),
+      });
+    }
+  }
+
+  if (pairs.length === 0) {
+    return null;
+  }
+
+  pairs.sort((left, right) => left.distanceKm - right.distanceKm);
+  const bridgeCandidates = pairs.filter((pair) => pair.distanceKm <= maxBridgeKm);
+  const shortlisted = (bridgeCandidates.length > 0 ? bridgeCandidates : pairs).slice(0, 20);
+  let best = null;
+
+  for (const candidate of shortlisted) {
+    const leftElevation = sampleElevation ? await sampleElevation(candidate.leftPoint) : null;
+    const rightElevation = sampleElevation ? await sampleElevation(candidate.rightPoint) : null;
+    const uphillMeters =
+      Number.isFinite(leftElevation) && Number.isFinite(rightElevation)
+        ? Math.max(0, rightElevation - leftElevation)
+        : 0;
+    const connectorDirection = (() => {
+      const referenceLatitude = (candidate.leftPoint[1] + candidate.rightPoint[1]) / 2;
+      const [ax, ay] = toKilometers(candidate.leftPoint, referenceLatitude);
+      const [bx, by] = toKilometers(candidate.rightPoint, referenceLatitude);
+      const dx = bx - ax;
+      const dy = by - ay;
+      const length = Math.hypot(dx, dy);
+
+      if (length <= 0) {
+        return null;
+      }
+
+      return [dx / length, dy / length];
+    })();
+    const directionPenaltyKm =
+      dominantDirection && connectorDirection
+        ? (1 - Math.max(-1, Math.min(1, (
+            connectorDirection[0] * dominantDirection[0] +
+            connectorDirection[1] * dominantDirection[1]
+          )))) * 0.45
+        : 0;
+    const score = candidate.distanceKm + uphillMeters * 0.014 + directionPenaltyKm;
+
+    if (!best || score < best.score) {
+      best = {
+        ...candidate,
+        score,
+      };
+    }
+  }
+
+  return best ?? pairs[0];
+}
+
+function connectedPathExistsBetweenExtremes(nodes, edges) {
+  if (edges.length === 0) {
+    return false;
+  }
+
+  const adjacency = new Map();
+
+  for (const edge of edges) {
+    const startEdges = adjacency.get(edge.startKey) ?? [];
+    startEdges.push(edge);
+    adjacency.set(edge.startKey, startEdges);
+    const endEdges = adjacency.get(edge.endKey) ?? [];
+    endEdges.push(edge);
+    adjacency.set(edge.endKey, endEdges);
+  }
+
+  const activeNodeKeys = [...adjacency.keys()];
+
+  if (activeNodeKeys.length < 2) {
+    return false;
+  }
+
+  const westNodeKey = activeNodeKeys.reduce((best, current) =>
+    (nodes.get(current)?.[0] ?? Infinity) < (nodes.get(best)?.[0] ?? Infinity) ? current : best);
+  const eastNodeKey = activeNodeKeys.reduce((best, current) =>
+    (nodes.get(current)?.[0] ?? -Infinity) > (nodes.get(best)?.[0] ?? -Infinity) ? current : best);
+  const visited = new Set([westNodeKey]);
+  const queue = [westNodeKey];
+
+  while (queue.length > 0) {
+    const current = queue.shift();
+
+    if (current === eastNodeKey) {
+      return true;
+    }
+
+    for (const edge of adjacency.get(current) ?? []) {
+      const next = edge.startKey === current ? edge.endKey : edge.startKey;
+
+      if (!visited.has(next)) {
+        visited.add(next);
+        queue.push(next);
+      }
+    }
+  }
+
+  return false;
+}
+
+async function buildFocusedHexRiverReconstructionLayer(
+  waterLayer,
+  riverLineLayer,
+  elevationRasterPath,
+) {
+  const targetHexIds = ["HX-W18-N50", "HX-W17-N50"];
+  const hexPath = path.join(processedRoot, "hex-cells.geojson");
+
+  if (!existsSync(hexPath) || !riverLineLayer) {
+    return emptyFeatureCollection();
+  }
+
+  const hexCells = await readLocalGeoJson(hexPath, "hex-cells");
+  const targetHexFeatures = (hexCells.features ?? []).filter((feature) =>
+    targetHexIds.includes(feature?.properties?.id),
+  );
+
+  if (targetHexFeatures.length !== targetHexIds.length) {
+    console.warn("Focused river reconstruction skipped: target hexes not found.");
+    return emptyFeatureCollection();
+  }
+
+  const candidateRiverSegments = [];
+
+  for (const feature of riverLineLayer.features ?? []) {
+    const name = typeof feature?.properties?.name === "string"
+      ? feature.properties.name.trim()
+      : "";
+    const nameKey = normalizeRiverName(name);
+
+    for (const [segmentStart, segmentEnd] of extractLineSegments(feature.geometry)) {
+      const midpoint = segmentMidpoint(segmentStart, segmentEnd);
+      const containingHex = targetHexFeatures.find((hexFeature) =>
+        pointInPolygonGeometry(midpoint, hexFeature.geometry),
+      );
+
+      if (!containingHex) {
+        continue;
+      }
+
+      candidateRiverSegments.push({
+        name,
+        nameKey,
+        hexId: containingHex.properties?.id ?? null,
+        segmentStart,
+        segmentEnd,
+      });
+    }
+  }
+
+  if (candidateRiverSegments.length === 0) {
+    return emptyFeatureCollection();
+  }
+
+  const riverStatsByName = new Map();
+
+  for (const segment of candidateRiverSegments) {
+    const stats = riverStatsByName.get(segment.nameKey) ?? {
+      totalLengthKm: 0,
+      hexIds: new Set(),
+    };
+    stats.totalLengthKm += pointDistanceKm(segment.segmentStart, segment.segmentEnd);
+    if (segment.hexId) {
+      stats.hexIds.add(segment.hexId);
+    }
+    riverStatsByName.set(segment.nameKey, stats);
+  }
+
+  const dominantRiverNameKey = [...riverStatsByName.entries()]
+    .filter(([, stats]) => stats.hexIds.size >= 2)
+    .sort((left, right) => right[1].totalLengthKm - left[1].totalLengthKm)[0]?.[0] ??
+    [...riverStatsByName.entries()].sort((left, right) => right[1].totalLengthKm - left[1].totalLengthKm)[0]?.[0] ??
+    "";
+
+  if (!dominantRiverNameKey) {
+    return emptyFeatureCollection();
+  }
+
+  const dominantRiverSegments = candidateRiverSegments.filter(
+    (segment) => segment.nameKey === dominantRiverNameKey,
+  );
+  const dominantDirection = (() => {
+    let sumX = 0;
+    let sumY = 0;
+
+    for (const segment of dominantRiverSegments) {
+      const referenceLatitude = (segment.segmentStart[1] + segment.segmentEnd[1]) / 2;
+      const [ax, ay] = toKilometers(segment.segmentStart, referenceLatitude);
+      const [bx, by] = toKilometers(segment.segmentEnd, referenceLatitude);
+      const dx = bx - ax;
+      const dy = by - ay;
+      const length = Math.hypot(dx, dy);
+
+      if (length <= 0) {
+        continue;
+      }
+
+      sumX += dx / length;
+      sumY += dy / length;
+    }
+
+    const totalLength = Math.hypot(sumX, sumY);
+
+    if (totalLength <= 0) {
+      return null;
+    }
+
+    return [sumX / totalLength, sumY / totalLength];
+  })();
+  const baseGraph = buildLineEdgeGraph(dominantRiverSegments);
+  const sampleElevation = await createElevationSampler(elevationRasterPath);
+  const waterEntries = (waterLayer.features ?? [])
+    .filter(
+      (feature) =>
+        feature.geometry?.type === "Polygon" || feature.geometry?.type === "MultiPolygon",
+    )
+    .map((feature) => ({
+      feature,
+      bounds: geometryBounds(feature.geometry),
+    }));
+  const waterIndex = buildBoundsSpatialIndex(waterEntries);
+  const midpointDistanceCache = new Map();
+  const attemptCount = 4;
+  let bestAttempt = null;
+
+  for (let attemptIndex = 0; attemptIndex < attemptCount; attemptIndex += 1) {
+    const maxBridgeKm = 0.32 + attemptIndex * 0.28;
+    const waterCoveredThresholdKm = 0.02 + attemptIndex * 0.01;
+    const riverHalfWidthKm = 0.09 + attemptIndex * 0.02;
+    const nodes = new Map(baseGraph.nodes);
+    const edges = [...baseGraph.edges];
+    let adjacency = new Map();
+
+    function rebuildAdjacency() {
+      adjacency = new Map();
+
+      for (const edge of edges) {
+        const startEdges = adjacency.get(edge.startKey) ?? [];
+        startEdges.push(edge);
+        adjacency.set(edge.startKey, startEdges);
+        const endEdges = adjacency.get(edge.endKey) ?? [];
+        endEdges.push(edge);
+        adjacency.set(edge.endKey, endEdges);
+      }
+    }
+
+    rebuildAdjacency();
+
+    for (let connectorRound = 0; connectorRound < 12; connectorRound += 1) {
+      const components = computeGraphComponents(nodes, adjacency);
+
+      if (components.length <= 1) {
+        break;
+      }
+
+      components.sort(
+        (left, right) =>
+          componentCentroidLongitude(left, nodes) - componentCentroidLongitude(right, nodes),
+      );
+      let addedConnectorInRound = false;
+
+      for (let componentIndex = 0; componentIndex < components.length - 1; componentIndex += 1) {
+        const leftComponent = components[componentIndex];
+        const rightComponent = components[componentIndex + 1];
+        const connector = await chooseBestComponentConnector(
+          leftComponent,
+          rightComponent,
+          nodes,
+          adjacency,
+          {
+            maxBridgeKm,
+            sampleElevation,
+            dominantDirection,
+          },
+        );
+
+        if (!connector) {
+          continue;
+        }
+
+        const startKey = pointKey(connector.leftPoint);
+        const endKey = pointKey(connector.rightPoint);
+
+        if (startKey === endKey) {
+          continue;
+        }
+
+        if (!nodes.has(startKey)) {
+          nodes.set(startKey, connector.leftPoint);
+        }
+
+        if (!nodes.has(endKey)) {
+          nodes.set(endKey, connector.rightPoint);
+        }
+
+        edges.push({
+          id: `focused-connector/${attemptIndex + 1}/${edges.length + 1}`,
+          startKey,
+          endKey,
+          segmentStart: nodes.get(startKey),
+          segmentEnd: nodes.get(endKey),
+          synthetic: true,
+        });
+        addedConnectorInRound = true;
+      }
+
+      if (!addedConnectorInRound) {
+        break;
+      }
+
+      rebuildAdjacency();
+    }
+
+    const corridorFeatures = [];
+    const visibleEdges = [];
+    let nextId = 1;
+
+    for (const edge of edges) {
+      const midpoint = edgeMidpoint(edge);
+      const distanceCacheKey = pointKey(midpoint);
+      const midpointDistanceKm = midpointDistanceCache.has(distanceCacheKey)
+        ? midpointDistanceCache.get(distanceCacheKey)
+        : (() => {
+            const nearbyWaterEntries = queryBoundsSpatialIndex(
+              waterIndex,
+              bboxAroundPointKm(midpoint, 0.35),
+            );
+            const distance = minDistanceToWaterEntriesNearPointKm(
+              midpoint,
+              nearbyWaterEntries,
+              0.35,
+            );
+            midpointDistanceCache.set(distanceCacheKey, distance);
+            return distance;
+          })();
+      const coveredByWater = Number.isFinite(midpointDistanceKm) &&
+        midpointDistanceKm <= waterCoveredThresholdKm;
+      const needsCorridor = !coveredByWater || edge.synthetic;
+
+      if (needsCorridor) {
+        const geometry = bufferLineSegmentToPolygon(
+          edge.segmentStart,
+          edge.segmentEnd,
+          riverHalfWidthKm,
+        );
+
+        if (geometry) {
+          corridorFeatures.push({
+            type: "Feature",
+            id: nextId,
+            properties: {
+              id: `river-corridor/focused/${nextId}`,
+              type: "river-corridor",
+              source: "focused-hex-reconstruction",
+              riverName: dominantRiverNameKey,
+              attempt: attemptIndex + 1,
+            },
+            geometry,
+          });
+          nextId += 1;
+        }
+      }
+
+      if (coveredByWater || needsCorridor) {
+        visibleEdges.push(edge);
+      }
+    }
+
+    const connected = connectedPathExistsBetweenExtremes(nodes, visibleEdges);
+    bestAttempt = {
+      connected,
+      corridorFeatures,
+      attemptIndex,
+      dominantRiverNameKey,
+    };
+
+    if (connected) {
+      console.log(
+        `Focused river reconstruction connected for ${targetHexIds.join(", ")} ` +
+        `on attempt ${attemptIndex + 1} (${corridorFeatures.length} features).`,
+      );
+      break;
+    }
+  }
+
+  if (!bestAttempt || bestAttempt.corridorFeatures.length === 0) {
+    return emptyFeatureCollection();
+  }
+
+  if (!bestAttempt.connected) {
+    console.warn(
+      `Focused river reconstruction remained disconnected after ${attemptCount} attempts; ` +
+      `using best-effort corridors (${bestAttempt.corridorFeatures.length} features).`,
+    );
+  }
+
+  return {
+    type: "FeatureCollection",
+    features: bestAttempt.corridorFeatures,
+  };
+}
+
+function mergeWaterBodiesWithCoverageFallback(primary, fallback, primaryCoverageGeometry) {
+  if (!primaryCoverageGeometry) {
+    return primary;
+  }
+
+  const mergedFeatures = [...(primary.features ?? [])];
+  const seenIds = new Set(
+    mergedFeatures
+      .map((feature) => feature?.properties?.id ?? feature?.id ?? null)
+      .filter((value) => typeof value === "string" || typeof value === "number"),
+  );
+
+  for (const fallbackFeature of fallback.features ?? []) {
+    if (!fallbackFeature.geometry) {
+      continue;
+    }
+
+    const representativePoint = representativePointForGeometry(fallbackFeature.geometry);
+    if (representativePoint && pointInPolygonGeometry(representativePoint, primaryCoverageGeometry)) {
+      continue;
+    }
+
+    const featureId = fallbackFeature?.properties?.id ?? fallbackFeature?.id ?? null;
+    if (
+      (typeof featureId === "string" || typeof featureId === "number") &&
+      seenIds.has(featureId)
+    ) {
+      continue;
+    }
+
+    mergedFeatures.push(fallbackFeature);
+    if (typeof featureId === "string" || typeof featureId === "number") {
+      seenIds.add(featureId);
+    }
+  }
+
+  return {
+    type: "FeatureCollection",
+    features: mergedFeatures,
+  };
+}
+
 // Write processed GeoJSON outputs into the application-facing data directory.
 async function writeGeoJson(relativePath, data) {
   const targetPath = path.join(processedRoot, relativePath);
@@ -2887,6 +4144,376 @@ async function loadAdm2Subdivisions() {
     "geoboundaries/adm2-metadata",
   );
   return fetchJson(adm2Url, "geoboundaries/adm2-geometry");
+}
+
+function localOsmPbfCandidates() {
+  return [
+    path.join(rawRoot, "osm", "ukraine-osm-extract.pbf"),
+    path.join(cacheRoot, "raw-intake", "osm", "ukraine-latest.osm.pbf"),
+  ];
+}
+
+function resolveLocalOsmPbfPath() {
+  return localOsmPbfCandidates().find((candidate) => existsSync(candidate)) ?? null;
+}
+
+function normalizeExtractedWaterBodies(featureCollection) {
+  // Keep much higher fidelity for Ukraine water polygons because this layer is
+  // the primary zoomed-in reference in operational areas.
+  const minApproxAreaKm2 = 0.005;
+  const minSegmentKm = 0.03;
+  const maxVertices = 1200;
+
+  function simplifyWaterRing(ring) {
+    const stabilized = simplifyRingByMinSegmentKm(closeRing(ring), minSegmentKm);
+    if (stabilized.length <= maxVertices) {
+      return stabilized;
+    }
+
+    return simplifyRing(stabilized, maxVertices);
+  }
+
+  function simplifyPolygonRings(rings) {
+    if (!Array.isArray(rings) || rings.length === 0) {
+      return null;
+    }
+
+    const outerRing = simplifyWaterRing(rings[0]);
+    if (outerRing.length < 4) {
+      return null;
+    }
+
+    if (approximateBoundsAreaKm2(outerRing) < minApproxAreaKm2) {
+      return null;
+    }
+
+    const holes = rings
+      .slice(1)
+      .map((ring) => simplifyWaterRing(ring))
+      .filter((ring) => ring.length >= 4);
+
+    return [outerRing, ...holes];
+  }
+
+  return {
+    type: "FeatureCollection",
+    features: (featureCollection.features ?? [])
+      .filter(
+        (feature) =>
+          feature.geometry?.type === "Polygon" || feature.geometry?.type === "MultiPolygon",
+      )
+      .map((feature, index) => {
+        const tags = feature.properties ?? {};
+        const osmId = tags.osm_id ?? tags.osm_way_id ?? index + 1;
+        const waterType = tags.water ?? tags.natural ?? tags.waterway ?? tags.landuse ?? "water";
+        const geometry = feature.geometry.type === "Polygon"
+          ? (() => {
+              const coordinates = simplifyPolygonRings(feature.geometry.coordinates);
+              if (!coordinates) {
+                return null;
+              }
+
+              return {
+                type: "Polygon",
+                coordinates,
+              };
+            })()
+          : (() => {
+              const polygons = feature.geometry.coordinates
+                .map((polygon) => simplifyPolygonRings(polygon))
+                .filter((polygon) => Boolean(polygon));
+              if (polygons.length === 0) {
+                return null;
+              }
+
+              return {
+                type: "MultiPolygon",
+                coordinates: polygons,
+              };
+            })();
+
+        if (!geometry) {
+          return null;
+        }
+
+        return {
+          type: "Feature",
+          id: index + 1,
+          properties: {
+            id: `osm/${osmId}`,
+            type: String(waterType),
+          },
+          geometry,
+        };
+      })
+      .filter((feature) => Boolean(feature)),
+  };
+}
+
+function normalizeExtractedMajorRiverLines(featureCollection) {
+  const minSegmentKm = 0.12;
+
+  function geometryLengthKm(geometry) {
+    return extractLineSegments(geometry).reduce(
+      (sum, [segmentStart, segmentEnd]) => sum + pointDistanceKm(segmentStart, segmentEnd),
+      0,
+    );
+  }
+
+  function normalizeLineGeometry(geometry) {
+    if (!geometry) {
+      return null;
+    }
+
+    if (geometry.type === "LineString") {
+      const coordinates = simplifyLineByMinSegmentKm(geometry.coordinates, minSegmentKm);
+      return coordinates.length >= 2
+        ? {
+          type: "LineString",
+          coordinates,
+        }
+        : null;
+    }
+
+    if (geometry.type === "MultiLineString") {
+      const lines = geometry.coordinates
+        .map((line) => simplifyLineByMinSegmentKm(line, minSegmentKm))
+        .filter((line) => line.length >= 2);
+      return lines.length > 0
+        ? {
+          type: "MultiLineString",
+          coordinates: lines,
+        }
+        : null;
+    }
+
+    return null;
+  }
+
+  return {
+    type: "FeatureCollection",
+    features: (featureCollection.features ?? [])
+      .map((feature, index) => {
+        const tags = feature.properties ?? {};
+        const waterway = String(tags.waterway ?? "").toLowerCase();
+
+        if (waterway !== "river") {
+          return null;
+        }
+
+        const geometry = normalizeLineGeometry(feature.geometry);
+
+        if (!geometry) {
+          return null;
+        }
+
+        const lengthKm = geometryLengthKm(geometry);
+        const hasName = typeof tags.name === "string" && tags.name.trim() !== "";
+        const isMajorRiver = lengthKm >= 40 || (hasName && lengthKm >= 12);
+
+        if (!isMajorRiver) {
+          return null;
+        }
+
+        const osmId = tags.osm_id ?? tags.osm_way_id ?? index + 1;
+
+        return {
+          type: "Feature",
+          id: index + 1,
+          properties: {
+            id: `way/${osmId}`,
+            waterway,
+            name: tags.name ? String(tags.name) : null,
+            lengthKm: Number(lengthKm.toFixed(3)),
+          },
+          geometry,
+        };
+      })
+      .filter((feature) => Boolean(feature)),
+  };
+}
+
+async function extractMajorRiverLinesFromLocalOsmPbf() {
+  const cacheKey = "osm/rivers/pbf-lines";
+  const extractSchemaVersion = 1;
+  const pbfPath = resolveLocalOsmPbfPath();
+
+  if (!pbfPath) {
+    console.warn("Skipping local PBF river extraction: no local Ukraine OSM PBF found.");
+    return null;
+  }
+
+  const pbfStats = await stat(pbfPath);
+  const pbfMtimeMs = Math.trunc(pbfStats.mtimeMs);
+  const relativeOutputPath = path.join("osm", "rivers-lines-from-pbf.geojson");
+  const outputPath = cachePathForBinary(relativeOutputPath);
+
+  if (!shouldRefresh(cacheKey)) {
+    const cached = await readCachedBinary(cacheKey);
+
+    if (
+      cached &&
+      cached.sourcePbfPath === pbfPath &&
+      cached.sourcePbfMtimeMs === pbfMtimeMs &&
+      cached.extractSchemaVersion === extractSchemaVersion
+    ) {
+      console.log("cache hit  osm/rivers/pbf-lines");
+      return normalizeExtractedMajorRiverLines(
+        await readLocalGeoJson(cached.absolutePath, "osm/rivers/pbf-lines"),
+      );
+    }
+  }
+
+  const ogr2ogrAvailable = await commandExists(gdalTools.ogr2ogr);
+
+  if (!ogr2ogrAvailable) {
+    console.warn("Skipping local PBF river extraction: `ogr2ogr` is not available.");
+    return null;
+  }
+
+  await mkdir(path.dirname(outputPath), { recursive: true });
+
+  const whereClause = "waterway = 'river'";
+  const tempOutputPath = `${outputPath}.tmp-${Date.now()}`;
+
+  try {
+    await runCommand(gdalTools.ogr2ogr, [
+      "-skipfailures",
+      "-f",
+      "GeoJSON",
+      tempOutputPath,
+      pbfPath,
+      "lines",
+      "-spat",
+      `${theaterBbox.west}`,
+      `${theaterBbox.south}`,
+      `${theaterBbox.east}`,
+      `${theaterBbox.north}`,
+      "-where",
+      whereClause,
+      "-t_srs",
+      "EPSG:4326",
+      "-lco",
+      "RFC7946=YES",
+    ]);
+
+    await copyFile(tempOutputPath, outputPath);
+    await writeCachedBinary(cacheKey, relativeOutputPath, {
+      sourcePbfPath: pbfPath,
+      sourcePbfMtimeMs: pbfMtimeMs,
+      extractSchemaVersion,
+    });
+
+    return normalizeExtractedMajorRiverLines(
+      await readLocalGeoJson(tempOutputPath, "osm/rivers/pbf-lines"),
+    );
+  } finally {
+    if (existsSync(tempOutputPath)) {
+      await unlink(tempOutputPath);
+    }
+  }
+}
+
+async function extractWaterBodiesFromLocalOsmPbf() {
+  const cacheKey = "osm/water-bodies/pbf-extract";
+  const extractSchemaVersion = 3;
+  const pbfPath = resolveLocalOsmPbfPath();
+
+  if (!pbfPath) {
+    console.warn("Skipping local PBF water extraction: no local Ukraine OSM PBF found.");
+    return null;
+  }
+
+  const pbfStats = await stat(pbfPath);
+  const pbfMtimeMs = Math.trunc(pbfStats.mtimeMs);
+  const relativeOutputPath = path.join("osm", "water-bodies-from-pbf.geojson");
+  const outputPath = cachePathForBinary(relativeOutputPath);
+
+  if (!shouldRefresh(cacheKey)) {
+    const cached = await readCachedBinary(cacheKey);
+
+    if (
+      cached &&
+      cached.sourcePbfPath === pbfPath &&
+      cached.sourcePbfMtimeMs === pbfMtimeMs &&
+      cached.extractSchemaVersion === extractSchemaVersion
+    ) {
+      console.log("cache hit  osm/water-bodies/pbf-extract");
+      return normalizeExtractedWaterBodies(
+        await readLocalGeoJson(cached.absolutePath, "osm/water-bodies/pbf-extract"),
+      );
+    }
+  }
+
+  const ogr2ogrAvailable = await commandExists(gdalTools.ogr2ogr);
+
+  if (!ogr2ogrAvailable) {
+    console.warn("Skipping local PBF water extraction: `ogr2ogr` is not available.");
+    return null;
+  }
+
+  await mkdir(path.dirname(outputPath), { recursive: true });
+
+  const whereClause = [
+    "natural = 'water'",
+    "landuse IN ('reservoir','basin')",
+    `(
+      other_tags IS NOT NULL
+      AND (
+        other_tags LIKE '%"water"=>"lake"%'
+        OR other_tags LIKE '%"water"=>"reservoir"%'
+        OR other_tags LIKE '%"water"=>"basin"%'
+        OR other_tags LIKE '%"water"=>"river"%'
+        OR other_tags LIKE '%"water"=>"oxbow"%'
+        OR other_tags LIKE '%"water"=>"canal"%'
+        OR other_tags LIKE '%"water"=>"lagoon"%'
+        OR other_tags LIKE '%"water"=>"pond"%'
+        OR other_tags LIKE '%"waterway"=>"riverbank"%'
+        OR other_tags LIKE '%"waterway"=>"canal"%'
+      )
+    )`,
+  ].join(" OR ").replace(/\s+/g, " ").trim();
+  const tempOutputPath = `${outputPath}.tmp-${Date.now()}`;
+
+  try {
+    await runCommand(gdalTools.ogr2ogr, [
+      "-skipfailures",
+      "-f",
+      "GeoJSON",
+      tempOutputPath,
+      pbfPath,
+      "multipolygons",
+      "-makevalid",
+      "-nlt",
+      "MULTIPOLYGON",
+      "-spat",
+      `${theaterBbox.west}`,
+      `${theaterBbox.south}`,
+      `${theaterBbox.east}`,
+      `${theaterBbox.north}`,
+      "-where",
+      whereClause,
+      "-t_srs",
+      "EPSG:4326",
+      "-lco",
+      "RFC7946=YES",
+    ]);
+
+    await copyFile(tempOutputPath, outputPath);
+    await writeCachedBinary(cacheKey, relativeOutputPath, {
+      sourcePbfPath: pbfPath,
+      sourcePbfMtimeMs: pbfMtimeMs,
+      extractSchemaVersion,
+    });
+
+    return normalizeExtractedWaterBodies(
+      await readLocalGeoJson(tempOutputPath, "osm/water-bodies/pbf-extract"),
+    );
+  } finally {
+    if (existsSync(tempOutputPath)) {
+      await unlink(tempOutputPath);
+    }
+  }
 }
 
 // Print a read-only report of every known cache entry and its freshness metadata.
@@ -3067,9 +4694,12 @@ async function main() {
       maxVertices: 120,
     },
   );
+  const osmWaterBodiesFromPbf = await extractWaterBodiesFromLocalOsmPbf();
+  const osmMajorRiverLinesFromPbf = await extractMajorRiverLinesFromLocalOsmPbf();
 
   let elevationAvailable = false;
   let hillshadeLayerPath = "terrain/hillshade-clipped.png";
+  const elevationRasterPath = path.join(processedRoot, "terrain", "elevation-clipped.tif");
 
   if (!skipElevationMode) {
     try {
@@ -3082,9 +4712,7 @@ async function main() {
   } else {
     console.log("Skipping elevation/hillshade in public build due to --skip-elevation.");
     const existingHillshadePath = detectExistingHillshadeLayerPath();
-    const existingElevationPath = path.join(processedRoot, "terrain", "elevation-clipped.tif");
-
-    if (existsSync(existingElevationPath) && existingHillshadePath) {
+    if (existsSync(elevationRasterPath) && existingHillshadePath) {
       elevationAvailable = true;
       hillshadeLayerPath = existingHillshadePath;
     }
@@ -3097,7 +4725,10 @@ async function main() {
     "layers/oblast-subdivisions.geojson": emptyFeatureCollection(),
     "layers/oblast-subdivision-label-points.geojson": emptyFeatureCollection(),
     "layers/rivers.geojson": filterFeatureCollectionToBbox(rivers, theaterBbox),
-    "layers/water-bodies.geojson": filterFeatureCollectionToBbox(lakes, theaterBbox),
+    "layers/water-bodies.geojson": filterFeatureCollectionToBbox(
+      osmWaterBodiesPrototype,
+      theaterBbox,
+    ),
     "layers/water-bodies-osm-prototype.geojson": osmWaterBodiesPrototype,
     "layers/seas.geojson": filterFeatureCollectionToBbox(seas, theaterBbox),
     "layers/wetlands.geojson": wetlands,
@@ -3126,10 +4757,46 @@ async function main() {
     clippedOblastBoundaries,
     clippedAdm2Polygons,
   );
-  const admBoundaryTopology = buildBoundaryLineTopologyFromAdm2(oblastSubdivisions, seas);
+  const admBoundaryTopology = buildBoundaryLineTopologyFromAdm2(oblastSubdivisions);
+  let effectiveWaterBodies = osmWaterBodiesFromPbf
+    ? mergeWaterBodiesWithCoverageFallback(
+        osmWaterBodiesFromPbf,
+        osmWaterBodiesPrototype,
+        admBoundaryTopology.ukraineGeometry,
+      )
+    : osmWaterBodiesPrototype;
+  const riverCorridorGapLayer = buildMajorRiverCorridorGapLayer(
+    effectiveWaterBodies,
+    osmMajorRiverLinesFromPbf,
+    admBoundaryTopology.ukraineGeometry,
+  );
+  effectiveWaterBodies = appendRiverCorridorGapFeatures(
+    effectiveWaterBodies,
+    riverCorridorGapLayer,
+  );
+  const focusedHexRiverLayer = await buildFocusedHexRiverReconstructionLayer(
+    effectiveWaterBodies,
+    osmMajorRiverLinesFromPbf,
+    existsSync(elevationRasterPath) ? elevationRasterPath : null,
+  );
+  effectiveWaterBodies = appendRiverCorridorGapFeatures(
+    effectiveWaterBodies,
+    focusedHexRiverLayer,
+  );
+  const clippedEffectiveWaterBodies = filterFeatureCollectionToBbox(
+    effectiveWaterBodies,
+    theaterBbox,
+  );
+  const correctedSeas = correctSeaLayerWithAdm0Geometry(seas, admBoundaryTopology.ukraineGeometry);
+  filteredLayers["layers/water-bodies.geojson"] = clippedEffectiveWaterBodies;
+  filteredLayers["layers/seas.geojson"] = filterFeatureCollectionToBbox(correctedSeas, theaterBbox);
   filteredLayers["layers/theater-boundary.geojson"] = admBoundaryTopology.adm0Outer;
   filteredLayers["layers/oblast-boundaries.geojson"] = admBoundaryTopology.adm1Shared;
   filteredLayers["layers/oblast-subdivisions.geojson"] = admBoundaryTopology.adm2Internal;
+  filteredLayers["layers/settlements.geojson"] = filterPointFeaturesOutsidePolygons(
+    filteredLayers["layers/settlements.geojson"],
+    filteredLayers["layers/seas.geojson"],
+  );
   filteredLayers["layers/settlement-voronoi-cells.geojson"] = buildSettlementVoronoiLayer(
     filteredLayers["layers/country-boundaries.geojson"],
     filteredLayers["layers/settlements.geojson"],

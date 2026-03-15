@@ -12,11 +12,23 @@ Completed tasks that are no longer needed for day-to-day context have been moved
 
 62.2 [done] Improve ADM2 (subdivision) border visibility while preserving hierarchy below ADM1: increase contrast and legibility at operational zoom levels without making ADM2 borders visually equivalent to ADM1 borders. Implemented style changes: dashed ADM2 retained; width set to `0.7` (z6.2), `1.05` (z8), `1.3` (z10); opacity set to `0.62` (z6.2), `0.68` (z8), `0.72` (z10); color changed to `#7d8478`; dash pattern tightened to `[1.3, 2.0]`.
 
+62.3 [done] Prototype a coastal sea-geometry correction step that replaces coarse Natural Earth coastline segments with ADM0-derived coastline where geometries are near each other and the ADM0 segment is maritime (not land on both sides). Implemented prototype: derive UKR ADM0 polygon from the GADM ADM2 topology step, correct `seas` by subtracting that ADM0 land geometry (`seas - adm0`), then apply maritime ADM0 segment suppression against the corrected sea layer instead of raw Natural Earth seas. Outcome: not sufficient in complex delta/coastal zones (coastline detail mismatch remains); maritime suppression has been reverted and continuous ADM0 rendering restored.
+
 69. [done] Prototyped World Bank Official Boundaries (WBOB) on a Ukraine subset from the WBOB medium-resolution FeatureServer (item `c030a96882e84205897973ed44b12cf2`, layers ADM0/ADM1/ADM2) and wrote comparison outputs to `reports/wbob-boundary-prototype-comparison.{json,md}`. Result: cross-level coherence passed, but detail parity failed for ADM2 in this source slice (only `24` ADM2 features for Ukraine, with `NAM_2` unavailable across all), so it is not suitable as a production replacement for current ADM2 detail.
 
 ## Pending Tasks
 
-62.3 [pending] Prototype a coastal sea-geometry correction step that replaces coarse Natural Earth coastline segments with ADM0-derived coastline where geometries are near each other and the ADM0 segment is maritime (not land on both sides). Goal: preserve detailed coastal border coherence without clipping away valid land-border segments.
+62.3.1 [pending] discuss the report of riverhexes to fix before proceeding with any task.
+
+62.4 [pending] Prototype an OSM-derived high-detail coastal water mask (coastline/water polygons) and use it for maritime border handling so coastal sea-land edges align with detailed ADM0/shoreline geometry in problematic zones (for example Danube Delta / Black Sea coast). Attempted prototype: build a hybrid maritime suppression mask by combining Natural Earth seas with OSM water polygons selected near both sea and ADM0 (`nearSea` + `nearBorder` thresholds), then suppress ADM0 maritime segments against this hybrid mask while leaving displayed sea fill source unchanged. Result: still over-suppresses in problematic coastal strips; continuous ADM0 rendering has been restored pending a better coastline source/approach.
+
+62.5 [pending] Improve hydrology/wetland source quality for map rendering: promote higher-detail inland water geometry (OSM water polygons) over coarse Natural Earth inland-water representation, and prototype a wetlands quality upgrade using a hybrid of OSM wetland polygons plus ESA WorldCover wetland support to reduce false/missing extents. Progress: `water-bodies` now prefers local OSM `.pbf` extraction (GDAL/OGR multipolygon pull with caching, simplification, and min-area filtering) with fallback to Overpass prototype; this restores major inland water in problem zones (including Sasyk near Tatarbunary) and keeps normal builds cache-based. Wetlands hybrid prototype still pending.
+
+62.6 [pending] The landborders of the area around the black sea are not correct, just look at hex HX-E75-N12, HX-E77-N12 etc. to see water bodies in the sea area. In hex HX-E72-N11 Kerch is in a location that looks wrong. It seems the ADM0 border is better than the current land/sea border drawing (for instance near Odessa, see hex HX-E36-N22). Please check that and suggest a fix.
+
+62.7 [pending] The GUI should be changed a bit. The "detailed" button should become part of the Cell information button (just a spacer between them), visually. The search box on the right should be moved to the left, right after the cell information button, and should only contain the text box and a find button right behind it.
+
+62.8 [pending] When I select a hex by clicking on it, the hex border should change colour to yellow (and become thicker) to indicate its selection. When I click out of it, it should deselect.
 
 63. [pending] Add a typed attribution configuration module (`src/config/attribution.ts`) defining source id, provider name, required attribution text, canonical link, and show/hide conditions for the app.
 

@@ -35,6 +35,18 @@ display classes:
 npm run data:analytics:hex-shading
 ```
 
+River/water mismatch checklist report (hexes to inspect for uncovered river
+segments against water bodies):
+
+```bash
+npm run data:analytics:river-gaps
+```
+
+Notes:
+
+- defaults focus on named major rivers (`feature length >= 40 km`) inside the Ukraine theater polygon
+- use script args for broader scans, for example `npm run data:analytics:river-gaps -- --feature-min-length-km=12 --include-all-hexes`
+
 Inputs:
 
 - `data/processed/hex-cells.geojson`
@@ -49,6 +61,8 @@ Output:
 - `reports/dem-resolution-benchmark/dem-resolution-benchmark.md`
 - `reports/water-bodies-prototype-comparison.json`
 - `reports/water-bodies-prototype-comparison.md`
+- `reports/river-water-gap-checklist.json`
+- `reports/river-water-gap-checklist.md`
 - `reports/osm-informed-hex-shading-comparison.json`
 - `reports/osm-informed-hex-shading-comparison.md`
 - `data/processed/hex-cells-osm-shading-prototype.geojson`

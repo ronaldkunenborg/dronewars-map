@@ -43,6 +43,19 @@ For a production build:
 npm run build
 ```
 
+Build output notes (Windows / Dropbox-safe default):
+
+- by default, Vite build artifacts are written to `C:\temp\dronewars-map-dist` (instead of project-local `dist/`)
+- this avoids Dropbox file-lock interference during output cleanup/rewrite
+- override the output directory with `DRONEWARS_BUILD_OUT_DIR` when needed
+
+Example override:
+
+```powershell
+$env:DRONEWARS_BUILD_OUT_DIR='C:/temp/custom-dronewars-dist'
+npm run build
+```
+
 ## What You Should See
 
 With the current processed data, the app should show:
@@ -313,6 +326,19 @@ Outputs:
 - `reports/osm-informed-hex-shading-comparison.json`
 - `reports/osm-informed-hex-shading-comparison.md`
 - `data/processed/hex-cells-osm-shading-prototype.geojson`
+
+8. River/water mismatch checklist report (hexes to review):
+
+```bash
+npm run data:analytics:river-gaps
+```
+
+Outputs:
+
+- `reports/river-water-gap-checklist.json`
+- `reports/river-water-gap-checklist.md`
+
+Default scan behavior targets named major rivers (`feature length >= 40 km`) in-theater; use script args to broaden scope (for example `--feature-min-length-km=12 --include-all-hexes`).
 
 ### 2. Optional Local Pipeline Scaffolding
 

@@ -8,7 +8,8 @@ type OrderedLayerDefinition = {
 };
 
 export const mapLayerVisibilityTargets = {
-  water: ["sea-fill", "water-bodies-fill", "rivers-line"],
+  water: ["sea-fill", "water-bodies-fill"],
+  rivers: ["rivers-line"],
   wetlands: ["wetlands-fill"],
   forests: ["forests-fill"],
   roads: ["roads-line"],
@@ -41,6 +42,7 @@ export const mapLayerVisibilityTargets = {
     "settlement-voronoi-fill",
     "settlement-voronoi-outline",
   ],
+  riverGapHexes: ["river-gap-hex-outline"],
   contours: [],
   hillshade: ["hillshade-raster"],
 } as const;
@@ -501,7 +503,7 @@ const orderedLayerRegistry: OrderedLayerDefinition[] = [
         type: "line",
         source: sourceId,
         paint: {
-          "line-color": "#6788aa",
+          "line-color": "#88a8c1",
           "line-width": [
             "interpolate",
             ["linear"],
@@ -513,7 +515,7 @@ const orderedLayerRegistry: OrderedLayerDefinition[] = [
             11,
             3.1,
           ],
-          "line-opacity": 0.94,
+          "line-opacity": 0.84,
         },
       },
     ],
