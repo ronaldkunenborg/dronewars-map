@@ -324,8 +324,8 @@ function ensureSelectedHexLayers(map: MapLibreMap) {
       type: "fill",
       source: "selected-hex",
       paint: {
-        "fill-color": "#d3a85e",
-        "fill-opacity": 0.12,
+        "fill-color": "#ffe457",
+        "fill-opacity": 0.08,
       },
     });
   }
@@ -336,18 +336,18 @@ function ensureSelectedHexLayers(map: MapLibreMap) {
       type: "line",
       source: "selected-hex",
       paint: {
-        "line-color": "#9f7035",
-        "line-opacity": 0.95,
+        "line-color": "#ffe457",
+        "line-opacity": 1,
         "line-width": [
           "interpolate",
           ["linear"],
           ["zoom"],
           4,
-          0.8,
-          8,
-          1.4,
-          12,
           2.2,
+          8,
+          3.6,
+          12,
+          5.2,
         ],
       },
     });
@@ -608,6 +608,7 @@ export function MapView({
   const [datasetInfo, setDatasetInfo] = useState<string | null>(null);
   const [debugInfo, setDebugInfo] = useState<HexDebugInfo | null>(null);
   const [selectedHex, setSelectedHex] = useState<HexInspectorData | null>(null);
+  const [hoveredHexId, setHoveredHexId] = useState<string | null>(null);
   const [detailsVisible, setDetailsVisible] = useState(true);
   const [detailedVisible, setDetailedVisible] = useState(false);
   const [searchQuery, setSearchQuery] = useState("");
@@ -787,15 +788,20 @@ export function MapView({
     };
 
     const handleMouseMove = (event: MapMouseEvent) => {
-      const hasFeature = map.queryRenderedFeatures(event.point, {
+      const feature = map.queryRenderedFeatures(event.point, {
         layers: ["operational-hex-fill"],
-      }).length > 0;
+      })[0] as MapGeoJSONFeature | undefined;
+      const hasFeature = Boolean(feature);
+      const nextHoveredHexId =
+        typeof feature?.properties?.id === "string" ? feature.properties.id : null;
 
       map.getCanvas().style.cursor = hasFeature ? "pointer" : "";
+      setHoveredHexId((current) => (current === nextHoveredHexId ? current : nextHoveredHexId));
     };
 
     const handleMouseLeave = () => {
       map.getCanvas().style.cursor = "";
+      setHoveredHexId(null);
     };
 
     map.on("click", handleClick);
@@ -807,6 +813,7 @@ export function MapView({
       map.off("mousemove", handleMouseMove);
       map.off("mouseleave", "operational-hex-fill", handleMouseLeave);
       map.getCanvas().style.cursor = "";
+      setHoveredHexId(null);
     };
   }
 
@@ -1014,7 +1021,7 @@ export function MapView({
             onClick={() => setDetailsVisible((value) => !value)}
             type="button"
           >
-            Cell Information
+            <span className="cell-panel__toggle-text">{`Hex: ${hoveredHexId ?? "n/a"}`}</span>
           </button>
           <label className="cell-panel__debug">
             <input

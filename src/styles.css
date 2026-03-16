@@ -378,6 +378,15 @@ select {
   padding: 0.45rem 0.75rem;
   box-shadow: 0 12px 24px rgba(51, 60, 46, 0.14);
   cursor: pointer;
+  width: 15ch;
+  text-align: left;
+}
+
+.cell-panel__toggle-text {
+  display: block;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
 }
 
 .cell-panel__debug {
