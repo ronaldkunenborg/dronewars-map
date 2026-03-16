@@ -363,7 +363,10 @@ function clearSelectedHex(map: MapLibreMap) {
   });
 }
 
-function setSelectedHexFeature(map: MapLibreMap, feature: MapGeoJSONFeature) {
+function setSelectedHexFeature(
+  map: MapLibreMap,
+  feature: HexPolygonGeoJson["features"][number],
+) {
   const source = map.getSource("selected-hex") as GeoJSONSource | undefined;
 
   if (!source) {
@@ -714,7 +717,7 @@ export function MapView({
       zoom: Math.max(map.getZoom(), 9),
       essential: true,
     });
-    setSelectedHexFeature(map, containingHex as unknown as MapGeoJSONFeature);
+    setSelectedHexFeature(map, containingHex);
     setSelectedHex(buildHexInspectorData(containingHex as unknown as MapGeoJSONFeature));
     setDebugInfo(null);
     setSearchQuery(settlementLabel(entry));
@@ -725,11 +728,27 @@ export function MapView({
     ensureSelectedHexLayers(map);
 
     const handleClick = (event: MapMouseEvent) => {
-      const feature = map.queryRenderedFeatures(event.point, {
+      const renderedFeature = map.queryRenderedFeatures(event.point, {
         layers: ["operational-hex-fill"],
       })[0] as MapGeoJSONFeature | undefined;
+      const point: Point = [event.lngLat.lng, event.lngLat.lat];
+      const renderedHexId =
+        typeof renderedFeature?.properties?.id === "string"
+          ? renderedFeature.properties.id
+          : null;
+      const canonicalFeatureById = renderedHexId
+        ? hexGeoJsonRef.current?.features.find(
+            (candidate) => String(candidate.properties?.id ?? "") === renderedHexId,
+          )
+        : null;
+      const canonicalFeature = canonicalFeatureById ??
+        hexGeoJsonRef.current?.features.find((candidate) =>
+          pointInPolygonFeature(point, candidate),
+        );
+      const featureForDebug = renderedFeature ??
+        (canonicalFeature as unknown as MapGeoJSONFeature | undefined);
 
-      if (!feature) {
+      if (!canonicalFeature || !featureForDebug) {
         setDebugInfo(null);
         setSelectedHex(null);
         clearSelectedHex(map);
@@ -737,11 +756,11 @@ export function MapView({
       }
 
       const centroid =
-        parseCentroid(feature.properties?.centroid) ?? geometryCentroid(feature);
-      const trueCenter = parseCentroid(feature.properties?.centerLngLat);
+        parseCentroid(featureForDebug.properties?.centroid) ?? geometryCentroid(featureForDebug);
+      const trueCenter = parseCentroid(featureForDebug.properties?.centerLngLat);
       const hexId =
-        typeof feature.properties?.id === "string"
-          ? feature.properties.id
+        typeof featureForDebug.properties?.id === "string"
+          ? featureForDebug.properties.id
           : "unknown";
 
       if (!centroid) {
@@ -767,8 +786,8 @@ export function MapView({
         ? [trueCenterPoint.x, trueCenterPoint.y]
         : null;
 
-      setSelectedHexFeature(map, feature);
-      setSelectedHex(buildHexInspectorData(feature));
+      setSelectedHexFeature(map, canonicalFeature);
+      setSelectedHex(buildHexInspectorData(canonicalFeature as unknown as MapGeoJSONFeature));
       setDebugInfo({
         hexId,
         trueCenterLngLat: trueCenter,

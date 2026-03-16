@@ -1,5 +1,6 @@
 import { access, copyFile, mkdir, readFile, stat, unlink, writeFile } from "node:fs/promises";
 import { existsSync } from "node:fs";
+import os from "node:os";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 import { spawn } from "node:child_process";
@@ -65,6 +66,8 @@ import {
  *   Only valid with `--elevation-only`; stages elevation but skips hillshade generation.
  * - `--skip-elevation`
  *   Skips elevation/hillshade processing during the full public layer build (useful for quick vector-only refreshes).
+ * - `--workers=<n>`
+ *   Bounded concurrency for expensive independent stages (tile fetching and local PBF extraction); defaults to a safe value based on available CPU.
  * - `--smoke-test=static`
  *   Fetches only the static GeoBoundaries and Natural Earth sources, mainly to validate cache behavior quickly.
  * - `--smoke-test=settlements`
@@ -348,6 +351,62 @@ const cacheReportMode = process.argv.includes("--cache-report");
 const elevationOnlyMode = process.argv.includes("--elevation-only");
 const skipHillshadeMode = process.argv.includes("--skip-hillshade");
 const skipElevationMode = process.argv.includes("--skip-elevation");
+const requestedWorkerCount = process.argv
+  .find((argument) => argument.startsWith("--workers="))
+  ?.slice("--workers=".length);
+
+function detectCpuParallelism() {
+  if (typeof os.availableParallelism === "function") {
+    const detected = os.availableParallelism();
+    return Number.isFinite(detected) && detected > 0 ? detected : 1;
+  }
+
+  const cpuCount = os.cpus()?.length ?? 1;
+  return Number.isFinite(cpuCount) && cpuCount > 0 ? cpuCount : 1;
+}
+
+function resolveWorkerConcurrency(requested) {
+  const cpuParallelism = detectCpuParallelism();
+  const safeDefault = Math.max(1, Math.min(8, cpuParallelism - 1));
+
+  if (requested === undefined) {
+    return safeDefault;
+  }
+
+  const parsed = Number.parseInt(requested, 10);
+
+  if (!Number.isFinite(parsed) || parsed < 1) {
+    console.warn(`Ignoring invalid --workers value "${requested}". Using ${safeDefault}.`);
+    return safeDefault;
+  }
+
+  return Math.max(1, Math.min(parsed, cpuParallelism));
+}
+
+const workerConcurrency = resolveWorkerConcurrency(requestedWorkerCount);
+const tileFetchConcurrency = Math.max(1, Math.min(workerConcurrency, 6));
+
+async function mapWithConcurrency(items, concurrency, mapper) {
+  const results = new Array(items.length);
+  let nextIndex = 0;
+  const workerCount = Math.max(1, Math.min(concurrency, items.length || 1));
+
+  async function runWorker() {
+    while (true) {
+      const index = nextIndex;
+      nextIndex += 1;
+
+      if (index >= items.length) {
+        return;
+      }
+
+      results[index] = await mapper(items[index], index);
+    }
+  }
+
+  await Promise.all(Array.from({ length: workerCount }, () => runWorker()));
+  return results;
+}
 
 // Shared empty fallback for layers that may intentionally produce no features.
 function emptyFeatureCollection() {
@@ -3005,14 +3064,18 @@ function addOverpassRelationFeatures(featuresById, elements, propertiesBuilder, 
 async function fetchTiledAreaLayer(layerId, selectors, propertiesBuilder, options) {
   const tiles = buildBboxGrid(theaterBbox, 3, 3);
   const featuresById = new Map();
+  const tileResponses = await mapWithConcurrency(
+    tiles,
+    Math.min(tileFetchConcurrency, tiles.length),
+    async (tile, tileIndex) =>
+      fetchOverpassJsonWithFallback(
+        [sources.terrainOverpassApi, sources.overpassFallbackApi, sources.overpassApi],
+        overpassAreaQuery(selectors, tile),
+        `overpass/${layerId}/tile-${tileIndex}`,
+      ),
+  );
 
-  for (const [tileIndex, tile] of tiles.entries()) {
-    const response = await fetchOverpassJsonWithFallback(
-      [sources.terrainOverpassApi, sources.overpassFallbackApi, sources.overpassApi],
-      overpassAreaQuery(selectors, tile),
-      `overpass/${layerId}/tile-${tileIndex}`,
-    );
-
+  for (const response of tileResponses) {
     addOverpassWayFeatures(featuresById, response.elements ?? [], propertiesBuilder, options);
     addOverpassRelationFeatures(featuresById, response.elements ?? [], propertiesBuilder, options);
   }
@@ -4540,6 +4603,9 @@ async function printCacheReport() {
 async function main() {
   await mkdir(cacheRoot, { recursive: true });
   await mkdir(layersRoot, { recursive: true });
+  console.log(
+    `Using worker concurrency ${workerConcurrency} (tile fetch concurrency ${tileFetchConcurrency}).`,
+  );
 
   if (cacheReportMode) {
     await printCacheReport();
@@ -4660,6 +4726,10 @@ async function main() {
     fetchJson(sources.urbanAreas, "natural-earth/urban-areas"),
   ]);
 
+  const pbfExtractionPromise = Promise.all([
+    extractWaterBodiesFromLocalOsmPbf(),
+    extractMajorRiverLinesFromLocalOsmPbf(),
+  ]);
   const settlements = await fetchOverpassJson(overpassPlaceQuery(theaterBbox));
   const forests = await fetchTiledAreaLayer(
     "forests",
@@ -4694,8 +4764,7 @@ async function main() {
       maxVertices: 120,
     },
   );
-  const osmWaterBodiesFromPbf = await extractWaterBodiesFromLocalOsmPbf();
-  const osmMajorRiverLinesFromPbf = await extractMajorRiverLinesFromLocalOsmPbf();
+  const [osmWaterBodiesFromPbf, osmMajorRiverLinesFromPbf] = await pbfExtractionPromise;
 
   let elevationAvailable = false;
   let hillshadeLayerPath = "terrain/hillshade-clipped.png";

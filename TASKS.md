@@ -14,6 +14,10 @@ Completed tasks that are no longer needed for day-to-day context have been moved
 
 62.3 [done] Prototype a coastal sea-geometry correction step that replaces coarse Natural Earth coastline segments with ADM0-derived coastline where geometries are near each other and the ADM0 segment is maritime (not land on both sides). Implemented prototype: derive UKR ADM0 polygon from the GADM ADM2 topology step, correct `seas` by subtracting that ADM0 land geometry (`seas - adm0`), then apply maritime ADM0 segment suppression against the corrected sea layer instead of raw Natural Earth seas. Outcome: not sufficient in complex delta/coastal zones (coastline detail mismatch remains); maritime suppression has been reverted and continuous ADM0 rendering restored.
 
+62.8 [done] Selecting a hex now highlights it with a thicker yellow border (and subtle yellow fill), clicking outside deselects it, and the cell panel toggle now shows `Hex: <hovered-id>` while preserving stable button width when not hovering (shows `Hex: n/a` without resizing). Follow-up fix: selection now writes canonical plain GeoJSON hex features (instead of rendered-feature objects) so MapLibre serialization errors are avoided and click-selection remains stable.
+
+62.9 [done] Parallelized expensive `data:layers:public` stages with bounded concurrency (`--workers=<n>`): tiled Overpass area fetches now run with a capped worker pool while preserving deterministic merge order, and local OSM PBF water/river extraction now runs in parallel with the network-bound layer fetch stage.
+
 69. [done] Prototyped World Bank Official Boundaries (WBOB) on a Ukraine subset from the WBOB medium-resolution FeatureServer (item `c030a96882e84205897973ed44b12cf2`, layers ADM0/ADM1/ADM2) and wrote comparison outputs to `reports/wbob-boundary-prototype-comparison.{json,md}`. Result: cross-level coherence passed, but detail parity failed for ADM2 in this source slice (only `24` ADM2 features for Ukraine, with `NAM_2` unavailable across all), so it is not suitable as a production replacement for current ADM2 detail.
 
 ## Pending Tasks
@@ -28,7 +32,7 @@ Completed tasks that are no longer needed for day-to-day context have been moved
 
 62.7 [pending] The GUI should be changed a bit. The "detailed" button should become part of the Cell information button (just a spacer between them), visually. The search box on the right should be moved to the left, right after the cell information button, and should only contain the text box and a find button right behind it.
 
-62.8 [done] Selecting a hex now highlights it with a thicker yellow border (and subtle yellow fill), clicking outside deselects it, and the cell panel toggle now shows `Hex: <hovered-id>` while preserving stable button width when not hovering (shows `Hex: n/a` without resizing).
+62.8.1 [pending] The cell panel toggle should be wider to accomodate current hex numbering. There should also be a visual indicator that we are showing or hiding the cel information panel, with a triangle up/down or similar icon.
 
 63. [pending] Add a typed attribution configuration module (`src/config/attribution.ts`) defining source id, provider name, required attribution text, canonical link, and show/hide conditions for the app.
 
@@ -41,3 +45,5 @@ Completed tasks that are no longer needed for day-to-day context have been moved
 67. [pending] Add a reusable attribution export helper that generates a plain-text attribution block for screenshots/exports using the same shared attribution config and layer mapping logic.
 
 68. [pending] Update README with an `Attribution In App` section and add tests for attribution resolution logic (layer visibility -> required attribution set), plus a short manual verification checklist.
+
+69. [pending] Create a points-of-interest layer with features such as important bridges over rivers, dams, power plants, military bases, and airports (airports should be modeled as POI, not logistics-network links). These features should also display as icons, comparable to cities like Kiev which has a red dot and star as icon and also a graphical representation. But first determine the best source for these POI items.

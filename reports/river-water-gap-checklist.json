@@ -1,5 +1,5 @@
 {
-  "generatedAt": "2026-03-15T22:46:00.145Z",
+  "generatedAt": "2026-03-16T21:33:24.174Z",
   "config": {
     "includeOnlyTheaterHexes": true,
     "requireRenderedRiverPresence": true,
@@ -31,62 +31,29 @@
       "shortFeature": 17460
     },
     "theaterFilterApplied": true,
-    "hexesWithEnoughRiver": 894,
-    "hexesWithRenderedRiver": 185,
-    "manuallyExcludedHexMatchCount": 9,
-    "flaggedHexCount": 36,
+    "hexesWithEnoughRiver": 880,
+    "hexesWithRenderedRiver": 171,
+    "manuallyExcludedHexMatchCount": 23,
+    "flaggedHexCount": 22,
     "flaggedByPrefix": {
       "HX-W19": 3,
-      "HX-E16": 3,
-      "HX-E51": 3,
-      "HX-E53": 2,
-      "HX-W4": 2,
       "HX-E20": 2,
+      "HX-E16": 2,
       "HX-W9": 2,
       "HX-E22": 2,
-      "HX-W17": 2,
+      "HX-E51": 2,
       "HX-E3": 1,
-      "HX-E13": 1,
       "HX-E55": 1,
       "HX-W1": 1,
       "HX-W2": 1,
-      "HX-W16": 1,
       "HX-W18": 1,
-      "HX-E54": 1,
-      "HX-E7": 1,
       "HX-E24": 1,
-      "HX-E52": 1,
+      "HX-W17": 1,
       "HX-W13": 1,
-      "HX-E11": 1,
-      "HX-W6": 1,
-      "HX-W10": 1
+      "HX-E11": 1
     }
   },
   "flaggedHexes": [
-    {
-      "hexId": "HX-E53-N31",
-      "centerLngLat": [
-        34.78972580341381,
-        47.49617682295136
-      ],
-      "totalRiverKm": 34.23,
-      "uncoveredRiverKm": 20.681,
-      "uncoveredPct": 60.42,
-      "renderedRiverKm": 12.8,
-      "segmentCount": 62,
-      "uncoveredSegmentCount": 22,
-      "severityScore": 40.0107,
-      "riverNames": [
-        {
-          "name": "Кінська",
-          "km": 20.681
-        },
-        {
-          "name": "Дніпро",
-          "km": 13.549
-        }
-      ]
-    },
     {
       "hexId": "HX-W19-N50",
       "centerLngLat": [
@@ -108,30 +75,6 @@
         {
           "name": "Дністер",
           "km": 1.467
-        }
-      ]
-    },
-    {
-      "hexId": "HX-W4-N44",
-      "centerLngLat": [
-        25.360803860751076,
-        48.89723443840587
-      ],
-      "totalRiverKm": 16.654,
-      "uncoveredRiverKm": 14.024,
-      "uncoveredPct": 84.21,
-      "renderedRiverKm": 14.625,
-      "segmentCount": 138,
-      "uncoveredSegmentCount": 114,
-      "severityScore": 29.3751,
-      "riverNames": [
-        {
-          "name": "Стрипа",
-          "km": 14.143
-        },
-        {
-          "name": "Дністер",
-          "km": 2.51
         }
       ]
     },
@@ -184,34 +127,6 @@
       ]
     },
     {
-      "hexId": "HX-E51-N52",
-      "centerLngLat": [
-        36.37677207099071,
-        49.7404214640947
-      ],
-      "totalRiverKm": 16.455,
-      "uncoveredRiverKm": 10.615,
-      "uncoveredPct": 64.51,
-      "renderedRiverKm": 1.703,
-      "segmentCount": 134,
-      "uncoveredSegmentCount": 83,
-      "severityScore": 22.2585,
-      "riverNames": [
-        {
-          "name": "Мжа",
-          "km": 7.869
-        },
-        {
-          "name": "Уди",
-          "km": 5.974
-        },
-        {
-          "name": "Сіверський Донець",
-          "km": 2.612
-        }
-      ]
-    },
-    {
       "hexId": "HX-E3-N41",
       "centerLngLat": [
         26.387716151536125,
@@ -252,26 +167,6 @@
       ]
     },
     {
-      "hexId": "HX-E13-N39",
-      "centerLngLat": [
-        28.068118081911663,
-        48.3628997892849
-      ],
-      "totalRiverKm": 15.957,
-      "uncoveredRiverKm": 8.527,
-      "uncoveredPct": 53.44,
-      "renderedRiverKm": 10.201,
-      "segmentCount": 151,
-      "uncoveredSegmentCount": 79,
-      "severityScore": 17.9909,
-      "riverNames": [
-        {
-          "name": "Мурафа",
-          "km": 15.957
-        }
-      ]
-    },
-    {
       "hexId": "HX-E22-N70",
       "centerLngLat": [
         32.64254555904507,
@@ -292,70 +187,6 @@
         {
           "name": "Убідь",
           "km": 8.736
-        }
-      ]
-    },
-    {
-      "hexId": "HX-W4-N40",
-      "centerLngLat": [
-        24.98738120955651,
-        48.470219493519686
-      ],
-      "totalRiverKm": 17.461,
-      "uncoveredRiverKm": 7.884,
-      "uncoveredPct": 45.15,
-      "renderedRiverKm": 6.931,
-      "segmentCount": 208,
-      "uncoveredSegmentCount": 93,
-      "severityScore": 16.5014,
-      "riverNames": [
-        {
-          "name": "Пістинька",
-          "km": 9.873
-        },
-        {
-          "name": "Прут",
-          "km": 7.587
-        }
-      ]
-    },
-    {
-      "hexId": "HX-E16-N37",
-      "centerLngLat": [
-        28.441540733106223,
-        48.147580497063046
-      ],
-      "totalRiverKm": 6.07,
-      "uncoveredRiverKm": 6.017,
-      "uncoveredPct": 99.13,
-      "renderedRiverKm": 25.205,
-      "segmentCount": 87,
-      "uncoveredSegmentCount": 86,
-      "severityScore": 15.55,
-      "riverNames": [
-        {
-          "name": "Марківка",
-          "km": 6.07
-        }
-      ]
-    },
-    {
-      "hexId": "HX-W17-N58",
-      "centerLngLat": [
-        24.240535907167388,
-        50.36335633455103
-      ],
-      "totalRiverKm": 5.217,
-      "uncoveredRiverKm": 5.217,
-      "uncoveredPct": 100,
-      "renderedRiverKm": 17.035,
-      "segmentCount": 49,
-      "uncoveredSegmentCount": 49,
-      "severityScore": 14.0381,
-      "riverNames": [
-        {
-          "name": "Солокія",
-          "km": 5.217
         }
       ]
     },
@@ -476,26 +307,6 @@
       ]
     },
     {
-      "hexId": "HX-W16-N50",
-      "centerLngLat": [
-        23.680401930375538,
-        49.530977628151554
-      ],
-      "totalRiverKm": 4.098,
-      "uncoveredRiverKm": 4.098,
-      "uncoveredPct": 100,
-      "renderedRiverKm": 19.369,
-      "segmentCount": 39,
-      "uncoveredSegmentCount": 39,
-      "severityScore": 11.9933,
-      "riverNames": [
-        {
-          "name": "Бистриця Тисменицька",
-          "km": 4.098
-        }
-      ]
-    },
-    {
       "hexId": "HX-E20-N68",
       "centerLngLat": [
         32.08241158225322,
@@ -540,50 +351,6 @@
         {
           "name": "Стривігор",
           "km": 4.764
-        }
-      ]
-    },
-    {
-      "hexId": "HX-E54-N53",
-      "centerLngLat": [
-        37.03026171058119,
-        49.84480574116114
-      ],
-      "totalRiverKm": 9.054,
-      "uncoveredRiverKm": 4.174,
-      "uncoveredPct": 46.09,
-      "renderedRiverKm": 5.966,
-      "segmentCount": 57,
-      "uncoveredSegmentCount": 26,
-      "severityScore": 9.6646,
-      "riverNames": [
-        {
-          "name": "Великий Бурлук",
-          "km": 9.054
-        }
-      ]
-    },
-    {
-      "hexId": "HX-E7-N42",
-      "centerLngLat": [
-        27.22791711672389,
-        48.68417952668539
-      ],
-      "totalRiverKm": 3.217,
-      "uncoveredRiverKm": 2.747,
-      "uncoveredPct": 85.36,
-      "renderedRiverKm": 1.527,
-      "segmentCount": 37,
-      "uncoveredSegmentCount": 34,
-      "severityScore": 8.887,
-      "riverNames": [
-        {
-          "name": "Калюс",
-          "km": 2.801
-        },
-        {
-          "name": "Дністер",
-          "km": 0.416
         }
       ]
     },
@@ -636,26 +403,6 @@
       ]
     },
     {
-      "hexId": "HX-E52-N53",
-      "centerLngLat": [
-        36.656839059386634,
-        49.84480574116114
-      ],
-      "totalRiverKm": 4.082,
-      "uncoveredRiverKm": 2.385,
-      "uncoveredPct": 58.45,
-      "renderedRiverKm": 14.22,
-      "segmentCount": 49,
-      "uncoveredSegmentCount": 27,
-      "severityScore": 7.0051,
-      "riverNames": [
-        {
-          "name": "Уди",
-          "km": 4.082
-        }
-      ]
-    },
-    {
       "hexId": "HX-W13-N54",
       "centerLngLat": [
         24.613958558361947,
@@ -672,26 +419,6 @@
         {
           "name": "Полтва",
           "km": 7.92
-        }
-      ]
-    },
-    {
-      "hexId": "HX-E53-N54",
-      "centerLngLat": [
-        36.93690604778255,
-        49.9489651079681
-      ],
-      "totalRiverKm": 6.604,
-      "uncoveredRiverKm": 1.773,
-      "uncoveredPct": 26.85,
-      "renderedRiverKm": 14.672,
-      "segmentCount": 39,
-      "uncoveredSegmentCount": 18,
-      "severityScore": 4.4532,
-      "riverNames": [
-        {
-          "name": "Хотімля",
-          "km": 6.604
         }
       ]
     },
@@ -812,54 +539,6 @@
         {
           "name": "Рів",
           "km": 2.052
-        }
-      ]
-    },
-    {
-      "hexId": "HX-W6-N45",
-      "centerLngLat": [
-        25.08073687235515,
-        49.00342275175056
-      ],
-      "totalRiverKm": 13.7,
-      "uncoveredRiverKm": 0.998,
-      "uncoveredPct": 7.28,
-      "renderedRiverKm": 10.04,
-      "segmentCount": 83,
-      "uncoveredSegmentCount": 15,
-      "severityScore": 2.1681,
-      "riverNames": [
-        {
-          "name": "Дністер",
-          "km": 12.703
-        },
-        {
-          "name": "Коропець",
-          "km": 0.998
-        }
-      ]
-    },
-    {
-      "hexId": "HX-W10-N47",
-      "centerLngLat": [
-        24.520602895563307,
-        49.21512167463428
-      ],
-      "totalRiverKm": 24.256,
-      "uncoveredRiverKm": 1.001,
-      "uncoveredPct": 4.13,
-      "renderedRiverKm": 16.627,
-      "segmentCount": 218,
-      "uncoveredSegmentCount": 7,
-      "severityScore": 2.009,
-      "riverNames": [
-        {
-          "name": "Дністер",
-          "km": 18.218
-        },
-        {
-          "name": "Сівка",
-          "km": 6.038
         }
       ]
     },
@@ -1258,30 +937,6 @@
         {
           "name": "Бритай",
           "km": 19.521
-        }
-      ]
-    },
-    {
-      "hexId": "HX-E53-N31",
-      "centerLngLat": [
-        34.78972580341381,
-        47.49617682295136
-      ],
-      "totalRiverKm": 34.23,
-      "uncoveredRiverKm": 20.681,
-      "uncoveredPct": 60.42,
-      "renderedRiverKm": 12.8,
-      "segmentCount": 62,
-      "uncoveredSegmentCount": 22,
-      "severityScore": 40.0107,
-      "riverNames": [
-        {
-          "name": "Кінська",
-          "km": 20.681
-        },
-        {
-          "name": "Дніпро",
-          "km": 13.549
         }
       ]
     },
@@ -2586,30 +2241,6 @@
         {
           "name": "Стир",
           "km": 13.644
-        }
-      ]
-    },
-    {
-      "hexId": "HX-W4-N44",
-      "centerLngLat": [
-        25.360803860751076,
-        48.89723443840587
-      ],
-      "totalRiverKm": 16.654,
-      "uncoveredRiverKm": 14.024,
-      "uncoveredPct": 84.21,
-      "renderedRiverKm": 14.625,
-      "segmentCount": 138,
-      "uncoveredSegmentCount": 114,
-      "severityScore": 29.3751,
-      "riverNames": [
-        {
-          "name": "Стрипа",
-          "km": 14.143
-        },
-        {
-          "name": "Дністер",
-          "km": 2.51
         }
       ]
     },
@@ -4678,34 +4309,6 @@
       ]
     },
     {
-      "hexId": "HX-E51-N52",
-      "centerLngLat": [
-        36.37677207099071,
-        49.7404214640947
-      ],
-      "totalRiverKm": 16.455,
-      "uncoveredRiverKm": 10.615,
-      "uncoveredPct": 64.51,
-      "renderedRiverKm": 1.703,
-      "segmentCount": 134,
-      "uncoveredSegmentCount": 83,
-      "severityScore": 22.2585,
-      "riverNames": [
-        {
-          "name": "Мжа",
-          "km": 7.869
-        },
-        {
-          "name": "Уди",
-          "km": 5.974
-        },
-        {
-          "name": "Сіверський Донець",
-          "km": 2.612
-        }
-      ]
-    },
-    {
       "hexId": "HX-E3-N41",
       "centerLngLat": [
         26.387716151536125,
@@ -6106,26 +5709,6 @@
       ]
     },
     {
-      "hexId": "HX-E13-N39",
-      "centerLngLat": [
-        28.068118081911663,
-        48.3628997892849
-      ],
-      "totalRiverKm": 15.957,
-      "uncoveredRiverKm": 8.527,
-      "uncoveredPct": 53.44,
-      "renderedRiverKm": 10.201,
-      "segmentCount": 151,
-      "uncoveredSegmentCount": 79,
-      "severityScore": 17.9909,
-      "riverNames": [
-        {
-          "name": "Мурафа",
-          "km": 15.957
-        }
-      ]
-    },
-    {
       "hexId": "HX-E69-N45",
       "centerLngLat": [
         39.0840862921513,
@@ -6834,30 +6417,6 @@
       ]
     },
     {
-      "hexId": "HX-W4-N40",
-      "centerLngLat": [
-        24.98738120955651,
-        48.470219493519686
-      ],
-      "totalRiverKm": 17.461,
-      "uncoveredRiverKm": 7.884,
-      "uncoveredPct": 45.15,
-      "renderedRiverKm": 6.931,
-      "segmentCount": 208,
-      "uncoveredSegmentCount": 93,
-      "severityScore": 16.5014,
-      "riverNames": [
-        {
-          "name": "Пістинька",
-          "km": 9.873
-        },
-        {
-          "name": "Прут",
-          "km": 7.587
-        }
-      ]
-    },
-    {
       "hexId": "HX-W16-N49",
       "centerLngLat": [
         23.5870462675769,
@@ -7294,26 +6853,6 @@
         {
           "name": "Бистриця Солотвинська",
           "km": 7.279
-        }
-      ]
-    },
-    {
-      "hexId": "HX-E16-N37",
-      "centerLngLat": [
-        28.441540733106223,
-        48.147580497063046
-      ],
-      "totalRiverKm": 6.07,
-      "uncoveredRiverKm": 6.017,
-      "uncoveredPct": 99.13,
-      "renderedRiverKm": 25.205,
-      "segmentCount": 87,
-      "uncoveredSegmentCount": 86,
-      "severityScore": 15.55,
-      "riverNames": [
-        {
-          "name": "Марківка",
-          "km": 6.07
         }
       ]
     },
@@ -7922,26 +7461,6 @@
         {
           "name": "Роставиця",
           "km": 11.693
-        }
-      ]
-    },
-    {
-      "hexId": "HX-W17-N58",
-      "centerLngLat": [
-        24.240535907167388,
-        50.36335633455103
-      ],
-      "totalRiverKm": 5.217,
-      "uncoveredRiverKm": 5.217,
-      "uncoveredPct": 100,
-      "renderedRiverKm": 17.035,
-      "segmentCount": 49,
-      "uncoveredSegmentCount": 49,
-      "severityScore": 14.0381,
-      "riverNames": [
-        {
-          "name": "Солокія",
-          "km": 5.217
         }
       ]
     },
@@ -8918,26 +8437,6 @@
         {
           "name": "Уборть",
           "km": 5.394
-        }
-      ]
-    },
-    {
-      "hexId": "HX-W16-N50",
-      "centerLngLat": [
-        23.680401930375538,
-        49.530977628151554
-      ],
-      "totalRiverKm": 4.098,
-      "uncoveredRiverKm": 4.098,
-      "uncoveredPct": 100,
-      "renderedRiverKm": 19.369,
-      "segmentCount": 39,
-      "uncoveredSegmentCount": 39,
-      "severityScore": 11.9933,
-      "riverNames": [
-        {
-          "name": "Бистриця Тисменицька",
-          "km": 4.098
         }
       ]
     },
@@ -10014,26 +9513,6 @@
       ]
     },
     {
-      "hexId": "HX-E54-N53",
-      "centerLngLat": [
-        37.03026171058119,
-        49.84480574116114
-      ],
-      "totalRiverKm": 9.054,
-      "uncoveredRiverKm": 4.174,
-      "uncoveredPct": 46.09,
-      "renderedRiverKm": 5.966,
-      "segmentCount": 57,
-      "uncoveredSegmentCount": 26,
-      "severityScore": 9.6646,
-      "riverNames": [
-        {
-          "name": "Великий Бурлук",
-          "km": 9.054
-        }
-      ]
-    },
-    {
       "hexId": "HX-E53-N56",
       "centerLngLat": [
         37.12361737337983,
@@ -10410,30 +9889,6 @@
         {
           "name": "Ушиця",
           "km": 2.409
-        }
-      ]
-    },
-    {
-      "hexId": "HX-E7-N42",
-      "centerLngLat": [
-        27.22791711672389,
-        48.68417952668539
-      ],
-      "totalRiverKm": 3.217,
-      "uncoveredRiverKm": 2.747,
-      "uncoveredPct": 85.36,
-      "renderedRiverKm": 1.527,
-      "segmentCount": 37,
-      "uncoveredSegmentCount": 34,
-      "severityScore": 8.887,
-      "riverNames": [
-        {
-          "name": "Калюс",
-          "km": 2.801
-        },
-        {
-          "name": "Дністер",
-          "km": 0.416
         }
       ]
     },
@@ -11314,26 +10769,6 @@
       ]
     },
     {
-      "hexId": "HX-E52-N53",
-      "centerLngLat": [
-        36.656839059386634,
-        49.84480574116114
-      ],
-      "totalRiverKm": 4.082,
-      "uncoveredRiverKm": 2.385,
-      "uncoveredPct": 58.45,
-      "renderedRiverKm": 14.22,
-      "segmentCount": 49,
-      "uncoveredSegmentCount": 27,
-      "severityScore": 7.0051,
-      "riverNames": [
-        {
-          "name": "Уди",
-          "km": 4.082
-        }
-      ]
-    },
-    {
       "hexId": "HX-E51-N53",
       "centerLngLat": [
         36.470127733789354,
@@ -12022,26 +11457,6 @@
       ]
     },
     {
-      "hexId": "HX-E53-N54",
-      "centerLngLat": [
-        36.93690604778255,
-        49.9489651079681
-      ],
-      "totalRiverKm": 6.604,
-      "uncoveredRiverKm": 1.773,
-      "uncoveredPct": 26.85,
-      "renderedRiverKm": 14.672,
-      "segmentCount": 39,
-      "uncoveredSegmentCount": 18,
-      "severityScore": 4.4532,
-      "riverNames": [
-        {
-          "name": "Хотімля",
-          "km": 6.604
-        }
-      ]
-    },
-    {
       "hexId": "HX-E2-N52",
       "centerLngLat": [
         27.22791711672389,
@@ -12530,30 +11945,6 @@
       ]
     },
     {
-      "hexId": "HX-W6-N45",
-      "centerLngLat": [
-        25.08073687235515,
-        49.00342275175056
-      ],
-      "totalRiverKm": 13.7,
-      "uncoveredRiverKm": 0.998,
-      "uncoveredPct": 7.28,
-      "renderedRiverKm": 10.04,
-      "segmentCount": 83,
-      "uncoveredSegmentCount": 15,
-      "severityScore": 2.1681,
-      "riverNames": [
-        {
-          "name": "Дністер",
-          "km": 12.703
-        },
-        {
-          "name": "Коропець",
-          "km": 0.998
-        }
-      ]
-    },
-    {
       "hexId": "HX-E61-N51",
       "centerLngLat": [
         38.150529664164885,
@@ -12634,30 +12025,6 @@
         {
           "name": "Вересня",
           "km": 0.887
-        }
-      ]
-    },
-    {
-      "hexId": "HX-W10-N47",
-      "centerLngLat": [
-        24.520602895563307,
-        49.21512167463428
-      ],
-      "totalRiverKm": 24.256,
-      "uncoveredRiverKm": 1.001,
-      "uncoveredPct": 4.13,
-      "renderedRiverKm": 16.627,
-      "segmentCount": 218,
-      "uncoveredSegmentCount": 7,
-      "severityScore": 2.009,
-      "riverNames": [
-        {
-          "name": "Дністер",
-          "km": 18.218
-        },
-        {
-          "name": "Сівка",
-          "km": 6.038
         }
       ]
     },
@@ -19175,6 +18542,20 @@
     "HX-E65-N45",
     "HX-E69-N42",
     "HX-E71-N41",
-    "HX-E71-N43"
+    "HX-E71-N43",
+    "HX-W17-N58",
+    "HX-W16-N50",
+    "HX-W10-N47",
+    "HX-W6-N45",
+    "HX-W4-N44",
+    "HX-W4-N40",
+    "HX-E7-N42",
+    "HX-E13-N39",
+    "HX-E16-N37",
+    "HX-E53-N31",
+    "HX-E51-N52",
+    "HX-E52-N53",
+    "HX-E53-N54",
+    "HX-E54-N53"
   ]
 }
