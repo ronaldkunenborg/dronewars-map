@@ -22,7 +22,7 @@ Completed tasks that are no longer needed for day-to-day context have been moved
 
 ## Pending Tasks
 
-62.3.1 [pending] discuss the report of riverhexes to fix before proceeding with any task.
+62.3.1 [pending] discuss the report of riverhexes to fix before proceeding with any task. Research question: can the current river-connection detection also catch disconnected side branches when the main river path is otherwise correctly rendered (example: `HX-W9-N46` with disconnected branch toward `HX-W9-N45`)?
 
 62.4 [pending] Prototype an OSM-derived high-detail coastal water mask (coastline/water polygons) and use it for maritime border handling so coastal sea-land edges align with detailed ADM0/shoreline geometry in problematic zones (for example Danube Delta / Black Sea coast). Attempted prototype: build a hybrid maritime suppression mask by combining Natural Earth seas with OSM water polygons selected near both sea and ADM0 (`nearSea` + `nearBorder` thresholds), then suppress ADM0 maritime segments against this hybrid mask while leaving displayed sea fill source unchanged. Result: still over-suppresses in problematic coastal strips; continuous ADM0 rendering has been restored pending a better coastline source/approach. When we finally fix this, examine AGENTS.md for rules that are no longer required.
 
@@ -47,3 +47,5 @@ Completed tasks that are no longer needed for day-to-day context have been moved
 68. [pending] Update README with an `Attribution In App` section and add tests for attribution resolution logic (layer visibility -> required attribution set), plus a short manual verification checklist.
 
 69. [pending] Create a points-of-interest layer with features such as important bridges over rivers, dams, power plants, military bases, and airports (airports should be modeled as POI, not logistics-network links). These features should also display as icons, comparable to cities like Kiev which has a red dot and star as icon and also a graphical representation. But first determine the best source for these POI items.
+
+For later: Once we have fixed the water bodies, at zoomlevel 7.5 and lower the rivers look better than the water bodies. You can keep the water bodies but the rivers should be enabled at that point when water bodies are on. But we should only do this when all water issues are fixed.

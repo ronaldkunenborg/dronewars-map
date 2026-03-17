@@ -1,5 +1,5 @@
 {
-  "generatedAt": "2026-03-16T21:33:24.174Z",
+  "generatedAt": "2026-03-17T00:03:50.244Z",
   "config": {
     "includeOnlyTheaterHexes": true,
     "requireRenderedRiverPresence": true,
@@ -31,14 +31,13 @@
       "shortFeature": 17460
     },
     "theaterFilterApplied": true,
-    "hexesWithEnoughRiver": 880,
-    "hexesWithRenderedRiver": 171,
-    "manuallyExcludedHexMatchCount": 23,
-    "flaggedHexCount": 22,
+    "hexesWithEnoughRiver": 877,
+    "hexesWithRenderedRiver": 168,
+    "manuallyExcludedHexMatchCount": 26,
+    "flaggedHexCount": 19,
     "flaggedByPrefix": {
       "HX-W19": 3,
       "HX-E20": 2,
-      "HX-E16": 2,
       "HX-W9": 2,
       "HX-E22": 2,
       "HX-E51": 2,
@@ -49,8 +48,7 @@
       "HX-W18": 1,
       "HX-E24": 1,
       "HX-W17": 1,
-      "HX-W13": 1,
-      "HX-E11": 1
+      "HX-W13": 1
     }
   },
   "flaggedHexes": [
@@ -99,30 +97,6 @@
         {
           "name": "Десна",
           "km": 2.727
-        }
-      ]
-    },
-    {
-      "hexId": "HX-E16-N64",
-      "centerLngLat": [
-        30.962143628669526,
-        50.97822105497596
-      ],
-      "totalRiverKm": 28.411,
-      "uncoveredRiverKm": 12.103,
-      "uncoveredPct": 42.6,
-      "renderedRiverKm": 3.764,
-      "segmentCount": 224,
-      "uncoveredSegmentCount": 101,
-      "severityScore": 24.0054,
-      "riverNames": [
-        {
-          "name": "Остер",
-          "km": 17.848
-        },
-        {
-          "name": "Десна",
-          "km": 10.563
         }
       ]
     },
@@ -495,50 +469,6 @@
         {
           "name": "Мжа",
           "km": 1.873
-        }
-      ]
-    },
-    {
-      "hexId": "HX-E16-N63",
-      "centerLngLat": [
-        30.86878796587089,
-        50.876302598096565
-      ],
-      "totalRiverKm": 23.213,
-      "uncoveredRiverKm": 1.912,
-      "uncoveredPct": 8.24,
-      "renderedRiverKm": 14.649,
-      "segmentCount": 158,
-      "uncoveredSegmentCount": 11,
-      "severityScore": 3.8456,
-      "riverNames": [
-        {
-          "name": "Десна",
-          "km": 19.002
-        },
-        {
-          "name": "Остер",
-          "km": 4.211
-        }
-      ]
-    },
-    {
-      "hexId": "HX-E11-N46",
-      "centerLngLat": [
-        28.348185070307583,
-        49.109385124127876
-      ],
-      "totalRiverKm": 2.052,
-      "uncoveredRiverKm": 0.709,
-      "uncoveredPct": 34.54,
-      "renderedRiverKm": 13.414,
-      "segmentCount": 26,
-      "uncoveredSegmentCount": 8,
-      "severityScore": 2.8543,
-      "riverNames": [
-        {
-          "name": "Рів",
-          "km": 2.052
         }
       ]
     },
@@ -3733,30 +3663,6 @@
         {
           "name": "Тилігул",
           "km": 10.671
-        }
-      ]
-    },
-    {
-      "hexId": "HX-E16-N64",
-      "centerLngLat": [
-        30.962143628669526,
-        50.97822105497596
-      ],
-      "totalRiverKm": 28.411,
-      "uncoveredRiverKm": 12.103,
-      "uncoveredPct": 42.6,
-      "renderedRiverKm": 3.764,
-      "segmentCount": 224,
-      "uncoveredSegmentCount": 101,
-      "severityScore": 24.0054,
-      "riverNames": [
-        {
-          "name": "Остер",
-          "km": 17.848
-        },
-        {
-          "name": "Десна",
-          "km": 10.563
         }
       ]
     },
@@ -11633,30 +11539,6 @@
       ]
     },
     {
-      "hexId": "HX-E16-N63",
-      "centerLngLat": [
-        30.86878796587089,
-        50.876302598096565
-      ],
-      "totalRiverKm": 23.213,
-      "uncoveredRiverKm": 1.912,
-      "uncoveredPct": 8.24,
-      "renderedRiverKm": 14.649,
-      "segmentCount": 158,
-      "uncoveredSegmentCount": 11,
-      "severityScore": 3.8456,
-      "riverNames": [
-        {
-          "name": "Десна",
-          "km": 19.002
-        },
-        {
-          "name": "Остер",
-          "km": 4.211
-        }
-      ]
-    },
-    {
       "hexId": "HX-E40-N57",
       "centerLngLat": [
         34.78972580341381,
@@ -11781,26 +11663,6 @@
         {
           "name": "Інгул",
           "km": 14.993
-        }
-      ]
-    },
-    {
-      "hexId": "HX-E11-N46",
-      "centerLngLat": [
-        28.348185070307583,
-        49.109385124127876
-      ],
-      "totalRiverKm": 2.052,
-      "uncoveredRiverKm": 0.709,
-      "uncoveredPct": 34.54,
-      "renderedRiverKm": 13.414,
-      "segmentCount": 26,
-      "uncoveredSegmentCount": 8,
-      "severityScore": 2.8543,
-      "riverNames": [
-        {
-          "name": "Рів",
-          "km": 2.052
         }
       ]
     },
@@ -18556,6 +18418,9 @@
     "HX-E51-N52",
     "HX-E52-N53",
     "HX-E53-N54",
-    "HX-E54-N53"
+    "HX-E54-N53",
+    "HX-E11-N46",
+    "HX-E16-N63",
+    "HX-E16-N64"
   ]
 }

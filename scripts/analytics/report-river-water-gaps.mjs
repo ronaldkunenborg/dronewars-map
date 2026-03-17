@@ -48,6 +48,9 @@ const manuallyExcludedHexIds = new Set([
   "HX-E52-N53",
   "HX-E53-N54",
   "HX-E54-N53",
+  "HX-E11-N46",
+  "HX-E16-N63",
+  "HX-E16-N64",
 ]);
 
 const defaultConfig = {
