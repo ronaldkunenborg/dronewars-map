@@ -14,6 +14,7 @@ This project keeps quickstart and high-level context in `README.md`, with detail
 ## Hydrology
 
 - [River Gap Repair Workflow](hydrology/river-gap-repair.md)
+- [Coastal Water Correction Workflow](hydrology/coastal-water-correction.md)
 
 ## Reports
 
@@ -22,6 +23,7 @@ This project keeps quickstart and high-level context in `README.md`, with detail
 ## Data Policy
 
 - [External Sources Policy](data/external-sources.md)
+- [Attribution](ATTRIBUTION.md)
 
 ## UI
 

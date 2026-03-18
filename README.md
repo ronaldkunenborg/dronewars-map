@@ -234,6 +234,7 @@ Detailed docs are now split under `docs/` and indexed here:
 - [River Gap Repair Workflow](docs/hydrology/river-gap-repair.md)
 - [Analytics Reports](docs/reports/analytics-reports.md)
 - [External Sources Policy](docs/data/external-sources.md)
+- [Attribution](docs/ATTRIBUTION.md)
 - [Map Layers and Controls](docs/ui/map-layers-and-controls.md)
 - [Tasks and Governance](docs/dev/tasks-and-governance.md)
 - [Decisions (ADRs)](docs/decisions)
