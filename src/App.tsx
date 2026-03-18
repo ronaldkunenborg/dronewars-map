@@ -79,6 +79,12 @@ export default function App() {
           onZoomChange={setZoomReadout}
           resetToken={resetToken}
         />
+        <footer className="attribution-footer" aria-label="Data attribution">
+          <span>Data: GeoBoundaries, GADM, Natural Earth, OSM, FABDEM/Copernicus, ESA WorldCover.</span>
+          <a href="/docs/ATTRIBUTION.md" rel="noopener noreferrer" target="_blank">
+            Attribution
+          </a>
+        </footer>
       </section>
     </main>
   );

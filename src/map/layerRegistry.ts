@@ -8,7 +8,12 @@ type OrderedLayerDefinition = {
 };
 
 export const mapLayerVisibilityTargets = {
-  water: ["sea-fill", "water-bodies-fill"],
+  water: [
+    "sea-fill",
+    "water-bodies-fill",
+    "water-bodies-debug-pilot-fill",
+    "water-bodies-debug-osm-fallback-fill",
+  ],
   rivers: ["rivers-line"],
   wetlands: ["wetlands-fill"],
   forests: ["forests-fill"],
@@ -399,6 +404,26 @@ const orderedLayerRegistry: OrderedLayerDefinition[] = [
           "fill-opacity": 0.84,
         },
       },
+      {
+        id: "water-bodies-debug-pilot-fill",
+        type: "fill",
+        source: sourceId,
+        filter: ["==", ["get", "source"], "pilot-hex-reconstruction"],
+        paint: {
+          "fill-color": "#d62828",
+          "fill-opacity": 0.72,
+        },
+      },
+      {
+        id: "water-bodies-debug-osm-fallback-fill",
+        type: "fill",
+        source: sourceId,
+        filter: ["==", ["get", "source"], "hex-specific-osm-water-fallback"],
+        paint: {
+          "fill-color": "#2a9d48",
+          "fill-opacity": 0.72,
+        },
+      },
     ],
   },
   {
@@ -502,6 +527,7 @@ const orderedLayerRegistry: OrderedLayerDefinition[] = [
         id: "rivers-line",
         type: "line",
         source: sourceId,
+        filter: ["!=", ["get", "insideUkraine"], true],
         paint: {
           "line-color": "#88a8c1",
           "line-width": [
