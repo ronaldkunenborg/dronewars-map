@@ -51,6 +51,18 @@ const manuallyExcludedHexIds = new Set([
   "HX-E11-N46",
   "HX-E16-N63",
   "HX-E16-N64",
+  "HX-E20-N68",
+  "HX-E20-N69",
+  "HX-E22-N69",
+  "HX-E22-N70",
+  "HX-E24-N74",
+  "HX-E51-N51",
+  "HX-E51-N57",
+  "HX-E55-N49",
+]);
+
+const manuallyIncludedFlaggedHexIds = new Set([
+  "HX-E53-N53",
 ]);
 
 const defaultConfig = {
@@ -72,15 +84,25 @@ const defaultConfig = {
 
 function parseArgs(config) {
   const parsed = { ...config };
+  let includeAllHexesRequested = false;
+  let renderedGateExplicitlySet = false;
 
   for (const arg of process.argv.slice(2)) {
     if (arg === "--include-all-hexes") {
       parsed.includeOnlyTheaterHexes = false;
+      includeAllHexesRequested = true;
       continue;
     }
 
     if (arg === "--include-nonrendered") {
       parsed.requireRenderedRiverPresence = false;
+      renderedGateExplicitlySet = true;
+      continue;
+    }
+
+    if (arg === "--require-rendered") {
+      parsed.requireRenderedRiverPresence = true;
+      renderedGateExplicitlySet = true;
       continue;
     }
 
@@ -127,6 +149,12 @@ function parseArgs(config) {
         parsed.minRenderedRiverKm = value;
       }
     }
+  }
+
+  if (includeAllHexesRequested && !renderedGateExplicitlySet) {
+    // Outside the theater, rendered-river coverage is intentionally sparse/coarse.
+    // Disable the rendered-river gate so we still flag uncovered major rivers.
+    parsed.requireRenderedRiverPresence = false;
   }
 
   return parsed;
@@ -603,6 +631,7 @@ function buildMarkdown(report) {
   lines.push(`- Hexes with at least ${report.config.hexMinRiverKm} km river: ${report.summary.hexesWithEnoughRiver}`);
   lines.push(`- Hexes passing rendered-river gate: ${report.summary.hexesWithRenderedRiver}`);
   lines.push(`- Manually excluded hexes removed: ${report.summary.manuallyExcludedHexMatchCount}`);
+  lines.push(`- Manually included flagged hexes added: ${report.summary.manuallyIncludedHexMatchCount}`);
   lines.push(`- Theater filter applied: ${report.summary.theaterFilterApplied}`);
   lines.push(`- Flagged hexes to check: ${report.summary.flaggedHexCount}`);
   lines.push("");
@@ -633,9 +662,11 @@ function buildMarkdown(report) {
 
 async function main() {
   const config = parseArgs(defaultConfig);
-  const riversPath = existsSync(inputPaths.riversFromCache)
-    ? inputPaths.riversFromCache
-    : inputPaths.riversFallback;
+  const riversPath = !config.includeOnlyTheaterHexes
+    ? inputPaths.riversFallback
+    : (existsSync(inputPaths.riversFromCache)
+      ? inputPaths.riversFromCache
+      : inputPaths.riversFallback);
 
   await ensureInputFile(inputPaths.hexCells, "hex-cells layer");
   await ensureInputFile(inputPaths.waterBodies, "water-bodies layer");
@@ -822,7 +853,57 @@ async function main() {
         row.uncoveredRiverKm >= config.flagMinUncoveredKm &&
         row.uncoveredPct >= config.flagMinUncoveredPct,
     )
-    .sort((left, right) => right.severityScore - left.severityScore);
+    .map((row) => ({ ...row, forcedInclude: false }));
+  const flaggedHexById = new Map(flaggedHexes.map((row) => [row.hexId, row]));
+  const filteredHexRowsById = new Map(filteredHexRows.map((row) => [row.hexId, row]));
+  const hexEntryById = new Map(hexEntries.map((entry) => [entry.hexId, entry]));
+  let manuallyIncludedHexMatchCount = 0;
+
+  for (const forcedHexId of manuallyIncludedFlaggedHexIds) {
+    if (flaggedHexById.has(forcedHexId)) {
+      continue;
+    }
+
+    const existingRow = filteredHexRowsById.get(forcedHexId);
+
+    if (existingRow) {
+      const forcedRow = { ...existingRow, forcedInclude: true };
+      flaggedHexes.push(forcedRow);
+      flaggedHexById.set(forcedHexId, forcedRow);
+      manuallyIncludedHexMatchCount += 1;
+      continue;
+    }
+
+    const hexEntry = hexEntryById.get(forcedHexId);
+    const fallbackRow = {
+      hexId: forcedHexId,
+      centerLngLat: hexEntry?.centerLngLat ?? null,
+      totalRiverKm: 0,
+      uncoveredRiverKm: 0,
+      uncoveredPct: 0,
+      renderedRiverKm: 0,
+      segmentCount: 0,
+      uncoveredSegmentCount: 0,
+      severityScore: 0,
+      riverNames: [],
+      forcedInclude: true,
+    };
+    flaggedHexes.push(fallbackRow);
+    flaggedHexById.set(forcedHexId, fallbackRow);
+    manuallyIncludedHexMatchCount += 1;
+  }
+
+  flaggedHexes.sort((left, right) => {
+    if (left.forcedInclude && !right.forcedInclude) {
+      return -1;
+    }
+
+    if (!left.forcedInclude && right.forcedInclude) {
+      return 1;
+    }
+
+    return right.severityScore - left.severityScore;
+  });
   const flaggedByPrefix = sortObjectDescending(
     flaggedHexes.reduce((accumulator, row) => {
       const prefix = row.hexId.split("-").slice(0, 2).join("-");
@@ -848,12 +929,14 @@ async function main() {
       hexesWithEnoughRiver: filteredHexRows.length,
       hexesWithRenderedRiver: gatedHexRows.length,
       manuallyExcludedHexMatchCount,
+      manuallyIncludedHexMatchCount,
       flaggedHexCount: flaggedHexes.length,
       flaggedByPrefix,
     },
     flaggedHexes,
     allHexStats: filteredHexRows.sort((left, right) => right.severityScore - left.severityScore),
     manuallyExcludedHexIds: [...manuallyExcludedHexIds],
+    manuallyIncludedFlaggedHexIds: [...manuallyIncludedFlaggedHexIds],
   };
 
   await mkdir(reportsRoot, { recursive: true });

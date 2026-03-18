@@ -68,6 +68,9 @@ import {
  *   Skips elevation/hillshade processing during the full public layer build (useful for quick vector-only refreshes).
  * - `--workers=<n>`
  *   Bounded concurrency for expensive independent stages (tile fetching and local PBF extraction); defaults to a safe value based on available CPU.
+ * - `--hex-only=<hexId[,hexId...]>`
+ *   Limits vector layer assembly to one or more operational hexes. The selected hex bounds are used as the working extent,
+ *   and final vector outputs are clipped/filtered to the selected hex geometry mask.
  * - `--smoke-test=static`
  *   Fetches only the static GeoBoundaries and Natural Earth sources, mainly to validate cache behavior quickly.
  * - `--smoke-test=settlements`
@@ -99,6 +102,7 @@ const cacheRoot = path.join(repoRoot, "data", "cache", "public-sources");
 const rawRoot = path.join(repoRoot, "data", "raw");
 const processedRoot = path.join(repoRoot, "data", "processed");
 const layersRoot = path.join(processedRoot, "layers");
+const reportsRoot = path.join(repoRoot, "reports");
 // Cached source responses stay reusable for up to one year unless explicitly refreshed.
 const cacheTtlMs = 365 * 24 * 60 * 60 * 1000;
 // Bump this when the cache file wrapper or payload assumptions change to invalidate old entries.
@@ -354,6 +358,18 @@ const skipElevationMode = process.argv.includes("--skip-elevation");
 const requestedWorkerCount = process.argv
   .find((argument) => argument.startsWith("--workers="))
   ?.slice("--workers=".length);
+const hexOnlyIds = process.argv
+  .flatMap((argument) => {
+    if (!argument.startsWith("--hex-only=")) {
+      return [];
+    }
+
+    return argument
+      .slice("--hex-only=".length)
+      .split(",")
+      .map((value) => value.trim())
+      .filter(Boolean);
+  });
 
 function detectCpuParallelism() {
   if (typeof os.availableParallelism === "function") {
@@ -1773,6 +1789,28 @@ function fromClipMultiPolygon(clipGeometry) {
   };
 }
 
+function unionPolygonFeatures(featureCollection) {
+  const multipolygons = (featureCollection?.features ?? [])
+    .map((feature) => toClipMultiPolygon(feature.geometry))
+    .filter(Boolean);
+
+  if (multipolygons.length === 0) {
+    return null;
+  }
+
+  let unioned = multipolygons[0];
+
+  for (let index = 1; index < multipolygons.length; index += 1) {
+    try {
+      unioned = polygonClipping.union(unioned, multipolygons[index]);
+    } catch {
+      // Keep previous union on occasional clipping robustness failures.
+    }
+  }
+
+  return fromClipMultiPolygon(unioned);
+}
+
 function clipPolygonArea(polygon) {
   if (!Array.isArray(polygon) || polygon.length === 0) {
     return 0;
@@ -2343,6 +2381,274 @@ function correctSeaLayerWithAdm0Geometry(seaLayer, adm0Geometry) {
         }
       })
       .filter(Boolean),
+  };
+}
+
+function unionPolygonFeatureCollectionGeometries(featureCollection, additionalGeometries = []) {
+  const polygonGeometries = [
+    ...(featureCollection?.features ?? []).map((feature) => feature?.geometry),
+    ...additionalGeometries,
+  ].filter((geometry) => geometry?.type === "Polygon" || geometry?.type === "MultiPolygon");
+
+  if (polygonGeometries.length === 0) {
+    return null;
+  }
+
+  const multipolygons = polygonGeometries
+    .map((geometry) => toClipMultiPolygon(geometry))
+    .filter(Boolean);
+
+  if (multipolygons.length === 0) {
+    return null;
+  }
+
+  let unioned = multipolygons[0];
+
+  for (let index = 1; index < multipolygons.length; index += 1) {
+    try {
+      unioned = polygonClipping.union(unioned, multipolygons[index]);
+    } catch {
+      // Keep previous union on occasional clipping robustness failures.
+    }
+  }
+
+  return fromClipMultiPolygon(unioned);
+}
+
+function buildTheaterCoastalLandMask(countryBoundaryLayer, ukraineAdm0Geometry) {
+  return unionPolygonFeatureCollectionGeometries(
+    countryBoundaryLayer,
+    ukraineAdm0Geometry ? [ukraineAdm0Geometry] : [],
+  );
+}
+
+function correctSeaLayerWithLandMask(seaLayer, landMaskGeometry) {
+  return correctSeaLayerWithAdm0Geometry(seaLayer, landMaskGeometry);
+}
+
+function subtractPolygonMaskFromPolygonLayer(polygonLayer, maskGeometry, correctionTag = "sea-subtracted") {
+  if (!polygonLayer || !Array.isArray(polygonLayer.features) || !maskGeometry) {
+    return polygonLayer;
+  }
+
+  const maskMultiPolygon = toClipMultiPolygon(maskGeometry);
+
+  if (!maskMultiPolygon) {
+    return polygonLayer;
+  }
+
+  let nextId = 1;
+
+  return {
+    type: "FeatureCollection",
+    features: (polygonLayer.features ?? [])
+      .map((feature) => {
+        const geometry = feature?.geometry;
+        const geometryMultiPolygon = toClipMultiPolygon(geometry);
+
+        if (!geometry || !geometryMultiPolygon) {
+          return null;
+        }
+
+        try {
+          const corrected = polygonClipping.difference(geometryMultiPolygon, maskMultiPolygon);
+          const correctedGeometry = fromClipMultiPolygon(corrected);
+
+          if (!correctedGeometry) {
+            return null;
+          }
+
+          return {
+            type: "Feature",
+            id: nextId++,
+            properties: {
+              ...(feature.properties ?? {}),
+              coastalCorrection: correctionTag,
+            },
+            geometry: correctedGeometry,
+          };
+        } catch {
+          return {
+            type: "Feature",
+            id: nextId++,
+            properties: {
+              ...(feature.properties ?? {}),
+              coastalCorrection: "fallback-original",
+            },
+            geometry,
+          };
+        }
+      })
+      .filter(Boolean),
+  };
+}
+
+function applyHexSpecificSeaOverrides(seaLayer, waterLayer, hexLayer, options = {}) {
+  const {
+    hexIds = [],
+    maxSeaDistanceKm = 0.35,
+    minOverrideAreaDeg2 = 0.000001,
+    minSeaAreaRatio = 0.55,
+    maxSeaAreaRatio = 1.35,
+  } = options;
+
+  if (
+    !seaLayer ||
+    !Array.isArray(seaLayer.features) ||
+    !waterLayer ||
+    !Array.isArray(waterLayer.features) ||
+    !hexLayer ||
+    !Array.isArray(hexLayer.features) ||
+    hexIds.length === 0
+  ) {
+    return seaLayer;
+  }
+
+  let nextId = 1;
+  const outsideHexFeatures = [];
+  const overrideFeatures = [];
+
+  for (const feature of seaLayer.features ?? []) {
+    if (typeof feature?.id === "number") {
+      nextId = Math.max(nextId, feature.id + 1);
+    }
+  }
+
+  for (const seaFeature of seaLayer.features ?? []) {
+    let geometry = seaFeature?.geometry;
+
+    if (!geometry) {
+      continue;
+    }
+
+    for (const hexId of hexIds) {
+      const hexFeature = (hexLayer.features ?? []).find(
+        (feature) => String(feature?.properties?.id ?? "") === hexId,
+      );
+
+      if (!hexFeature?.geometry) {
+        continue;
+      }
+
+      const seaBounds = geometryBounds(geometry);
+      const hexBounds = geometryBounds(hexFeature.geometry);
+
+      if (!bboxIntersects(seaBounds, hexBounds)) {
+        continue;
+      }
+
+      const clippedSeaGeometry = clipGeometryToMask(geometry, hexFeature.geometry);
+
+      if (!clippedSeaGeometry) {
+        continue;
+      }
+
+      const clippedSeaArea = clipMultiPolygonArea(toClipMultiPolygon(clippedSeaGeometry));
+
+      if (clippedSeaArea <= 0) {
+        continue;
+      }
+
+      const coastalCandidateFeatures = (waterLayer.features ?? [])
+        .filter((waterFeature) =>
+          waterFeature.geometry?.type === "Polygon" || waterFeature.geometry?.type === "MultiPolygon",
+        )
+        .map((waterFeature) => {
+          const clippedWaterGeometry = clipGeometryToMask(waterFeature.geometry, hexFeature.geometry);
+
+          if (!clippedWaterGeometry) {
+            return null;
+          }
+
+          const point = geometryRepresentativePoint(clippedWaterGeometry);
+          if (!point) {
+            return null;
+          }
+
+          const distanceKm = pointDistanceToGeometryKm(point, clippedSeaGeometry);
+          if (!Number.isFinite(distanceKm) || distanceKm > maxSeaDistanceKm) {
+            return null;
+          }
+
+          return {
+            type: "Feature",
+            properties: waterFeature.properties ?? {},
+            geometry: clippedWaterGeometry,
+          };
+        })
+        .filter(Boolean);
+
+      const overrideGeometry = unionPolygonFeatureCollectionGeometries({
+        type: "FeatureCollection",
+        features: coastalCandidateFeatures,
+      });
+      const overrideArea = clipMultiPolygonArea(toClipMultiPolygon(overrideGeometry));
+      const areaRatio = clippedSeaArea > 0 ? overrideArea / clippedSeaArea : 0;
+
+      if (
+        !overrideGeometry ||
+        overrideArea < minOverrideAreaDeg2 ||
+        areaRatio < minSeaAreaRatio ||
+        areaRatio > maxSeaAreaRatio
+      ) {
+        console.log(
+          `Sea override skipped for ${hexId}: seaArea=${clippedSeaArea.toFixed(6)}, ` +
+          `overrideArea=${overrideArea.toFixed(6)}, ratio=${areaRatio.toFixed(3)}, ` +
+          `candidates=${coastalCandidateFeatures.length}.`,
+        );
+        continue;
+      }
+
+      const outsideGeometry = subtractPolygonMaskFromPolygonLayer(
+        {
+          type: "FeatureCollection",
+          features: [{
+            type: "Feature",
+            id: seaFeature.id ?? null,
+            properties: seaFeature.properties ?? {},
+            geometry,
+          }],
+        },
+        hexFeature.geometry,
+        "hex-override-exclusion",
+      ).features[0]?.geometry ?? null;
+
+      if (outsideGeometry) {
+        geometry = outsideGeometry;
+      } else {
+        geometry = null;
+      }
+
+      overrideFeatures.push({
+        type: "Feature",
+        id: nextId++,
+        properties: {
+          ...(seaFeature.properties ?? {}),
+          coastlineCorrection: "hex-specific-osm-sea-override",
+          hexId,
+        },
+        geometry: overrideGeometry,
+      });
+      console.log(
+        `Sea override applied for ${hexId}: seaArea=${clippedSeaArea.toFixed(6)}, ` +
+        `overrideArea=${overrideArea.toFixed(6)}, ratio=${areaRatio.toFixed(3)}, ` +
+        `candidates=${coastalCandidateFeatures.length}.`,
+      );
+      break;
+    }
+
+    if (geometry) {
+      outsideHexFeatures.push({
+        ...seaFeature,
+        id: seaFeature.id ?? nextId++,
+        geometry,
+      });
+    }
+  }
+
+  return {
+    type: "FeatureCollection",
+    features: [...outsideHexFeatures, ...overrideFeatures],
   };
 }
 
@@ -3074,7 +3380,8 @@ function addOverpassRelationFeatures(featuresById, elements, propertiesBuilder, 
 
 // Fetch a tiled polygon layer from Overpass and merge deduplicated way features across tiles.
 async function fetchTiledAreaLayer(layerId, selectors, propertiesBuilder, options) {
-  const tiles = buildBboxGrid(theaterBbox, 3, 3);
+  const bbox = options?.bbox ?? theaterBbox;
+  const tiles = buildBboxGrid(bbox, 3, 3);
   const featuresById = new Map();
   const layerConcurrency = Math.min(tileFetchConcurrency, tiles.length);
   const layerStartedAt = Date.now();
@@ -3087,10 +3394,11 @@ async function fetchTiledAreaLayer(layerId, selectors, propertiesBuilder, option
     tiles,
     layerConcurrency,
     async (tile, tileIndex) => {
+      const bboxKey = `${tile.west.toFixed(3)}_${tile.south.toFixed(3)}_${tile.east.toFixed(3)}_${tile.north.toFixed(3)}`;
       const response = await fetchOverpassJsonWithFallback(
         [sources.terrainOverpassApi, sources.overpassFallbackApi, sources.overpassApi],
         overpassAreaQuery(selectors, tile),
-        `overpass/${layerId}/tile-${tileIndex}`,
+        `overpass/${layerId}/tile-${tileIndex}-${bboxKey}`,
       );
       completedTileCount += 1;
       console.log(
@@ -3258,6 +3566,233 @@ function filterFeatureCollectionToBbox(featureCollection, bbox) {
 
       return bboxIntersects(geometryBounds(feature.geometry), bbox);
     }),
+  };
+}
+
+function bboxToPolygonGeometry(bbox) {
+  return {
+    type: "Polygon",
+    coordinates: [[
+      [bbox.west, bbox.south],
+      [bbox.east, bbox.south],
+      [bbox.east, bbox.north],
+      [bbox.west, bbox.north],
+      [bbox.west, bbox.south],
+    ]],
+  };
+}
+
+function clipPolygonFeatureCollectionToBbox(featureCollection, bbox) {
+  const bboxMaskGeometry = bboxToPolygonGeometry(bbox);
+
+  return {
+    type: "FeatureCollection",
+    features: (featureCollection.features ?? [])
+      .map((feature, index) => {
+        const geometry = feature?.geometry;
+
+        if (!geometry) {
+          return null;
+        }
+
+        if (geometry.type !== "Polygon" && geometry.type !== "MultiPolygon") {
+          return bboxIntersects(geometryBounds(geometry), bbox) ? feature : null;
+        }
+
+        const clippedGeometry = clipGeometryToMask(geometry, bboxMaskGeometry);
+
+        if (!clippedGeometry) {
+          return null;
+        }
+
+        return {
+          ...feature,
+          id: feature.id ?? index + 1,
+          geometry: clippedGeometry,
+        };
+      })
+      .filter(Boolean),
+  };
+}
+
+function lineIntersectsMaskGeometry(geometry, maskGeometry) {
+  for (const [segmentStart, segmentEnd] of extractLineSegments(geometry)) {
+    const midpoint = segmentMidpoint(segmentStart, segmentEnd);
+
+    if (pointInPolygonGeometry(midpoint, maskGeometry)) {
+      return true;
+    }
+  }
+
+  return false;
+}
+
+function estimateMaskBoundaryCrossing(segmentStart, segmentEnd, maskGeometry, iterations = 24) {
+  let low = segmentStart;
+  let high = segmentEnd;
+  let lowInside = pointInPolygonGeometry(low, maskGeometry);
+  let highInside = pointInPolygonGeometry(high, maskGeometry);
+
+  if (lowInside === highInside) {
+    return segmentMidpoint(segmentStart, segmentEnd);
+  }
+
+  for (let index = 0; index < iterations; index += 1) {
+    const mid = segmentMidpoint(low, high);
+    const midInside = pointInPolygonGeometry(mid, maskGeometry);
+
+    if (midInside === lowInside) {
+      low = mid;
+      lowInside = midInside;
+    } else {
+      high = mid;
+      highInside = midInside;
+    }
+  }
+
+  return segmentMidpoint(low, high);
+}
+
+function splitLineCoordinatesByMask(lineCoordinates, maskGeometry) {
+  if (!Array.isArray(lineCoordinates) || lineCoordinates.length < 2 || !maskGeometry) {
+    return [];
+  }
+
+  const segments = [];
+  let currentInside = pointInPolygonGeometry(lineCoordinates[0], maskGeometry);
+  let currentCoordinates = [lineCoordinates[0]];
+
+  for (let index = 1; index < lineCoordinates.length; index += 1) {
+    const segmentStart = lineCoordinates[index - 1];
+    const segmentEnd = lineCoordinates[index];
+    const endInside = pointInPolygonGeometry(segmentEnd, maskGeometry);
+
+    if (endInside === currentInside) {
+      currentCoordinates.push(segmentEnd);
+      continue;
+    }
+
+    const crossingPoint = estimateMaskBoundaryCrossing(segmentStart, segmentEnd, maskGeometry);
+    currentCoordinates.push(crossingPoint);
+
+    if (currentCoordinates.length >= 2) {
+      segments.push({
+        insideMask: currentInside,
+        coordinates: currentCoordinates,
+      });
+    }
+
+    currentInside = endInside;
+    currentCoordinates = [crossingPoint, segmentEnd];
+  }
+
+  if (currentCoordinates.length >= 2) {
+    segments.push({
+      insideMask: currentInside,
+      coordinates: currentCoordinates,
+    });
+  }
+
+  return segments;
+}
+
+function splitLineFeatureCollectionByMask(featureCollection, maskGeometry, options = {}) {
+  if (!maskGeometry) {
+    return featureCollection;
+  }
+
+  const {
+    segmentInsideProperty = "insideUkraine",
+  } = options;
+  const splitFeatures = [];
+  let nextId = 1;
+
+  for (const feature of featureCollection.features ?? []) {
+    const geometry = feature?.geometry;
+
+    if (!geometry) {
+      continue;
+    }
+
+    const lineStrings = geometry.type === "LineString"
+      ? [geometry.coordinates]
+      : geometry.type === "MultiLineString"
+        ? geometry.coordinates
+        : null;
+
+    if (!lineStrings) {
+      splitFeatures.push(feature);
+      continue;
+    }
+
+    for (const lineCoordinates of lineStrings) {
+      for (const segment of splitLineCoordinatesByMask(lineCoordinates, maskGeometry)) {
+        splitFeatures.push({
+          type: "Feature",
+          id: nextId,
+          properties: {
+            ...(feature.properties ?? {}),
+            [segmentInsideProperty]: segment.insideMask,
+          },
+          geometry: {
+            type: "LineString",
+            coordinates: segment.coordinates,
+          },
+        });
+        nextId += 1;
+      }
+    }
+  }
+
+  return {
+    type: "FeatureCollection",
+    features: splitFeatures,
+  };
+}
+
+function filterFeatureCollectionToMask(featureCollection, maskGeometry) {
+  if (!maskGeometry) {
+    return featureCollection;
+  }
+
+  return {
+    type: "FeatureCollection",
+    features: (featureCollection.features ?? [])
+      .map((feature) => {
+        const geometry = feature?.geometry;
+
+        if (!geometry) {
+          return null;
+        }
+
+        if (geometry.type === "Polygon" || geometry.type === "MultiPolygon") {
+          const clippedGeometry = clipGeometryToMask(geometry, maskGeometry);
+
+          if (!clippedGeometry) {
+            return null;
+          }
+
+          return {
+            ...feature,
+            geometry: clippedGeometry,
+          };
+        }
+
+        if (geometry.type === "Point") {
+          return pointInPolygonGeometry(geometry.coordinates, maskGeometry)
+            ? feature
+            : null;
+        }
+
+        if (geometry.type === "LineString" || geometry.type === "MultiLineString") {
+          return lineIntersectsMaskGeometry(geometry, maskGeometry)
+            ? feature
+            : null;
+        }
+
+        return feature;
+      })
+      .filter(Boolean),
   };
 }
 
@@ -3957,7 +4492,7 @@ async function buildFocusedHexRiverReconstructionLayer(
   riverLineLayer,
   elevationRasterPath,
 ) {
-  const targetHexIds = ["HX-W18-N50", "HX-W17-N50"];
+  const targetHexIds = ["HX-W18-N50"];
   const hexPath = path.join(processedRoot, "hex-cells.geojson");
 
   if (!existsSync(hexPath) || !riverLineLayer) {
@@ -4266,6 +4801,327 @@ async function buildFocusedHexRiverReconstructionLayer(
   };
 }
 
+async function buildTargetedHexRiverSystemReconstructionLayer(waterLayer, riverLineLayer) {
+  const reportPath = path.join(reportsRoot, "river-water-gap-checklist.json");
+  const useRiverNameConstrainedMode = true;
+  const fallbackHexIds = [
+    "HX-W20-N50",
+    "HX-W19-N50",
+    "HX-W18-N50",
+    "HX-W18-N51",
+  ];
+  let targetHexIds = fallbackHexIds;
+  let report = null;
+  const reportHexRowsById = new Map();
+  try {
+    if (existsSync(reportPath)) {
+      const reportRaw = await readFile(reportPath, "utf8");
+      report = JSON.parse(reportRaw);
+      const flaggedHexIds = [...new Set(
+        (report?.flaggedHexes ?? [])
+          .map((entry) => (typeof entry?.hexId === "string" ? entry.hexId : null))
+          .filter((value) => Boolean(value)),
+      )];
+      for (const row of [...(report?.flaggedHexes ?? []), ...(report?.allHexStats ?? [])]) {
+        if (typeof row?.hexId === "string" && !reportHexRowsById.has(row.hexId)) {
+          reportHexRowsById.set(row.hexId, row);
+        }
+      }
+
+      if (flaggedHexIds.length > 0) {
+        targetHexIds = flaggedHexIds;
+      }
+    }
+  } catch (error) {
+    console.warn(`Targeted river reconstruction: failed to read flagged hex report: ${error.message}`);
+  }
+  // User-reviewed targeted-scope overrides for current river-system iteration.
+  const excludedTargetHexIds = new Set([
+    "HX-W9-N36",
+    "HX-W2-N34",
+    "HX-W1-N33",
+    "HX-E3-N41",
+  ]);
+  targetHexIds = targetHexIds.filter((hexId) => !excludedTargetHexIds.has(hexId));
+  const forcedTargetHexIds = [
+    "HX-W18-N51",
+    "HX-W20-N50",
+    "HX-E53-N53",
+  ];
+  for (const forcedHexId of forcedTargetHexIds) {
+    if (!targetHexIds.includes(forcedHexId)) {
+      targetHexIds.push(forcedHexId);
+    }
+  }
+  const hexPath = path.join(processedRoot, "hex-cells.geojson");
+
+  if (!existsSync(hexPath) || !riverLineLayer) {
+    return emptyFeatureCollection();
+  }
+
+  const hexCells = await readLocalGeoJson(hexPath, "hex-cells");
+  const targetHexFeatures = (hexCells.features ?? []).filter(
+    (feature) => targetHexIds.includes(String(feature?.properties?.id ?? "")),
+  );
+
+  if (targetHexFeatures.length === 0) {
+    console.warn(
+      `Targeted river reconstruction skipped: target hexes not found (${targetHexIds.join(", ")}).`,
+    );
+    return emptyFeatureCollection();
+  }
+
+  const foundHexIdSet = new Set(
+    targetHexFeatures.map((feature) => String(feature?.properties?.id ?? "")),
+  );
+  const missingHexIds = targetHexIds.filter((hexId) => !foundHexIdSet.has(hexId));
+
+  if (missingHexIds.length > 0) {
+    console.warn(`Targeted river reconstruction missing hex IDs: ${missingHexIds.join(", ")}`);
+  }
+  const targetHexFeatureById = new Map(
+    targetHexFeatures.map((feature) => [String(feature?.properties?.id ?? ""), feature]),
+  );
+  const forcedAllowedRiverNamesByHexId = new Map([
+    ["HX-W18-N51", ["Дністер", "Стривігор"]],
+    ["HX-W17-N50", ["Дністер"]],
+    ["HX-E53-N53", ["Сіверський Донець"]],
+  ]);
+  const allowedRiverNameKeysByHexId = new Map();
+  const allowedRiverNamesByHexId = new Map();
+  const hexIdsWithInferredRiverNames = [];
+
+  function extractRiverNamesFromReportRow(row) {
+    return (row?.riverNames ?? [])
+      .map((entry) => {
+        if (typeof entry === "string") {
+          return entry.trim();
+        }
+
+        if (typeof entry?.name === "string") {
+          return entry.name.trim();
+        }
+
+        return "";
+      })
+      .filter((value) => value.length > 0);
+  }
+
+  function hexCenterPoint(feature) {
+    const center = feature?.properties?.centerLngLat ?? feature?.properties?.centroid ?? null;
+    return Array.isArray(center) && center.length === 2 ? center : null;
+  }
+
+  for (const hexId of targetHexIds) {
+    const forcedNames = forcedAllowedRiverNamesByHexId.get(hexId) ?? [];
+    if (forcedNames.length > 0) {
+      allowedRiverNamesByHexId.set(hexId, forcedNames);
+      allowedRiverNameKeysByHexId.set(
+        hexId,
+        new Set(forcedNames.map((name) => normalizeRiverName(name)).filter((name) => name.length > 0)),
+      );
+      continue;
+    }
+
+    const directNames = extractRiverNamesFromReportRow(reportHexRowsById.get(hexId));
+    if (directNames.length > 0) {
+      allowedRiverNamesByHexId.set(hexId, directNames);
+      allowedRiverNameKeysByHexId.set(
+        hexId,
+        new Set(directNames.map((name) => normalizeRiverName(name)).filter((name) => name.length > 0)),
+      );
+      continue;
+    }
+
+    const thisHexFeature = targetHexFeatureById.get(hexId);
+    const thisHexCenter = hexCenterPoint(thisHexFeature);
+
+    if (!thisHexCenter) {
+      continue;
+    }
+
+    let bestNeighborHexId = null;
+    let bestDistanceKm = Number.POSITIVE_INFINITY;
+
+    for (const candidateHexId of targetHexIds) {
+      if (candidateHexId === hexId) {
+        continue;
+      }
+
+      const candidateNames = extractRiverNamesFromReportRow(reportHexRowsById.get(candidateHexId));
+      if (candidateNames.length === 0) {
+        continue;
+      }
+
+      const candidateCenter = hexCenterPoint(targetHexFeatureById.get(candidateHexId));
+      if (!candidateCenter) {
+        continue;
+      }
+
+      const distanceKm = pointDistanceKm(thisHexCenter, candidateCenter);
+      if (distanceKm < bestDistanceKm) {
+        bestDistanceKm = distanceKm;
+        bestNeighborHexId = candidateHexId;
+      }
+    }
+
+    if (bestNeighborHexId) {
+      const inferredNames = extractRiverNamesFromReportRow(reportHexRowsById.get(bestNeighborHexId));
+      if (inferredNames.length > 0) {
+        allowedRiverNamesByHexId.set(hexId, inferredNames);
+        allowedRiverNameKeysByHexId.set(
+          hexId,
+          new Set(inferredNames.map((name) => normalizeRiverName(name)).filter((name) => name.length > 0)),
+        );
+        hexIdsWithInferredRiverNames.push(`${hexId}<-${bestNeighborHexId}`);
+      }
+    }
+  }
+
+  const waterEntries = (waterLayer.features ?? [])
+    .filter(
+      (feature) =>
+        feature.geometry?.type === "Polygon" || feature.geometry?.type === "MultiPolygon",
+    )
+    .map((feature) => ({
+      feature,
+      bounds: geometryBounds(feature.geometry),
+    }));
+
+  if (waterEntries.length === 0) {
+    return emptyFeatureCollection();
+  }
+
+  const waterIndex = buildBoundsSpatialIndex(waterEntries);
+  const corridorFeatures = [];
+  const riverHalfWidthKm = 0.085;
+  const forcedDetailRiverHalfWidthKm = 0.11;
+  const forcedDetailHexIds = new Set(["HX-W18-N51"]);
+  const waterCoveredThresholdKm = 0.03;
+  const waterQueryRadiusKm = 0.35;
+  const minSegmentLengthKm = 0.05;
+  const maxCorridorFeatures = 6000;
+  let scannedSegments = 0;
+  let inTargetSegments = 0;
+  let nextId = 1;
+  const appendedByHexId = new Map();
+  const includedRiverNames = new Set();
+
+  for (const riverFeature of riverLineLayer.features ?? []) {
+    const waterway = String(riverFeature?.properties?.waterway ?? "").toLowerCase();
+    const riverNameRaw = typeof riverFeature?.properties?.name === "string"
+      ? riverFeature.properties.name.trim()
+      : "";
+    const riverName = riverNameRaw.length > 0 ? riverNameRaw : null;
+    const riverNameKey = normalizeRiverName(riverNameRaw);
+
+    if (waterway !== "river" || !riverName) {
+      continue;
+    }
+
+    for (const [segmentStart, segmentEnd] of extractLineSegments(riverFeature.geometry)) {
+      const segmentLengthKm = pointDistanceKm(segmentStart, segmentEnd);
+
+      if (segmentLengthKm < minSegmentLengthKm) {
+        continue;
+      }
+
+      scannedSegments += 1;
+      const midpoint = segmentMidpoint(segmentStart, segmentEnd);
+      const containingHex = targetHexFeatures.find((hexFeature) =>
+        pointInPolygonGeometry(midpoint, hexFeature.geometry),
+      );
+
+      if (!containingHex) {
+        continue;
+      }
+
+      const containingHexId = String(containingHex?.properties?.id ?? "");
+      const isForcedDetailHex = forcedDetailHexIds.has(containingHexId);
+      if (useRiverNameConstrainedMode) {
+        const allowedRiverNameKeys = allowedRiverNameKeysByHexId.get(containingHexId);
+
+        // Fallback (old broad behavior): skip this check and include all named rivers in target hexes.
+        if (allowedRiverNameKeys && allowedRiverNameKeys.size > 0 && !allowedRiverNameKeys.has(riverNameKey)) {
+          continue;
+        }
+      }
+
+      inTargetSegments += 1;
+      const nearbyWaterEntries = queryBoundsSpatialIndex(
+        waterIndex,
+        bboxAroundPointKm(midpoint, waterQueryRadiusKm),
+      );
+      const midpointDistanceKm = minDistanceToWaterEntriesNearPointKm(
+        midpoint,
+        nearbyWaterEntries,
+        waterQueryRadiusKm,
+      );
+      const coveredByWater = Number.isFinite(midpointDistanceKm) &&
+        midpointDistanceKm <= waterCoveredThresholdKm;
+
+      if (coveredByWater && !isForcedDetailHex) {
+        continue;
+      }
+
+      const bufferHalfWidthKm = isForcedDetailHex
+        ? forcedDetailRiverHalfWidthKm
+        : riverHalfWidthKm;
+      const geometry = bufferLineSegmentToPolygon(
+        segmentStart,
+        segmentEnd,
+        bufferHalfWidthKm,
+      );
+
+      if (!geometry) {
+        continue;
+      }
+
+      corridorFeatures.push({
+        type: "Feature",
+        id: nextId,
+        properties: {
+          id: `river-corridor/pilot/${nextId}`,
+          type: "river-corridor",
+          source: "pilot-hex-reconstruction",
+          pilotHexId: containingHexId,
+          riverName,
+          forcedDetail: isForcedDetailHex,
+        },
+        geometry,
+      });
+      const hexId = containingHexId;
+      appendedByHexId.set(hexId, (appendedByHexId.get(hexId) ?? 0) + 1);
+      includedRiverNames.add(riverName);
+      nextId += 1;
+
+      if (corridorFeatures.length >= maxCorridorFeatures) {
+        console.warn(
+          `Targeted river reconstruction reached feature cap; truncating output.`,
+        );
+        return {
+          type: "FeatureCollection",
+          features: corridorFeatures,
+        };
+      }
+    }
+  }
+
+  console.log(
+    `Targeted river reconstruction for ${targetHexIds.join(", ")}: scanned=${scannedSegments}, ` +
+    `inTarget=${inTargetSegments}, appended=${corridorFeatures.length}, ` +
+    `mode=${useRiverNameConstrainedMode ? "river-name-constrained" : "broad"}, ` +
+    `riverNames=${[...includedRiverNames].slice(0, 8).join(", ") || "n/a"}, ` +
+    `hexCounts=${JSON.stringify(Object.fromEntries(appendedByHexId.entries()))}, ` +
+    `inferredNameScopes=${hexIdsWithInferredRiverNames.join(", ") || "none"}.`,
+  );
+
+  return {
+    type: "FeatureCollection",
+    features: corridorFeatures,
+  };
+}
+
 function mergeWaterBodiesWithCoverageFallback(primary, fallback, primaryCoverageGeometry) {
   if (!primaryCoverageGeometry) {
     return primary;
@@ -4308,11 +5164,208 @@ function mergeWaterBodiesWithCoverageFallback(primary, fallback, primaryCoverage
   };
 }
 
+async function appendHexSpecificOsmWaterFallback(
+  currentWaterLayer,
+  osmWaterBodiesFromPbf,
+  osmMajorRiverLinesFromPbf,
+  options = {},
+) {
+  const {
+    hexIds = [],
+    riverNames = [],
+    maxDistanceKm = 0.35,
+  } = options;
+
+  if (!osmWaterBodiesFromPbf || !osmMajorRiverLinesFromPbf || hexIds.length === 0 || riverNames.length === 0) {
+    return currentWaterLayer;
+  }
+
+  const hexPath = path.join(processedRoot, "hex-cells.geojson");
+
+  if (!existsSync(hexPath)) {
+    return currentWaterLayer;
+  }
+
+  const hexCells = await readLocalGeoJson(hexPath, "hex-cells");
+  const targetHexFeatures = (hexCells.features ?? []).filter((feature) =>
+    hexIds.includes(String(feature?.properties?.id ?? "")),
+  );
+
+  if (targetHexFeatures.length === 0) {
+    return currentWaterLayer;
+  }
+
+  const nameKeySet = new Set(
+    riverNames
+      .map((name) => normalizeRiverName(name))
+      .filter((value) => value.length > 0),
+  );
+  const riverSegments = [];
+
+  for (const feature of osmMajorRiverLinesFromPbf.features ?? []) {
+    const waterway = String(feature?.properties?.waterway ?? "").toLowerCase();
+    const nameKey = normalizeRiverName(String(feature?.properties?.name ?? ""));
+
+    if (waterway !== "river" || !nameKeySet.has(nameKey)) {
+      continue;
+    }
+
+    for (const [segmentStart, segmentEnd] of extractLineSegments(feature.geometry)) {
+      const midpoint = segmentMidpoint(segmentStart, segmentEnd);
+      const inAnyTargetHex = targetHexFeatures.some((hexFeature) =>
+        pointInPolygonGeometry(midpoint, hexFeature.geometry),
+      );
+
+      if (!inAnyTargetHex) {
+        continue;
+      }
+
+      riverSegments.push([segmentStart, segmentEnd]);
+    }
+  }
+
+  if (riverSegments.length === 0) {
+    return currentWaterLayer;
+  }
+
+  function nearTargetRiver(geometry) {
+    const representativePoint = representativePointForGeometry(geometry);
+
+    if (!representativePoint) {
+      return false;
+    }
+
+    for (const [segmentStart, segmentEnd] of riverSegments) {
+      if (pointToSegmentDistanceKm(representativePoint, segmentStart, segmentEnd) <= maxDistanceKm) {
+        return true;
+      }
+    }
+
+    return false;
+  }
+
+  const appendedFeatures = [];
+
+  for (const sourceFeature of osmWaterBodiesFromPbf.features ?? []) {
+    const sourceGeometry = sourceFeature?.geometry;
+
+    if (!sourceGeometry || (sourceGeometry.type !== "Polygon" && sourceGeometry.type !== "MultiPolygon")) {
+      continue;
+    }
+
+    for (const hexFeature of targetHexFeatures) {
+      const clippedGeometry = clipGeometryToMask(sourceGeometry, hexFeature.geometry);
+
+      if (!clippedGeometry) {
+        continue;
+      }
+
+      if (!nearTargetRiver(clippedGeometry)) {
+        continue;
+      }
+
+      appendedFeatures.push({
+        type: "Feature",
+        properties: {
+          ...(sourceFeature.properties ?? {}),
+          id: `${sourceFeature.properties?.id ?? "osm-water"}/hex-fallback/${appendedFeatures.length + 1}`,
+          source: "hex-specific-osm-water-fallback",
+          fallbackHexId: String(hexFeature?.properties?.id ?? ""),
+        },
+        geometry: clippedGeometry,
+      });
+    }
+  }
+
+  if (appendedFeatures.length === 0) {
+    return currentWaterLayer;
+  }
+
+  console.log(
+    `Hex-specific OSM water fallback appended ${appendedFeatures.length} features ` +
+    `for hexes ${hexIds.join(", ")} near rivers ${riverNames.join(", ")}.`,
+  );
+
+  return {
+    type: "FeatureCollection",
+    features: [
+      ...(currentWaterLayer.features ?? []),
+      ...appendedFeatures,
+    ],
+  };
+}
+
 // Write processed GeoJSON outputs into the application-facing data directory.
 async function writeGeoJson(relativePath, data) {
   const targetPath = path.join(processedRoot, relativePath);
   await mkdir(path.dirname(targetPath), { recursive: true });
   await writeFile(targetPath, JSON.stringify(data, null, 2), "utf8");
+}
+
+async function resolveHexOnlyScope(hexIds) {
+  const requestedHexIds = [...new Set((hexIds ?? []).map((value) => String(value).trim()).filter(Boolean))];
+
+  if (requestedHexIds.length === 0) {
+    return null;
+  }
+
+  const hexPath = path.join(processedRoot, "hex-cells.geojson");
+
+  if (!existsSync(hexPath)) {
+    throw new Error(`--hex-only requires ${hexPath} to exist.`);
+  }
+
+  const hexCells = await readLocalGeoJson(hexPath, "hex-cells");
+  const selectedFeatures = (hexCells.features ?? []).filter((feature) =>
+    requestedHexIds.includes(String(feature?.properties?.id ?? "")),
+  );
+
+  const foundHexIds = selectedFeatures.map((feature) => String(feature?.properties?.id ?? ""));
+  const missingHexIds = requestedHexIds.filter((hexId) => !foundHexIds.includes(hexId));
+
+  if (selectedFeatures.length === 0) {
+    throw new Error(`--hex-only did not match any hex IDs: ${requestedHexIds.join(", ")}`);
+  }
+
+  if (missingHexIds.length > 0) {
+    console.warn(`--hex-only missing IDs: ${missingHexIds.join(", ")}`);
+  }
+
+  const maskGeometry = unionPolygonFeatures({
+    type: "FeatureCollection",
+    features: selectedFeatures,
+  });
+
+  if (!maskGeometry) {
+    throw new Error(`--hex-only could not build a mask geometry from: ${requestedHexIds.join(", ")}`);
+  }
+
+  const bounds = selectedFeatures.reduce(
+    (accumulator, feature) => {
+      const featureBounds = geometryBounds(feature.geometry);
+
+      return {
+        west: Math.min(accumulator.west, featureBounds.west),
+        south: Math.min(accumulator.south, featureBounds.south),
+        east: Math.max(accumulator.east, featureBounds.east),
+        north: Math.max(accumulator.north, featureBounds.north),
+      };
+    },
+    {
+      west: Number.POSITIVE_INFINITY,
+      south: Number.POSITIVE_INFINITY,
+      east: Number.NEGATIVE_INFINITY,
+      north: Number.NEGATIVE_INFINITY,
+    },
+  );
+
+  return {
+    requestedHexIds,
+    foundHexIds,
+    missingHexIds,
+    bounds,
+    maskGeometry,
+  };
 }
 
 // Resolve the actual GeoBoundaries GeoJSON download URL from the metadata endpoint.
@@ -4524,7 +5577,7 @@ function normalizeExtractedMajorRiverLines(featureCollection) {
   };
 }
 
-async function extractMajorRiverLinesFromLocalOsmPbf() {
+async function extractMajorRiverLinesFromLocalOsmPbf(extractBbox = theaterBbox) {
   const cacheKey = "osm/rivers/pbf-lines";
   const extractSchemaVersion = 1;
   const pbfPath = resolveLocalOsmPbfPath();
@@ -4578,10 +5631,10 @@ async function extractMajorRiverLinesFromLocalOsmPbf() {
       pbfPath,
       "lines",
       "-spat",
-      `${theaterBbox.west}`,
-      `${theaterBbox.south}`,
-      `${theaterBbox.east}`,
-      `${theaterBbox.north}`,
+      `${extractBbox.west}`,
+      `${extractBbox.south}`,
+      `${extractBbox.east}`,
+      `${extractBbox.north}`,
       "-where",
       whereClause,
       "-t_srs",
@@ -4611,7 +5664,7 @@ async function extractMajorRiverLinesFromLocalOsmPbf() {
   }
 }
 
-async function extractWaterBodiesFromLocalOsmPbf() {
+async function extractWaterBodiesFromLocalOsmPbf(extractBbox = theaterBbox) {
   const cacheKey = "osm/water-bodies/pbf-extract";
   const extractSchemaVersion = 3;
   const pbfPath = resolveLocalOsmPbfPath();
@@ -4686,10 +5739,10 @@ async function extractWaterBodiesFromLocalOsmPbf() {
       "-nlt",
       "MULTIPOLYGON",
       "-spat",
-      `${theaterBbox.west}`,
-      `${theaterBbox.south}`,
-      `${theaterBbox.east}`,
-      `${theaterBbox.north}`,
+      `${extractBbox.west}`,
+      `${extractBbox.south}`,
+      `${extractBbox.east}`,
+      `${extractBbox.north}`,
       "-where",
       whereClause,
       "-t_srs",
@@ -4743,9 +5796,18 @@ async function printCacheReport() {
 async function main() {
   await mkdir(cacheRoot, { recursive: true });
   await mkdir(layersRoot, { recursive: true });
+  const hexOnlyScope = await resolveHexOnlyScope(hexOnlyIds);
+  const buildExtentBbox = hexOnlyScope?.bounds ?? theaterBbox;
   console.log(
     `Using worker concurrency ${workerConcurrency} (tile fetch concurrency ${tileFetchConcurrency}).`,
   );
+  if (hexOnlyScope) {
+    console.log(
+      `Applying --hex-only scope to ${hexOnlyScope.foundHexIds.join(", ")} ` +
+      `(bbox ${buildExtentBbox.west.toFixed(4)},${buildExtentBbox.south.toFixed(4)} ` +
+      `to ${buildExtentBbox.east.toFixed(4)},${buildExtentBbox.north.toFixed(4)}).`,
+    );
+  }
 
   if (cacheReportMode) {
     await printCacheReport();
@@ -4782,7 +5844,7 @@ async function main() {
   }
 
   if (smokeTestMode === "settlements") {
-    await fetchOverpassJson(overpassPlaceQuery(theaterBbox));
+    await fetchOverpassJson(overpassPlaceQuery(buildExtentBbox));
     console.log("Smoke test completed for Overpass settlements.");
     return;
   }
@@ -4797,6 +5859,7 @@ async function main() {
       {
         minApproxAreaKm2: 2,
         maxVertices: 32,
+        bbox: buildExtentBbox,
       },
     );
     console.log("Smoke test completed for Overpass wetlands.");
@@ -4813,6 +5876,7 @@ async function main() {
       {
         minApproxAreaKm2: 8,
         maxVertices: 36,
+        bbox: buildExtentBbox,
       },
     );
     console.log("Smoke test completed for Overpass forests.");
@@ -4829,6 +5893,7 @@ async function main() {
       {
         minApproxAreaKm2: 0.05,
         maxVertices: 160,
+        bbox: buildExtentBbox,
       },
     );
     console.log("Smoke test completed for Overpass water-body polygons.");
@@ -4868,14 +5933,14 @@ async function main() {
 
   const pbfExtractionStartedAt = Date.now();
   console.log("Starting local OSM PBF extraction jobs in parallel...");
-  const pbfWaterPromise = extractWaterBodiesFromLocalOsmPbf()
+  const pbfWaterPromise = extractWaterBodiesFromLocalOsmPbf(buildExtentBbox)
     .then((value) => {
       console.log(
         `Local PBF water-body job finished (${formatElapsedMs(Date.now() - pbfExtractionStartedAt)}).`,
       );
       return value;
     });
-  const pbfRiversPromise = extractMajorRiverLinesFromLocalOsmPbf()
+  const pbfRiversPromise = extractMajorRiverLinesFromLocalOsmPbf(buildExtentBbox)
     .then((value) => {
       console.log(
         `Local PBF major-river job finished (${formatElapsedMs(Date.now() - pbfExtractionStartedAt)}).`,
@@ -4891,7 +5956,7 @@ async function main() {
     );
     return result;
   });
-  const settlements = await fetchOverpassJson(overpassPlaceQuery(theaterBbox));
+  const settlements = await fetchOverpassJson(overpassPlaceQuery(buildExtentBbox));
   const forests = await fetchTiledAreaLayer(
     "forests",
     ['["landuse"="forest"]', '["natural"="wood"]'],
@@ -4901,6 +5966,7 @@ async function main() {
     {
       minApproxAreaKm2: 0.4,
       maxVertices: 120,
+      bbox: buildExtentBbox,
     },
   );
   const wetlands = await fetchTiledAreaLayer(
@@ -4912,6 +5978,7 @@ async function main() {
     {
       minApproxAreaKm2: 2,
       maxVertices: 32,
+      bbox: buildExtentBbox,
     },
   );
   const osmWaterBodiesPrototype = await fetchTiledAreaLayer(
@@ -4923,6 +5990,7 @@ async function main() {
     {
       minApproxAreaKm2: 0.05,
       maxVertices: 120,
+      bbox: buildExtentBbox,
     },
   );
   const [osmWaterBodiesFromPbf, osmMajorRiverLinesFromPbf] = await pbfExtractionPromise;
@@ -4950,46 +6018,55 @@ async function main() {
 
   const postElevationVectorPrepStartedAt = Date.now();
   console.log("Starting post-elevation vector assembly...");
+  const clippedRivers = filterFeatureCollectionToBbox(rivers, buildExtentBbox);
   const filteredLayers = {
     "layers/theater-boundary.geojson": theaterBoundary,
     "layers/oblast-boundaries.geojson": oblastBoundaries,
     "layers/oblast-label-points.geojson": emptyFeatureCollection(),
     "layers/oblast-subdivisions.geojson": emptyFeatureCollection(),
     "layers/oblast-subdivision-label-points.geojson": emptyFeatureCollection(),
-    "layers/rivers.geojson": filterFeatureCollectionToBbox(rivers, theaterBbox),
+    "layers/rivers.geojson": clippedRivers,
     "layers/water-bodies.geojson": filterFeatureCollectionToBbox(
       osmWaterBodiesPrototype,
-      theaterBbox,
+      buildExtentBbox,
     ),
     "layers/water-bodies-osm-prototype.geojson": osmWaterBodiesPrototype,
-    "layers/seas.geojson": filterFeatureCollectionToBbox(seas, theaterBbox),
+    "layers/seas.geojson": filterFeatureCollectionToBbox(seas, buildExtentBbox),
     "layers/wetlands.geojson": wetlands,
     "layers/forests.geojson": forests,
-    "layers/roads.geojson": filterFeatureCollectionToBbox(roads, theaterBbox),
-    "layers/railways.geojson": filterFeatureCollectionToBbox(railways, theaterBbox),
+    "layers/roads.geojson": filterFeatureCollectionToBbox(roads, buildExtentBbox),
+    "layers/railways.geojson": filterFeatureCollectionToBbox(railways, buildExtentBbox),
     "layers/country-boundaries.geojson": buildCountryBoundaryLayer(
-      filterFeatureCollectionToBbox(countries, theaterBbox),
+      filterFeatureCollectionToBbox(countries, buildExtentBbox),
     ),
     "layers/country-label-guides.geojson": emptyFeatureCollection(),
     "layers/country-boundary-lines.geojson": filterFeatureCollectionToBbox(
       countryBoundaryLines,
-      theaterBbox,
+      buildExtentBbox,
     ),
     "layers/major-city-urban-areas.geojson": filterMajorCityUrbanAreas(
-      filterFeatureCollectionToBbox(urbanAreas, theaterBbox),
+      filterFeatureCollectionToBbox(urbanAreas, buildExtentBbox),
     ),
     "layers/settlements.geojson": overpassElementsToGeoJson(
       settlements.elements ?? [],
       theaterBoundary,
     ),
   };
-  const clippedOblastBoundaries = filterFeatureCollectionToBbox(oblastBoundaries, theaterBbox);
-  const clippedAdm2Polygons = filterFeatureCollectionToBbox(oblastSubdivisions, theaterBbox);
+  const clippedOblastBoundaries = filterFeatureCollectionToBbox(oblastBoundaries, buildExtentBbox);
+  const clippedAdm2Polygons = filterFeatureCollectionToBbox(oblastSubdivisions, buildExtentBbox);
   const alignedOblastSubdivisions = alignOblastSubdivisionBoundaries(
     clippedOblastBoundaries,
     clippedAdm2Polygons,
   );
   const admBoundaryTopology = buildBoundaryLineTopologyFromAdm2(oblastSubdivisions);
+  if (admBoundaryTopology.ukraineGeometry) {
+    const splitRivers = splitLineFeatureCollectionByMask(
+      filteredLayers["layers/rivers.geojson"],
+      admBoundaryTopology.ukraineGeometry,
+      { segmentInsideProperty: "insideUkraine" },
+    );
+    filteredLayers["layers/rivers.geojson"] = splitRivers;
+  }
   let effectiveWaterBodies = osmWaterBodiesFromPbf
     ? mergeWaterBodiesWithCoverageFallback(
         osmWaterBodiesFromPbf,
@@ -5012,26 +6089,71 @@ async function main() {
     effectiveWaterBodies,
     riverCorridorGapLayer,
   );
-  const focusedHexRiverLayer = await buildFocusedHexRiverReconstructionLayer(
+  const enableFocusedHexRiverReconstruction = false;
+  if (enableFocusedHexRiverReconstruction) {
+    const focusedHexRiverLayer = await buildFocusedHexRiverReconstructionLayer(
+      effectiveWaterBodies,
+      osmMajorRiverLinesFromPbf,
+      existsSync(elevationRasterPath) ? elevationRasterPath : null,
+    );
+    effectiveWaterBodies = appendRiverCorridorGapFeatures(
+      effectiveWaterBodies,
+      focusedHexRiverLayer,
+    );
+  }
+  const pilotHexRiverLayer = await buildTargetedHexRiverSystemReconstructionLayer(
     effectiveWaterBodies,
     osmMajorRiverLinesFromPbf,
-    existsSync(elevationRasterPath) ? elevationRasterPath : null,
   );
   effectiveWaterBodies = appendRiverCorridorGapFeatures(
     effectiveWaterBodies,
-    focusedHexRiverLayer,
+    pilotHexRiverLayer,
+  );
+  effectiveWaterBodies = await appendHexSpecificOsmWaterFallback(
+    effectiveWaterBodies,
+    osmWaterBodiesFromPbf,
+    osmMajorRiverLinesFromPbf,
+    {
+      hexIds: ["HX-W18-N51"],
+      riverNames: ["Дністер"],
+      maxDistanceKm: 0.35,
+    },
   );
   console.log(
     `Completed post-elevation hydrology reconstruction ` +
     `(${formatElapsedMs(Date.now() - postElevationHydrologyStartedAt)}).`,
   );
-  const clippedEffectiveWaterBodies = filterFeatureCollectionToBbox(
-    effectiveWaterBodies,
-    theaterBbox,
+  const theaterCoastalLandMask = buildTheaterCoastalLandMask(
+    filteredLayers["layers/country-boundaries.geojson"],
+    admBoundaryTopology.ukraineGeometry,
   );
-  const correctedSeas = correctSeaLayerWithAdm0Geometry(seas, admBoundaryTopology.ukraineGeometry);
-  filteredLayers["layers/water-bodies.geojson"] = clippedEffectiveWaterBodies;
-  filteredLayers["layers/seas.geojson"] = filterFeatureCollectionToBbox(correctedSeas, theaterBbox);
+  const correctedSeas = correctSeaLayerWithLandMask(seas, theaterCoastalLandMask);
+  const effectiveWaterBodiesClipped = clipPolygonFeatureCollectionToBbox(
+    effectiveWaterBodies,
+    buildExtentBbox,
+  );
+  const correctedSeasClipped = clipPolygonFeatureCollectionToBbox(correctedSeas, buildExtentBbox);
+  const hexCellsPath = path.join(processedRoot, "hex-cells.geojson");
+  let correctedSeasFinal = correctedSeasClipped;
+  if (existsSync(hexCellsPath)) {
+    const hexCells = await readLocalGeoJson(hexCellsPath, "hex-cells");
+    correctedSeasFinal = applyHexSpecificSeaOverrides(
+      correctedSeasClipped,
+      effectiveWaterBodiesClipped,
+      hexCells,
+      {
+        hexIds: ["HX-E36-N22"],
+        maxSeaDistanceKm: 0.5,
+      },
+    );
+  }
+  const correctedWaterBodies = subtractPolygonMaskFromPolygonLayer(
+    effectiveWaterBodiesClipped,
+    unionPolygonFeatureCollectionGeometries(correctedSeasFinal),
+    "corrected-sea-difference",
+  );
+  filteredLayers["layers/water-bodies.geojson"] = correctedWaterBodies;
+  filteredLayers["layers/seas.geojson"] = correctedSeasFinal;
   filteredLayers["layers/theater-boundary.geojson"] = admBoundaryTopology.adm0Outer;
   filteredLayers["layers/oblast-boundaries.geojson"] = admBoundaryTopology.adm1Shared;
   filteredLayers["layers/oblast-subdivisions.geojson"] = admBoundaryTopology.adm2Internal;
@@ -5070,6 +6192,22 @@ async function main() {
       stripSuffixPattern: /\s+Raion$/iu,
     },
   );
+  if (hexOnlyScope?.maskGeometry) {
+    for (const [relativePath, layer] of Object.entries(filteredLayers)) {
+      if (!relativePath.startsWith("layers/")) {
+        continue;
+      }
+
+      if (!layer || layer.type !== "FeatureCollection") {
+        continue;
+      }
+
+      filteredLayers[relativePath] = filterFeatureCollectionToMask(
+        layer,
+        hexOnlyScope.maskGeometry,
+      );
+    }
+  }
 
   const layerEntries = Object.entries(filteredLayers);
   for (const [index, [relativePath, data]] of layerEntries.entries()) {
