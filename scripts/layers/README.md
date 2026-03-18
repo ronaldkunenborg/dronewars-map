@@ -51,6 +51,19 @@ Downloads a minimal public fallback layer set for Ukraine into
 This is intended to get visible map content on screen when the full OSM/GDAL
 pipeline inputs are not available yet.
 
+Hex-scoped local iteration (single or multiple hexes):
+
+```bash
+node scripts/layers/fetch-public-layers.mjs --skip-elevation --hex-only=HX-W19-N50
+node scripts/layers/fetch-public-layers.mjs --skip-elevation --hex-only=HX-W19-N50,HX-W18-N50
+```
+
+If cached PBF extracts were previously created for a larger extent, add:
+
+```bash
+--refresh=osm/rivers/pbf-lines,osm/water-bodies/pbf-extract
+```
+
 To run only elevation + hillshade acquisition through the same cache system:
 
 ```bash

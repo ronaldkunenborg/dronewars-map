@@ -139,6 +139,23 @@ node scripts/layers/fetch-public-layers.mjs --smoke-test=forests
 node scripts/layers/fetch-public-layers.mjs --smoke-test=water-bodies
 ```
 
+Hex-scoped rebuilds (fast local iteration):
+
+```bash
+node scripts/layers/fetch-public-layers.mjs --skip-elevation --hex-only=HX-W19-N50
+node scripts/layers/fetch-public-layers.mjs --skip-elevation --hex-only=HX-W19-N50,HX-W18-N50
+```
+
+Notes for `--hex-only`:
+
+- vector outputs are clipped/filtered to the selected hex mask (polygons clipped, points filtered to inside mask, lines filtered to features intersecting the mask)
+- this option is intended for local debugging/iteration runs, not full-theater production outputs
+- if `osm/rivers/pbf-lines` or `osm/water-bodies/pbf-extract` were previously cached for a larger extent, a hex-only run may still process larger cached inputs; force a scoped refresh when needed:
+
+```bash
+node scripts/layers/fetch-public-layers.mjs --skip-elevation --hex-only=HX-W19-N50 --refresh=osm/rivers/pbf-lines,osm/water-bodies/pbf-extract
+```
+
 Raw intake bootstrap command (clean checkout preparation for local preprocess/layer builds):
 
 ```bash
@@ -205,6 +222,21 @@ Expected `proj.db` characteristics in a healthy modern install:
 - `PROJ.VERSION` should match your current PROJ package family (for example `9.8.0`)
 
 If setup reports `upgrades from old installation not supported, please do a fresh install`, do a clean reinstall into an empty root (`C:\OSGeo4W`) instead of in-place upgrade.
+
+## Documentation Structure
+
+Detailed docs are now split under `docs/` and indexed here:
+
+- [Documentation Index](docs/INDEX.md)
+- [Windows OSGeo4W Setup](docs/setup/windows-osgeo4w.md)
+- [Public Layer Builder](docs/pipeline/public-layer-builder.md)
+- [Full Local Layer Builder](docs/pipeline/full-local-builder.md)
+- [River Gap Repair Workflow](docs/hydrology/river-gap-repair.md)
+- [Analytics Reports](docs/reports/analytics-reports.md)
+- [External Sources Policy](docs/data/external-sources.md)
+- [Map Layers and Controls](docs/ui/map-layers-and-controls.md)
+- [Tasks and Governance](docs/dev/tasks-and-governance.md)
+- [Decisions (ADRs)](docs/decisions)
 
 Important runtime consistency notes from recent fixes:
 
