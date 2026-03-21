@@ -6,6 +6,7 @@
 - When invoking GDAL/OSGeo tools on this machine, use explicit binaries from `C:\OSGeo4W\bin` (or from `OSGEO4W_BIN` when set).
 - Prefer OpenStreetMap-derived data for thematic overlays where useful (including airfields and other special features), and prioritize OSM-informed terrain/landuse inputs when improving hex-cell shading quality; do not treat this as overriding the current administrative boundary stack unless a task explicitly requests boundary-source changes.
 - Model airports/airfields as points of interest (POI) rather than logistics-network links; keep logistics layers focused on ground-interdictable networks.
+- POI icon style rule: prefer clear OSM-like cartographic pictograms (readable civilian map symbols) over austere/NATO-style military symbology unless a task explicitly requests military-standard notation.
 - For targeted river reconstruction during processing, prefer elevation-guided path selection; if elevation data is unavailable, use river-line shape and dominant direction as the fallback guide (not exact centerline placement).
 - For river-gap remediation, use high-detail river detail as reconstruction input for the regular hydrology output (`water-bodies`) so fixes are visible at normal map zoom levels; do not introduce z12-only river-fix visibility unless explicitly requested.
 - Defer long-term sea-border reconciliation work (including non-Ukraine areas where rough ADM0 terrain borders conflict with improved waterbody geometry) to Task `62.4`; avoid ad-hoc interim fixes unless explicitly requested.

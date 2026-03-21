@@ -8,7 +8,10 @@ Prototype points of interest for:
 - dams
 - power plants
 - military bases
-- airports
+- airports/airfields
+- ports
+- rocket facilities
+- steel/industrial complexes (including Azovstal)
 
 ## Source options considered
 
@@ -27,6 +30,7 @@ Prototype points of interest for:
 Use OSM as primary POI source.
 
 - Prototype stage: static review file (`public/overlays/poi-prototype.geojson`) rendered directly in the app.
+- Prototype stage: static review file (`src/assets/poi-prototype.geojson`) rendered directly in the app.
 - Production stage (later): derive POIs from cached OSM sources in the builder with normalization and category rules.
 
 This gives the best accuracy/coverage tradeoff while keeping the first review loop fast.

@@ -9,7 +9,7 @@
 - roads
 - railways
 - settlements
-- poi prototype
+- poi prototype (custom SVG icon set)
 - boundaries/labels
 - operational hexes
 

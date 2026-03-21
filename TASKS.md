@@ -45,17 +45,21 @@ Pending tasks are listed under ## Pending tasks.
 
 79. [done] Added a lightweight manual attribution checklist for app/docs updates only in `docs/ATTRIBUTION.md`: verify in-app attribution footer/link visibility, docs link integrity, and source-list freshness (no export workflow scope).
 
-## Pending Tasks
-
-76. [pending] Improve inland hydrology and wetland quality (non-coastal scope): continue promoting higher-detail inland OSM water geometry quality and implement wetlands upgrade using OSM wetlands + ESA WorldCover support. Keep this task focused on inland rivers/lakes/wetlands quality and exclude sea-land border reconciliation (handled by `74`/`75`).
-
 80. [done] Reworked map UI information density: attribution moved to a compact on-map chip, map status notices reduced in footprint, hex panel width reduced, and inspector content switched to collapsible sections (`Summary`, `Terrain`, `Infrastructure`, `Capacity`, `Debug`) so the separate `Detailed` toggle is no longer needed.
 
 81. [done] Created POI prototype track: selected OSM as the primary source after tradeoff analysis (`docs/data/poi-source-selection.md`), then added a non-builder prototype overlay loaded from `public/overlays/poi-prototype.geojson` and rendered in-app with category-colored icons/labels (bridges, dams, power plants, military bases, airports) behind a dedicated `POI (Prototype)` layer toggle for review.
 
+87. [done] Replaced POI prototype marker styling with a custom icon set and category mapping, switched icon loading to PNG-first with SVG fallback, and validated readability/overlap behavior at operational zooms.
+
+## Pending Tasks
+
+76. [pending] Improve inland hydrology and wetland quality (non-coastal scope): continue promoting higher-detail inland OSM water geometry quality and implement wetlands upgrade using OSM wetlands + ESA WorldCover support. Keep this task focused on inland rivers/lakes/wetlands quality and exclude sea-land border reconciliation (handled by `74`/`75`).
+
 82. [pending] Rework elevation hillshade visual balance: current terrain appears too shadowed while mountain forms remain insufficiently legible. Increase relief contrast while making low-elevation areas near-transparent. Run controlled experiments on small map sections first (style/raster parameter sweeps and side-by-side comparisons), then apply the best-performing configuration theater-wide.
 
 83. [pending] Create a layer-by-layer technical documentation set under `docs/` (one document per major layer): for each layer, capture source(s), cache behavior, processing pipeline steps, transformation/merge rules, known failure modes, and what issues have already been solved. Link all layer docs from `docs/INDEX.md` and keep the set aligned with pipeline changes.
+
+88. [pending] Replace the manual POI prototype dataset with a full theater-wide POI pipeline from cached OSM data. Scope: extract and normalize airfields/airports, dams, power plants (including nuclear), bridges, ports, military bases, rocket facilities, and major industrial POIs; dedupe overlapping node/way/relation records deterministically; generate a processed POI layer in `data:layers:public`; and document source rules + tag mapping under `docs/data/`.
 
 ## Refinements
 
@@ -67,4 +71,4 @@ Pending tasks are listed under ## Pending tasks.
 
 75. [future] Prototype and evaluate an OSM-derived high-detail coastal water mask as the long-term coastal source upgrade: design a replacement-quality mask pipeline (coastline/water polygons), compare against the current Natural Earth coastal behavior in problematic strips, and define integration criteria so Task `74` can swap to this source without architectural changes. When finalized, re-check AGENTS.md and remove no-longer-needed temporary coastal rules.
 
-86. [future]] Once we have fixed the water bodies, at zoomlevel 7.5 and lower the rivers look better than the water bodies. You can keep the water bodies but the rivers should be enabled at that point when water bodies are on. But we should only do this when all water issues are fixed.
+86. [future] Once we have fixed the water bodies, at zoomlevel 7.5 and lower the rivers look better than the water bodies. You can keep the water bodies but the rivers should be enabled at that point when water bodies are on. But we should only do this when all water issues are fixed.
