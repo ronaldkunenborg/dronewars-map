@@ -3,7 +3,6 @@ import path from "node:path";
 import { spawn } from "node:child_process";
 import { fileURLToPath } from "node:url";
 import { processedLayerRecipes } from "./layer-recipes.mjs";
-import { settlementVoronoiCatalogEntry } from "./settlement-voronoi.mjs";
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -18,16 +17,13 @@ export async function ensureProcessedDirectories() {
 }
 
 export function getRecipeCatalog() {
-  return [
-    ...processedLayerRecipes.map((recipe) => ({
-      id: recipe.id,
-      label: recipe.label,
-      category: recipe.category,
-      geometryKind: recipe.geometryKind,
-      path: recipe.outputPath,
-    })),
-    settlementVoronoiCatalogEntry,
-  ];
+  return processedLayerRecipes.map((recipe) => ({
+    id: recipe.id,
+    label: recipe.label,
+    category: recipe.category,
+    geometryKind: recipe.geometryKind,
+    path: recipe.outputPath,
+  }));
 }
 
 export async function writeLayerCatalog() {

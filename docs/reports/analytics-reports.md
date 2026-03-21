@@ -50,3 +50,16 @@ npm run data:analytics:hex-shading
 ```
 
 Writes prototype comparison report artifacts under `reports/`.
+
+## Coastal Lockstep Eligibility
+
+```bash
+npm run data:analytics:coastal-lockstep
+```
+
+Writes:
+
+- `reports/coastal-lockstep-eligibility.json`
+- `reports/coastal-lockstep-eligibility.md`
+
+Note: run this after a theater-wide layer build (without `--hex-only`) if you want theater-wide diagnostics.

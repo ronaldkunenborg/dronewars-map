@@ -10,7 +10,7 @@
 - railways
 - settlements
 - boundaries/labels
-- operational hexes and voronoi cells
+- operational hexes
 
 ## Core Interaction
 
@@ -24,4 +24,4 @@
 
 - `water-bodies` is the primary hydrology polygon display
 - `rivers` acts as a line fallback/operational hint and is placed below water polygons
-- river-gap review overlay is available for targeted QA workflows
+- river-gap review uses report outputs (`reports/river-water-gap-checklist.{json,md}`) instead of an in-app temporary overlay

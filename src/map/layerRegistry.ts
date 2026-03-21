@@ -44,10 +44,7 @@ export const mapLayerVisibilityTargets = {
   hexes: [
     "operational-hex-fill",
     "operational-hex-outline",
-    "settlement-voronoi-fill",
-    "settlement-voronoi-outline",
   ],
-  riverGapHexes: ["river-gap-hex-outline"],
   contours: [],
   hillshade: ["hillshade-raster"],
 } as const;
@@ -410,8 +407,8 @@ const orderedLayerRegistry: OrderedLayerDefinition[] = [
         source: sourceId,
         filter: ["==", ["get", "source"], "pilot-hex-reconstruction"],
         paint: {
-          "fill-color": "#d62828",
-          "fill-opacity": 0.72,
+          "fill-color": "#88a8c1",
+          "fill-opacity": 0.84,
         },
       },
       {
@@ -420,8 +417,8 @@ const orderedLayerRegistry: OrderedLayerDefinition[] = [
         source: sourceId,
         filter: ["==", ["get", "source"], "hex-specific-osm-water-fallback"],
         paint: {
-          "fill-color": "#2a9d48",
-          "fill-opacity": 0.72,
+          "fill-color": "#88a8c1",
+          "fill-opacity": 0.84,
         },
       },
     ],
@@ -452,69 +449,6 @@ const orderedLayerRegistry: OrderedLayerDefinition[] = [
         paint: {
           "fill-color": "#7d9470",
           "fill-opacity": 0.44,
-        },
-      },
-    ],
-  },
-  {
-    id: "settlement-voronoi-cells",
-    sourceLayerId: "settlement-voronoi-cells",
-    build: (sourceId) => [
-      {
-        id: "settlement-voronoi-fill",
-        type: "fill",
-        source: sourceId,
-        paint: {
-          "fill-color": [
-            "match",
-            ["coalesce", ["get", "place"], "village"],
-            "city",
-            "#d96b5f",
-            "town",
-            "#c89a4b",
-            "#9daa68",
-          ],
-          "fill-opacity": [
-            "interpolate",
-            ["linear"],
-            ["zoom"],
-            4,
-            0.28,
-            7,
-            0.24,
-            10,
-            0.18,
-          ],
-        },
-      },
-      {
-        id: "settlement-voronoi-outline",
-        type: "line",
-        source: sourceId,
-        paint: {
-          "line-color": "#5a3d1f",
-          "line-opacity": [
-            "interpolate",
-            ["linear"],
-            ["zoom"],
-            4,
-            0.92,
-            8,
-            0.86,
-            12,
-            0.78,
-          ],
-          "line-width": [
-            "interpolate",
-            ["linear"],
-            ["zoom"],
-            4,
-            1.1,
-            8,
-            1.6,
-            12,
-            2.1,
-          ],
         },
       },
     ],

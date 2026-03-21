@@ -31,6 +31,14 @@ Pending tasks are listed under ## Pending tasks.
 
 73. [done] Prototyped World Bank Official Boundaries (WBOB) on a Ukraine subset from the WBOB medium-resolution FeatureServer (item `c030a96882e84205897973ed44b12cf2`, layers ADM0/ADM1/ADM2) and wrote comparison outputs to `reports/wbob-boundary-prototype-comparison.{json,md}`. Result: cross-level coherence passed, but detail parity failed for ADM2 in this source slice (only `24` ADM2 features for Ukraine, with `NAM_2` unavailable across all), so it is not suitable as a production replacement for current ADM2 detail.
 
+74. [done] Fix Black Sea / Sea of Azov coastal land-sea mismatch in production layers (priority implementation task): reproduced and resolved the Odessa/Crimea coastal sea-over-land and inland-water-in-sea issues through the operational coastal correction track (theater coastal land mask, corrected `seas`, `water-bodies` cleanup, curated lockstep/sea-completion hex controls), with user-validated visual outcome.
+
+74.1 [done] Prototyped and implemented bounded compute-worker parallelization for post-elevation vector assembly prefilter work (bbox clipping + country/urban/settlement/clipped-ADM prep) with deterministic output and serial fallback on worker failure.
+
+86. [done] Added generated coastal lockstep eligibility diagnostics report outputs (`reports/coastal-lockstep-eligibility.{json,md}`) and command (`npm run data:analytics:coastal-lockstep`) to audit per-hex inclusion logic (Ukraine membership, boundary test, sea/neighbor-sea test, auto-eligibility, manual override, and exclusion reasons).
+
+74.2 [done] Parallelized coastal `corrected water-bodies` subtraction in `data:layers:public` (including `--coastal-only`) using bounded compute workers with deterministic merge order and serial fallback on worker failure.
+
 77. [done] Introduce a minimal attribution documentation source at `docs/ATTRIBUTION.md` and link it from both `README.md` and `docs/INDEX.md`.
 
 78. [done] Added a simple in-app attribution footer/link (static text + link to `docs/ATTRIBUTION.md`) without per-layer dynamic resolution.
@@ -39,24 +47,24 @@ Pending tasks are listed under ## Pending tasks.
 
 ## Pending Tasks
 
-74. [pending] Fix Black Sea / Sea of Azov coastal land-sea mismatch in production layers (priority implementation task): reproduce and resolve issues around Odessa and Crimea (for example `HX-E36-N22`, `HX-E72-N11`, `HX-E75-N12`, `HX-E77-N12`) where sea overlaps land and/or inland water appears in sea space. Keep this as the operational fix track (theater-wide coastal land mask, recomputed `seas`, and `water-bodies` cleanup against corrected seas), with explicit before/after hex validation.
-
-74.1 [pending] Investigate and prototype parallelization for the `Starting post-elevation vector assembly...` stage, similar to hydrology compute-worker parallelism: identify CPU-heavy substeps, split safely into deterministic parallel units, and expose a bounded worker setting (separate from fetch workers) where beneficial.
-
-75. [pending] Prototype and evaluate an OSM-derived high-detail coastal water mask as the long-term coastal source upgrade: design a replacement-quality mask pipeline (coastline/water polygons), compare against the current Natural Earth coastal behavior in problematic strips, and define integration criteria so Task `74` can swap to this source without architectural changes. When finalized, re-check AGENTS.md and remove no-longer-needed temporary coastal rules.
-
 76. [pending] Improve inland hydrology and wetland quality (non-coastal scope): continue promoting higher-detail inland OSM water geometry quality and implement wetlands upgrade using OSM wetlands + ESA WorldCover support. Keep this task focused on inland rivers/lakes/wetlands quality and exclude sea-land border reconciliation (handled by `74`/`75`).
 
-80. [pending] Re-evaluate whether dynamic attribution (per-layer mapping, panel, export helper, tests) is necessary after the minimal approach has been used in practice.
+80. [pending] Rework map UI information density (attribution + hex panel). Proposal: move attribution into a compact on-map chip anchored bottom-right (`Attribution` link + short source text, semi-transparent background, non-blocking footprint), and reduce hex-panel width while replacing always-open detail blocks with collapsible sections (`Summary`, `Terrain`, `Infrastructure`, `Capacity`, `Debug`). This should remove the separate `Detailed` toggle and shift detail depth into explicit section expansion.
 
 81. [pending] Create a points-of-interest layer with features such as important bridges over rivers, dams, power plants, military bases, and airports (airports should be modeled as POI, not logistics-network links). These features should also display as icons, comparable to cities like Kiev which has a red dot and star as icon and also a graphical representation. But first determine the best source for these POI items.
 
-82. [pending] Investigate targeted river-reconstruction scope inflation after broad river-gap checklist runs (`--include-all-hexes`): prevent `buildTargetedHexRiverSystemReconstructionLayer` from ingesting very large `flaggedHexes` sets unintentionally, and implement deterministic scope control (for example theater-only default, curated include list, and/or max-target guard with explicit override logging).
+82. [pending] Rework elevation hillshade visual balance: current terrain appears too shadowed while mountain forms remain insufficiently legible. Increase relief contrast while making low-elevation areas near-transparent. Run controlled experiments on small map sections first (style/raster parameter sweeps and side-by-side comparisons), then apply the best-performing configuration theater-wide.
 
-83. [pending] Investigate and fix zoom-dependent polygon shape shifts where water/body geometries appear to drop vertices when zooming out (visible geometry changes between zoom levels in some hexes). Scope should include geometry hygiene, simplification/tolerance behavior, and renderer/source settings so polygon silhouettes remain stable across operational zoom transitions.
+83. [pending] Create a layer-by-layer technical documentation set under `docs/` (one document per major layer): for each layer, capture source(s), cache behavior, processing pipeline steps, transformation/merge rules, known failure modes, and what issues have already been solved. Link all layer docs from `docs/INDEX.md` and keep the set aligned with pipeline changes.
 
-84. [pending] Rework elevation hillshade visual balance: current terrain appears too shadowed while mountain forms remain insufficiently legible. Increase relief contrast while making low-elevation areas near-transparent. Run controlled experiments on small map sections first (style/raster parameter sweeps and side-by-side comparisons), then apply the best-performing configuration theater-wide.
+## Refinements
 
-85. [pending] Create a layer-by-layer technical documentation set under `docs/` (one document per major layer): for each layer, capture source(s), cache behavior, processing pipeline steps, transformation/merge rules, known failure modes, and what issues have already been solved. Link all layer docs from `docs/INDEX.md` and keep the set aligned with pipeline changes.
+84. [pending] Investigate targeted river-reconstruction scope inflation after broad river-gap checklist runs (`--include-all-hexes`): prevent `buildTargetedHexRiverSystemReconstructionLayer` from ingesting very large `flaggedHexes` sets unintentionally, and implement deterministic scope control (for example theater-only default, curated include list, and/or max-target guard with explicit override logging).
 
-For later: Once we have fixed the water bodies, at zoomlevel 7.5 and lower the rivers look better than the water bodies. You can keep the water bodies but the rivers should be enabled at that point when water bodies are on. But we should only do this when all water issues are fixed.
+85. [pending] Investigate and fix zoom-dependent polygon shape shifts where water/body geometries appear to drop vertices when zooming out (visible geometry changes between zoom levels in some hexes). Scope should include geometry hygiene, simplification/tolerance behavior, and renderer/source settings so polygon silhouettes remain stable across operational zoom transitions. Include current clipping examples `HX-E58-N8`, `HX-E51-N13` and `HX-E68-N10` in the investigation set.
+
+## Possible Future Tasks
+
+75. [future] Prototype and evaluate an OSM-derived high-detail coastal water mask as the long-term coastal source upgrade: design a replacement-quality mask pipeline (coastline/water polygons), compare against the current Natural Earth coastal behavior in problematic strips, and define integration criteria so Task `74` can swap to this source without architectural changes. When finalized, re-check AGENTS.md and remove no-longer-needed temporary coastal rules.
+
+86. [future]] Once we have fixed the water bodies, at zoomlevel 7.5 and lower the rivers look better than the water bodies. You can keep the water bodies but the rivers should be enabled at that point when water bodies are on. But we should only do this when all water issues are fixed.

@@ -1,5 +1,4 @@
 import path from "node:path";
-import { readFile, writeFile } from "node:fs/promises";
 import { processedLayerRecipes } from "./layer-recipes.mjs";
 import {
   copyProcessedFile,
@@ -9,7 +8,6 @@ import {
   runCommand,
   writeLayerCatalog,
 } from "./shared.mjs";
-import { buildSettlementVoronoiLayer } from "./settlement-voronoi.mjs";
 
 const osmExtractPath = path.join(rawRoot, "osm");
 
@@ -63,26 +61,6 @@ async function main() {
       ]);
     }
   }
-
-  const clippingBoundaries = await readFile(
-    path.join(processedRoot, "layers", "country-boundaries.geojson"),
-    "utf8",
-  )
-    .then((value) => JSON.parse(value))
-    .catch(async () =>
-      JSON.parse(
-        await readFile(path.join(processedRoot, "layers", "oblast-boundaries.geojson"), "utf8"),
-      ),
-    );
-  const settlements = JSON.parse(
-    await readFile(path.join(processedRoot, "layers", "settlements.geojson"), "utf8"),
-  );
-  const settlementVoronoiCells = buildSettlementVoronoiLayer(clippingBoundaries, settlements);
-  await writeFile(
-    path.join(processedRoot, "layers", "settlement-voronoi-cells.geojson"),
-    JSON.stringify(settlementVoronoiCells, null, 2),
-    "utf8",
-  );
 
   await writeLayerCatalog();
   console.log("Built processed layer outputs and wrote layers.json");

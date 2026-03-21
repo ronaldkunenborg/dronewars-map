@@ -11,12 +11,10 @@ export type LayerControlId =
   | "settlements"
   | "oblasts"
   | "hexes"
-  | "riverGapHexes"
   | "contours"
   | "hillshade";
 
 export type ViewMode = "terrain" | "logistics" | "settlements" | "boundaries";
-export type CellLayerMode = "hexes" | "voronoi";
 export type SettlementDisplayLevel = "cities" | "towns" | "villages";
 
 export type LayerVisibility = Record<LayerControlId, boolean>;
@@ -51,7 +49,6 @@ const settlementsLayerControls: LayerControl[] = [
 const boundariesLayerControls: LayerControl[] = [
   { id: "oblasts", label: "Oblasts", description: "Reference boundaries", color: "#73796d", available: true },
   { id: "hexes", label: "Hexes", description: "Operational hex layer", color: "#55614f", available: true },
-  { id: "riverGapHexes", label: "River Gap Hexes", description: "Temporary review overlay", color: "#d62828", available: true },
 ];
 
 export const defaultLayerVisibility: LayerVisibility = {
@@ -65,7 +62,6 @@ export const defaultLayerVisibility: LayerVisibility = {
   settlements: false,
   oblasts: true,
   hexes: true,
-  riverGapHexes: false,
   contours: false,
   hillshade: false,
 };
@@ -84,7 +80,6 @@ export const presetVisibility: Record<ViewMode, LayerVisibility> = {
     settlements: false,
     oblasts: false,
     hexes: false,
-    riverGapHexes: false,
   },
   logistics: {
     ...defaultLayerVisibility,
@@ -98,7 +93,6 @@ export const presetVisibility: Record<ViewMode, LayerVisibility> = {
     settlements: false,
     oblasts: false,
     hexes: false,
-    riverGapHexes: false,
   },
   settlements: {
     ...defaultLayerVisibility,
@@ -111,7 +105,6 @@ export const presetVisibility: Record<ViewMode, LayerVisibility> = {
     settlements: true,
     oblasts: true,
     hexes: false,
-    riverGapHexes: false,
     hillshade: false,
   },
   boundaries: {
@@ -125,18 +118,15 @@ export const presetVisibility: Record<ViewMode, LayerVisibility> = {
     settlements: false,
     oblasts: true,
     hexes: true,
-    riverGapHexes: false,
     hillshade: false,
   },
 };
 
 type LayerPanelProps = {
-  cellLayerMode: CellLayerMode;
   coordinateReadout: string | null;
   zoomReadout: string | null;
   settlementDisplayLevel: SettlementDisplayLevel;
   onApplyPreset: (mode: ViewMode) => void;
-  onChangeCellLayerMode: (mode: CellLayerMode) => void;
   onChangeSettlementDisplayLevel: (level: SettlementDisplayLevel) => void;
   onReset: () => void;
   onToggleLayer: (layerId: LayerControlId) => void;
@@ -179,12 +169,10 @@ function LayerToggleRow({
 }
 
 export function LayerPanel({
-  cellLayerMode,
   coordinateReadout,
   zoomReadout,
   settlementDisplayLevel,
   onApplyPreset,
-  onChangeCellLayerMode,
   onChangeSettlementDisplayLevel,
   onReset,
   onToggleLayer,
@@ -317,25 +305,6 @@ export function LayerPanel({
             />
           ))}
         </ul>
-        <div className="cell-layer-mode">
-          <p className="cell-layer-mode__label">Voronoi</p>
-          <div className="preset-row">
-            <button
-              className={`preset-button${cellLayerMode === "hexes" ? " is-active" : ""}`}
-              onClick={() => onChangeCellLayerMode("hexes")}
-              type="button"
-            >
-              Hex
-            </button>
-            <button
-              className={`preset-button${cellLayerMode === "voronoi" ? " is-active" : ""}`}
-              onClick={() => onChangeCellLayerMode("voronoi")}
-              type="button"
-            >
-              Voronoi
-            </button>
-          </div>
-        </div>
       </section>
 
       <section className="panel">

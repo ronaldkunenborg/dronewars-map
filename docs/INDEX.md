@@ -38,3 +38,4 @@ This project keeps quickstart and high-level context in `README.md`, with detail
 - [ADR-0001: Ukraine Boundary Stack from ADM2 Topology](decisions/ADR-0001-ukraine-boundary-topology.md)
 - [ADR-0002: River Gap Repair Uses OSM Lines + Polygon Reconstruction](decisions/ADR-0002-river-gap-repair-approach.md)
 - [ADR-0003: Coastal Dispute Hex Policy for Sea/Land Fill](decisions/ADR-0003-coastal-dispute-hex-policy.md)
+- [ADR-0004: Parallel Coastal Water Subtraction](decisions/ADR-0004-parallel-coastal-water-subtraction.md)

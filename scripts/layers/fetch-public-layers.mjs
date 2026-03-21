@@ -6,10 +6,6 @@ import { fileURLToPath } from "node:url";
 import { spawn } from "node:child_process";
 import { Worker, isMainThread, parentPort, workerData } from "node:worker_threads";
 import polygonClipping from "polygon-clipping";
-import {
-  buildSettlementVoronoiLayer,
-  settlementVoronoiCatalogEntry,
-} from "./settlement-voronoi.mjs";
 
 /*
  * Public fallback layer builder and cache utility.
@@ -431,15 +427,187 @@ function resolveComputeWorkerConcurrency(requested) {
   return Math.max(1, Math.min(parsed, cpuParallelism));
 }
 const computeWorkerConcurrency = resolveComputeWorkerConcurrency(requestedComputeWorkerCount);
-const coastalSeaCompletionHexIds = ["HX-E36-N22", "HX-E71-N12", "HX-E72-N11", "HX-E75-N12", "HX-E77-N12"];
-const countryFillExclusionHexIds = ["HX-E72-N11"];
-const adm2LandSeaLockstepHexIds = [
-  "HX-E33-N16",
+const coastalSeaCompletionHexIds = [
   "HX-E36-N22",
+  "HX-E53-N11",
+  "HX-E62-N21",
+  "HX-E67-N13",
+  "HX-E68-N9",
   "HX-E71-N12",
   "HX-E72-N11",
   "HX-E75-N12",
   "HX-E77-N12",
+];
+const countryFillExclusionHexIds = ["HX-E72-N11"];
+const adm2LandSeaLockstepHexIds = [
+  "HX-E34-N13",
+  "HX-E34-N14",
+  "HX-E34-N15",
+  "HX-E34-N16",
+  "HX-E34-N17",
+  "HX-E35-N13",
+  "HX-E35-N14",
+  "HX-E35-N15",
+  "HX-E35-N16",
+  "HX-E35-N17",
+  "HX-E36-N12",
+  "HX-E36-N15",
+  "HX-E36-N16",
+  "HX-E36-N17",
+  "HX-E36-N18",
+  "HX-E36-N19",
+  "HX-E36-N20",
+  "HX-E36-N21",
+  "HX-E36-N22",
+  "HX-E36-N23",
+  "HX-E37-N19",
+  "HX-E37-N23",
+  "HX-E38-N23",
+  "HX-E39-N23",
+  "HX-E40-N21",
+  "HX-E40-N22",
+  "HX-E40-N23",
+  "HX-E40-N25",
+  "HX-E40-N26",
+  "HX-E41-N20",
+  "HX-E41-N21",
+  "HX-E41-N22",
+  "HX-E41-N24",
+  "HX-E41-N25",
+  "HX-E41-N26",
+  "HX-E42-N19",
+  "HX-E42-N20",
+  "HX-E42-N21",
+  "HX-E42-N22",
+  "HX-E43-N19",
+  "HX-E43-N20",
+  "HX-E43-N21",
+  "HX-E43-N22",
+  "HX-E43-N23",
+  "HX-E44-N19",
+  "HX-E44-N20",
+  "HX-E44-N22",
+  "HX-E44-N23",
+  "HX-E45-N19",
+  "HX-E45-N22",
+  "HX-E46-N18",
+  "HX-E47-N18",
+  "HX-E48-N18",
+  "HX-E49-N18",
+  "HX-E50-N12",
+  "HX-E50-N13",
+  "HX-E50-N17",
+  "HX-E50-N18",
+  "HX-E50-N19",
+  "HX-E51-N11",
+  "HX-E51-N12",
+  "HX-E51-N13",
+  "HX-E51-N14",
+  "HX-E51-N15",
+  "HX-E51-N19",
+  "HX-E52-N12",
+  "HX-E52-N15",
+  "HX-E52-N16",
+  "HX-E52-N18",
+  "HX-E52-N19",
+  "HX-E53-N11",
+  "HX-E53-N12",
+  "HX-E53-N15",
+  "HX-E53-N16",
+  "HX-E53-N18",
+  "HX-E53-N19",
+  "HX-E54-N11",
+  "HX-E54-N16",
+  "HX-E54-N17",
+  "HX-E55-N10",
+  "HX-E55-N16",
+  "HX-E56-N10",
+  "HX-E57-N9",
+  "HX-E57-N10",
+  "HX-E58-N5",
+  "HX-E58-N7",
+  "HX-E58-N9",
+  "HX-E59-N5",
+  "HX-E59-N6",
+  "HX-E59-N19",
+  "HX-E60-N4",
+  "HX-E60-N18",
+  "HX-E60-N20",
+  "HX-E60-N21",
+  "HX-E61-N3",
+  "HX-E61-N4",
+  "HX-E61-N16",
+  "HX-E61-N17",
+  "HX-E61-N18",
+  "HX-E61-N19",
+  "HX-E61-N20",
+  "HX-E61-N21",
+  "HX-E61-N22",
+  "HX-E62-N3",
+  "HX-E62-N4",
+  "HX-E62-N15",
+  "HX-E62-N21",
+  "HX-E62-N22",
+  "HX-E62-N23",
+  "HX-E63-N3",
+  "HX-E63-N4",
+  "HX-E63-N5",
+  "HX-E63-N14",
+  "HX-E63-N23",
+  "HX-E63-N24",
+  "HX-E64-N5",
+  "HX-E64-N6",
+  "HX-E64-N7",
+  "HX-E64-N13",
+  "HX-E64-N23",
+  "HX-E64-N24",
+  "HX-E65-N7",
+  "HX-E65-N13",
+  "HX-E65-N23",
+  "HX-E65-N24",
+  "HX-E66-N7",
+  "HX-E66-N12",
+  "HX-E66-N24",
+  "HX-E66-N25",
+  "HX-E67-N7",
+  "HX-E67-N8",
+  "HX-E67-N9",
+  "HX-E67-N10",
+  "HX-E67-N11",
+  "HX-E67-N12",
+  "HX-E67-N13",
+  "HX-E67-N24",
+  "HX-E67-N25",
+  "HX-E68-N8",
+  "HX-E68-N9",
+  "HX-E68-N10",
+  "HX-E68-N12",
+  "HX-E68-N13",
+  "HX-E68-N24",
+  "HX-E68-N25",
+  "HX-E68-N26",
+  "HX-E69-N9",
+  "HX-E69-N12",
+  "HX-E69-N13",
+  "HX-E69-N25",
+  "HX-E69-N26",
+  "HX-E70-N9",
+  "HX-E70-N13",
+  "HX-E70-N25",
+  "HX-E70-N26",
+  "HX-E70-N27",
+  "HX-E71-N9",
+  "HX-E71-N13",
+  "HX-E71-N27",
+  "HX-E71-N28",
+  "HX-E72-N9",
+  "HX-E72-N10",
+  "HX-E72-N11",
+  "HX-E72-N12",
+  "HX-E72-N27",
+  "HX-E72-N28",
+  "HX-E73-N9",
+  "HX-E73-N27",
 ];
 
 async function mapWithConcurrency(items, concurrency, mapper) {
@@ -462,6 +630,119 @@ async function mapWithConcurrency(items, concurrency, mapper) {
 
   await Promise.all(Array.from({ length: workerCount }, () => runWorker()));
   return results;
+}
+
+function runVectorAssemblyJob(job) {
+  const jobId = String(job?.jobId ?? "");
+
+  switch (jobId) {
+    case "clipped-rivers":
+      return filterFeatureCollectionToBbox(job.featureCollection, job.bbox);
+    case "water-bodies-prototype-clipped":
+      return filterFeatureCollectionToBbox(job.featureCollection, job.bbox);
+    case "seas-clipped":
+      return filterFeatureCollectionToBbox(job.featureCollection, job.bbox);
+    case "roads-clipped":
+      return filterFeatureCollectionToBbox(job.featureCollection, job.bbox);
+    case "railways-clipped":
+      return filterFeatureCollectionToBbox(job.featureCollection, job.bbox);
+    case "country-boundaries-layer":
+      return buildCountryBoundaryLayer(
+        filterFeatureCollectionToBbox(job.featureCollection, job.bbox),
+      );
+    case "country-boundary-lines-clipped":
+      return filterFeatureCollectionToBbox(job.featureCollection, job.bbox);
+    case "major-city-urban-filtered":
+      return filterMajorCityUrbanAreas(
+        filterFeatureCollectionToBbox(job.featureCollection, job.bbox),
+      );
+    case "settlements-layer":
+      return overpassElementsToGeoJson(job.elements ?? [], job.theaterBoundary);
+    case "clipped-oblast-boundaries":
+      return filterFeatureCollectionToBbox(job.featureCollection, job.bbox);
+    case "clipped-adm2-polygons":
+      return filterFeatureCollectionToBbox(job.featureCollection, job.bbox);
+    default:
+      throw new Error(`Unknown vector assembly job: ${jobId}`);
+  }
+}
+
+function runVectorAssemblyJobWorker(job) {
+  return new Promise((resolve, reject) => {
+    const worker = new Worker(new URL(import.meta.url), {
+      workerData: {
+        task: "vector-assembly-job",
+        payload: {
+          job,
+        },
+      },
+    });
+
+    worker.once("message", (message) => {
+      resolve(message);
+    });
+    worker.once("error", reject);
+    worker.once("exit", (code) => {
+      if (code !== 0) {
+        reject(new Error(`Vector assembly worker exited with code ${code}.`));
+      }
+    });
+  });
+}
+
+async function runVectorAssemblyJobs(jobs, options = {}) {
+  const {
+    computeWorkers = computeWorkerConcurrency,
+    minParallelJobs = 3,
+  } = options;
+  const safeJobs = Array.isArray(jobs) ? jobs : [];
+
+  if (safeJobs.length === 0) {
+    return {
+      resultsById: new Map(),
+      usedWorkers: 0,
+      mode: "serial",
+    };
+  }
+
+  const targetWorkers = Math.max(1, Math.min(Number(computeWorkers) || 1, safeJobs.length));
+
+  const runSerial = () => {
+    const serialResults = safeJobs.map((job) => ({
+      jobId: job.jobId,
+      result: runVectorAssemblyJob(job),
+    }));
+    return {
+      resultsById: new Map(serialResults.map((entry) => [entry.jobId, entry.result])),
+      usedWorkers: 1,
+      mode: "serial",
+    };
+  };
+
+  if (targetWorkers <= 1 || safeJobs.length < minParallelJobs) {
+    return runSerial();
+  }
+
+  try {
+    const workerResults = await mapWithConcurrency(
+      safeJobs,
+      targetWorkers,
+      async (job) => runVectorAssemblyJobWorker(job),
+    );
+    const resultsById = new Map(
+      workerResults.map((entry) => [String(entry?.jobId ?? ""), entry?.result]),
+    );
+    return {
+      resultsById,
+      usedWorkers: targetWorkers,
+      mode: "parallel",
+    };
+  } catch (error) {
+    console.warn(
+      `Vector assembly parallel jobs failed; falling back to serial: ${error.message}`,
+    );
+    return runSerial();
+  }
 }
 
 // Shared empty fallback for layers that may intentionally produce no features.
@@ -1620,9 +1901,31 @@ function buildCountryLabelPointFeature(countryFeature) {
 }
 
 function buildCountryLabelGuideLayer(countryBoundaryLayer) {
+  const bestFeatureByCountryId = new Map();
+
+  for (const feature of countryBoundaryLayer.features ?? []) {
+    const countryId = String(feature?.properties?.id ?? "");
+
+    if (!countryId) {
+      continue;
+    }
+
+    const polygon = selectPrimaryPolygon(feature.geometry);
+    const area = polygon ? ringArea(polygon[0] ?? []) : 0;
+    const current = bestFeatureByCountryId.get(countryId);
+
+    if (!current || area > current.area) {
+      bestFeatureByCountryId.set(countryId, {
+        area,
+        feature,
+      });
+    }
+  }
+
   return {
     type: "FeatureCollection",
-    features: (countryBoundaryLayer.features ?? [])
+    features: [...bestFeatureByCountryId.values()]
+      .map((entry) => entry.feature)
       .map(buildCountryLabelPointFeature)
       .filter(Boolean),
   };
@@ -1682,6 +1985,10 @@ function buildAdminLabelPointFeature(feature, options) {
   const rawName = firstStringProperty(properties, nameFields);
 
   if (!rawName) {
+    return null;
+  }
+
+  if (rawName.trim() === "?") {
     return null;
   }
 
@@ -2863,6 +3170,162 @@ function subtractPolygonMaskFromPolygonLayer(polygonLayer, maskGeometry, correct
       })
       .filter(Boolean),
   };
+}
+
+function subtractPolygonMaskForIndexedFeatures(indexedFeatures, maskMultiPolygon, correctionTag) {
+  const processed = [];
+
+  for (const entry of indexedFeatures ?? []) {
+    const index = Number(entry?.index ?? -1);
+    const feature = entry?.feature;
+    const geometry = feature?.geometry;
+    const geometryMultiPolygon = toClipMultiPolygon(geometry);
+
+    if (index < 0 || !geometry || !geometryMultiPolygon) {
+      continue;
+    }
+
+    try {
+      const corrected = polygonClipping.difference(geometryMultiPolygon, maskMultiPolygon);
+      const correctedGeometry = fromClipMultiPolygon(corrected);
+
+      if (!correctedGeometry) {
+        continue;
+      }
+
+      processed.push({
+        index,
+        feature: {
+          type: "Feature",
+          properties: {
+            ...(feature.properties ?? {}),
+            coastalCorrection: correctionTag,
+          },
+          geometry: correctedGeometry,
+        },
+      });
+    } catch {
+      processed.push({
+        index,
+        feature: {
+          type: "Feature",
+          properties: {
+            ...(feature.properties ?? {}),
+            coastalCorrection: "fallback-original",
+          },
+          geometry,
+        },
+      });
+    }
+  }
+
+  return processed;
+}
+
+function buildFeatureCollectionFromIndexedEntries(entries) {
+  const orderedEntries = [...(entries ?? [])]
+    .filter((entry) => Number.isInteger(entry?.index) && entry.index >= 0 && entry?.feature)
+    .sort((left, right) => left.index - right.index);
+
+  let nextId = 1;
+
+  return {
+    type: "FeatureCollection",
+    features: orderedEntries.map((entry) => ({
+      ...entry.feature,
+      id: nextId++,
+    })),
+  };
+}
+
+function runPolygonMaskSubtractChunkWorker(payload) {
+  return new Promise((resolve, reject) => {
+    const worker = new Worker(new URL(import.meta.url), {
+      workerData: {
+        task: "polygon-mask-subtract-chunk",
+        payload,
+      },
+    });
+
+    worker.once("message", (message) => {
+      resolve(message);
+    });
+    worker.once("error", reject);
+    worker.once("exit", (code) => {
+      if (code !== 0) {
+        reject(new Error(`Polygon subtraction worker exited with code ${code}.`));
+      }
+    });
+  });
+}
+
+async function subtractPolygonMaskFromPolygonLayerWithWorkers(
+  polygonLayer,
+  maskGeometry,
+  correctionTag = "sea-subtracted",
+  options = {},
+) {
+  const {
+    computeWorkers = computeWorkerConcurrency,
+    minParallelFeatures = 1500,
+    logLabel = "polygon subtraction",
+  } = options;
+
+  if (!polygonLayer || !Array.isArray(polygonLayer.features) || !maskGeometry) {
+    return polygonLayer;
+  }
+
+  const maskMultiPolygon = toClipMultiPolygon(maskGeometry);
+
+  if (!maskMultiPolygon) {
+    return polygonLayer;
+  }
+
+  const indexedFeatures = (polygonLayer.features ?? []).map((feature, index) => ({
+    index,
+    feature,
+  }));
+
+  if (indexedFeatures.length === 0) {
+    return emptyFeatureCollection();
+  }
+
+  const targetWorkers = Math.max(1, Math.min(Number(computeWorkers) || 1, indexedFeatures.length));
+
+  if (targetWorkers <= 1 || indexedFeatures.length < minParallelFeatures) {
+    const processedEntries = subtractPolygonMaskForIndexedFeatures(
+      indexedFeatures,
+      maskMultiPolygon,
+      correctionTag,
+    );
+    return buildFeatureCollectionFromIndexedEntries(processedEntries);
+  }
+
+  try {
+    const chunks = chunkArray(indexedFeatures, targetWorkers);
+    const payloads = chunks.map((chunk, chunkIndex) => ({
+      chunkIndex,
+      indexedFeatures: chunk,
+      maskMultiPolygon,
+      correctionTag,
+    }));
+    const workerResults = await Promise.all(
+      payloads.map((payload) => runPolygonMaskSubtractChunkWorker(payload)),
+    );
+    workerResults.sort((left, right) => (left.chunkIndex ?? 0) - (right.chunkIndex ?? 0));
+    const processedEntries = workerResults.flatMap((result) => result.processedEntries ?? []);
+    return buildFeatureCollectionFromIndexedEntries(processedEntries);
+  } catch (error) {
+    console.warn(
+      `${logLabel} parallel execution failed; falling back to serial: ${error.message}`,
+    );
+    const processedEntries = subtractPolygonMaskForIndexedFeatures(
+      indexedFeatures,
+      maskMultiPolygon,
+      correctionTag,
+    );
+    return buildFeatureCollectionFromIndexedEntries(processedEntries);
+  }
 }
 
 function applyHexSeaCompletionFromLandMask(seaLayer, landMaskGeometry, hexLayer, options = {}) {
@@ -6099,6 +6562,23 @@ function resolveLocalOsmPbfPath() {
   return localOsmPbfCandidates().find((candidate) => existsSync(candidate)) ?? null;
 }
 
+function normalizeExtractBboxKey(extractBbox) {
+  if (!extractBbox) {
+    return "bbox:none";
+  }
+
+  const west = Number(extractBbox.west ?? Number.NaN);
+  const south = Number(extractBbox.south ?? Number.NaN);
+  const east = Number(extractBbox.east ?? Number.NaN);
+  const north = Number(extractBbox.north ?? Number.NaN);
+
+  if (![west, south, east, north].every((value) => Number.isFinite(value))) {
+    return "bbox:invalid";
+  }
+
+  return [west, south, east, north].map((value) => value.toFixed(6)).join(",");
+}
+
 function normalizeExtractedWaterBodies(featureCollection) {
   // Keep much higher fidelity for Ukraine water polygons because this layer is
   // the primary zoomed-in reference in operational areas.
@@ -6277,8 +6757,9 @@ function normalizeExtractedMajorRiverLines(featureCollection) {
 
 async function extractMajorRiverLinesFromLocalOsmPbf(extractBbox = theaterBbox) {
   const cacheKey = "osm/rivers/pbf-lines";
-  const extractSchemaVersion = 1;
+  const extractSchemaVersion = 2;
   const pbfPath = resolveLocalOsmPbfPath();
+  const extractBboxKey = normalizeExtractBboxKey(extractBbox);
 
   if (!pbfPath) {
     console.warn("Skipping local PBF river extraction: no local Ukraine OSM PBF found.");
@@ -6297,7 +6778,8 @@ async function extractMajorRiverLinesFromLocalOsmPbf(extractBbox = theaterBbox) 
       cached &&
       cached.sourcePbfPath === pbfPath &&
       cached.sourcePbfMtimeMs === pbfMtimeMs &&
-      cached.extractSchemaVersion === extractSchemaVersion
+      cached.extractSchemaVersion === extractSchemaVersion &&
+      cached.extractBboxKey === extractBboxKey
     ) {
       console.log("cache hit  osm/rivers/pbf-lines");
       return normalizeExtractedMajorRiverLines(
@@ -6346,6 +6828,7 @@ async function extractMajorRiverLinesFromLocalOsmPbf(extractBbox = theaterBbox) 
       sourcePbfPath: pbfPath,
       sourcePbfMtimeMs: pbfMtimeMs,
       extractSchemaVersion,
+      extractBboxKey,
     });
 
     console.log(
@@ -6364,8 +6847,9 @@ async function extractMajorRiverLinesFromLocalOsmPbf(extractBbox = theaterBbox) 
 
 async function extractWaterBodiesFromLocalOsmPbf(extractBbox = theaterBbox) {
   const cacheKey = "osm/water-bodies/pbf-extract";
-  const extractSchemaVersion = 3;
+  const extractSchemaVersion = 4;
   const pbfPath = resolveLocalOsmPbfPath();
+  const extractBboxKey = normalizeExtractBboxKey(extractBbox);
 
   if (!pbfPath) {
     console.warn("Skipping local PBF water extraction: no local Ukraine OSM PBF found.");
@@ -6384,7 +6868,8 @@ async function extractWaterBodiesFromLocalOsmPbf(extractBbox = theaterBbox) {
       cached &&
       cached.sourcePbfPath === pbfPath &&
       cached.sourcePbfMtimeMs === pbfMtimeMs &&
-      cached.extractSchemaVersion === extractSchemaVersion
+      cached.extractSchemaVersion === extractSchemaVersion &&
+      cached.extractBboxKey === extractBboxKey
     ) {
       console.log("cache hit  osm/water-bodies/pbf-extract");
       return normalizeExtractedWaterBodies(
@@ -6454,6 +6939,7 @@ async function extractWaterBodiesFromLocalOsmPbf(extractBbox = theaterBbox) {
       sourcePbfPath: pbfPath,
       sourcePbfMtimeMs: pbfMtimeMs,
       extractSchemaVersion,
+      extractBboxKey,
     });
 
     console.log(
@@ -6701,19 +7187,25 @@ async function main() {
       `Coastal-only stage: prepared sea subtraction layer (${formatElapsedMs(Date.now() - subtractionPrepStartedAt)}).`,
     );
     const waterSubtractionStartedAt = Date.now();
-    const correctedWaterBodies = subtractPolygonMaskFromPolygonLayer(
+    const correctedWaterBodies = await subtractPolygonMaskFromPolygonLayerWithWorkers(
       effectiveWaterBodiesClipped,
       unionPolygonFeatureCollectionGeometries(seaSubtractionLayer),
       "corrected-sea-difference",
+      {
+        logLabel: "Coastal water-bodies correction",
+      },
     );
     console.log(
       `Coastal-only stage: corrected water-bodies (${formatElapsedMs(Date.now() - waterSubtractionStartedAt)}).`,
     );
     const countryTrimStartedAt = Date.now();
-    let correctedCountryBoundaries = subtractPolygonMaskFromPolygonLayer(
+    let correctedCountryBoundaries = await subtractPolygonMaskFromPolygonLayerWithWorkers(
       countryBoundariesForCoastal,
       unionPolygonFeatureCollectionGeometries(seaSubtractionLayer),
       "coastal-sea-trim",
+      {
+        logLabel: "Coastal country-boundaries correction",
+      },
     );
     if (hexCells) {
       correctedCountryBoundaries = applyHexCountryBoundaryFillExclusions(
@@ -6871,7 +7363,84 @@ async function main() {
 
   const postElevationVectorPrepStartedAt = Date.now();
   console.log("Starting post-elevation vector assembly...");
-  const clippedRivers = filterFeatureCollectionToBbox(rivers, buildExtentBbox);
+  const vectorAssemblyPrefilterStartedAt = Date.now();
+  const vectorAssemblyJobs = [
+    {
+      jobId: "clipped-rivers",
+      featureCollection: rivers,
+      bbox: buildExtentBbox,
+    },
+    {
+      jobId: "water-bodies-prototype-clipped",
+      featureCollection: osmWaterBodiesPrototype,
+      bbox: buildExtentBbox,
+    },
+    {
+      jobId: "seas-clipped",
+      featureCollection: seas,
+      bbox: buildExtentBbox,
+    },
+    {
+      jobId: "roads-clipped",
+      featureCollection: roads,
+      bbox: buildExtentBbox,
+    },
+    {
+      jobId: "railways-clipped",
+      featureCollection: railways,
+      bbox: buildExtentBbox,
+    },
+    {
+      jobId: "country-boundaries-layer",
+      featureCollection: countries,
+      bbox: buildExtentBbox,
+    },
+    {
+      jobId: "country-boundary-lines-clipped",
+      featureCollection: countryBoundaryLines,
+      bbox: buildExtentBbox,
+    },
+    {
+      jobId: "major-city-urban-filtered",
+      featureCollection: urbanAreas,
+      bbox: buildExtentBbox,
+    },
+    {
+      jobId: "settlements-layer",
+      elements: settlements.elements ?? [],
+      theaterBoundary,
+    },
+    {
+      jobId: "clipped-oblast-boundaries",
+      featureCollection: oblastBoundaries,
+      bbox: buildExtentBbox,
+    },
+    {
+      jobId: "clipped-adm2-polygons",
+      featureCollection: oblastSubdivisions,
+      bbox: buildExtentBbox,
+    },
+  ];
+  const vectorAssemblyJobResult = await runVectorAssemblyJobs(vectorAssemblyJobs, {
+    computeWorkers: computeWorkerConcurrency,
+  });
+  console.log(
+    `Post-elevation vector assembly prefilter jobs completed in ` +
+    `${formatElapsedMs(Date.now() - vectorAssemblyPrefilterStartedAt)} ` +
+    `using ${vectorAssemblyJobResult.mode} mode with ${vectorAssemblyJobResult.usedWorkers} compute worker(s).`,
+  );
+  const prefilteredById = vectorAssemblyJobResult.resultsById;
+  const clippedRivers = prefilteredById.get("clipped-rivers");
+  const clippedWaterBodiesPrototype = prefilteredById.get("water-bodies-prototype-clipped");
+  const clippedSeas = prefilteredById.get("seas-clipped");
+  const clippedRoads = prefilteredById.get("roads-clipped");
+  const clippedRailways = prefilteredById.get("railways-clipped");
+  const countryBoundaryLayer = prefilteredById.get("country-boundaries-layer");
+  const clippedCountryBoundaryLines = prefilteredById.get("country-boundary-lines-clipped");
+  const clippedMajorCityUrbanAreas = prefilteredById.get("major-city-urban-filtered");
+  const settlementsLayer = prefilteredById.get("settlements-layer");
+  const clippedOblastBoundaries = prefilteredById.get("clipped-oblast-boundaries");
+  const clippedAdm2Polygons = prefilteredById.get("clipped-adm2-polygons");
   const filteredLayers = {
     "layers/theater-boundary.geojson": theaterBoundary,
     "layers/oblast-boundaries.geojson": oblastBoundaries,
@@ -6879,34 +7448,19 @@ async function main() {
     "layers/oblast-subdivisions.geojson": emptyFeatureCollection(),
     "layers/oblast-subdivision-label-points.geojson": emptyFeatureCollection(),
     "layers/rivers.geojson": clippedRivers,
-    "layers/water-bodies.geojson": filterFeatureCollectionToBbox(
-      osmWaterBodiesPrototype,
-      buildExtentBbox,
-    ),
+    "layers/water-bodies.geojson": clippedWaterBodiesPrototype,
     "layers/water-bodies-osm-prototype.geojson": osmWaterBodiesPrototype,
-    "layers/seas.geojson": filterFeatureCollectionToBbox(seas, buildExtentBbox),
+    "layers/seas.geojson": clippedSeas,
     "layers/wetlands.geojson": wetlands,
     "layers/forests.geojson": forests,
-    "layers/roads.geojson": filterFeatureCollectionToBbox(roads, buildExtentBbox),
-    "layers/railways.geojson": filterFeatureCollectionToBbox(railways, buildExtentBbox),
-    "layers/country-boundaries.geojson": buildCountryBoundaryLayer(
-      filterFeatureCollectionToBbox(countries, buildExtentBbox),
-    ),
+    "layers/roads.geojson": clippedRoads,
+    "layers/railways.geojson": clippedRailways,
+    "layers/country-boundaries.geojson": countryBoundaryLayer,
     "layers/country-label-guides.geojson": emptyFeatureCollection(),
-    "layers/country-boundary-lines.geojson": filterFeatureCollectionToBbox(
-      countryBoundaryLines,
-      buildExtentBbox,
-    ),
-    "layers/major-city-urban-areas.geojson": filterMajorCityUrbanAreas(
-      filterFeatureCollectionToBbox(urbanAreas, buildExtentBbox),
-    ),
-    "layers/settlements.geojson": overpassElementsToGeoJson(
-      settlements.elements ?? [],
-      theaterBoundary,
-    ),
+    "layers/country-boundary-lines.geojson": clippedCountryBoundaryLines,
+    "layers/major-city-urban-areas.geojson": clippedMajorCityUrbanAreas,
+    "layers/settlements.geojson": settlementsLayer,
   };
-  const clippedOblastBoundaries = filterFeatureCollectionToBbox(oblastBoundaries, buildExtentBbox);
-  const clippedAdm2Polygons = filterFeatureCollectionToBbox(oblastSubdivisions, buildExtentBbox);
   const alignedOblastSubdivisions = alignOblastSubdivisionBoundaries(
     clippedOblastBoundaries,
     clippedAdm2Polygons,
@@ -7077,19 +7631,25 @@ async function main() {
     `Coastal stage: prepared sea subtraction layer (${formatElapsedMs(Date.now() - subtractionPrepStartedAt)}).`,
   );
   const waterSubtractionStartedAt = Date.now();
-  const correctedWaterBodies = subtractPolygonMaskFromPolygonLayer(
+  const correctedWaterBodies = await subtractPolygonMaskFromPolygonLayerWithWorkers(
     effectiveWaterBodiesClipped,
     unionPolygonFeatureCollectionGeometries(seaSubtractionLayer),
     "corrected-sea-difference",
+    {
+      logLabel: "Coastal water-bodies correction",
+    },
   );
   console.log(
     `Coastal stage: corrected water-bodies (${formatElapsedMs(Date.now() - waterSubtractionStartedAt)}).`,
   );
   const countryTrimStartedAt = Date.now();
-  let correctedCountryBoundaries = subtractPolygonMaskFromPolygonLayer(
+  let correctedCountryBoundaries = await subtractPolygonMaskFromPolygonLayerWithWorkers(
     countryBoundariesForCoastal,
     unionPolygonFeatureCollectionGeometries(seaSubtractionLayer),
     "coastal-sea-trim",
+    {
+      logLabel: "Coastal country-boundaries correction",
+    },
   );
   if (hexCells) {
     correctedCountryBoundaries = applyHexCountryBoundaryFillExclusions(
@@ -7113,10 +7673,6 @@ async function main() {
   filteredLayers["layers/settlements.geojson"] = filterPointFeaturesOutsidePolygons(
     filteredLayers["layers/settlements.geojson"],
     filteredLayers["layers/seas.geojson"],
-  );
-  filteredLayers["layers/settlement-voronoi-cells.geojson"] = buildSettlementVoronoiLayer(
-    filteredLayers["layers/country-boundaries.geojson"],
-    filteredLayers["layers/settlements.geojson"],
   );
   filteredLayers["layers/country-label-guides.geojson"] = buildCountryLabelGuideLayer(
     filteredLayers["layers/country-boundaries.geojson"],
@@ -7313,7 +7869,6 @@ async function main() {
           },
         ]
       : []),
-    settlementVoronoiCatalogEntry,
   ];
 
   await writeGeoJson("layers.json", {
@@ -7342,6 +7897,31 @@ async function runWorkerTaskIfNeeded() {
       corridorFeatures: result.corridorFeatures ?? [],
       processedRiverFeatureCount: result.processedRiverFeatureCount ?? 0,
       processedSegmentCount: result.processedSegmentCount ?? 0,
+    });
+    return true;
+  }
+
+  if (workerData.task === "polygon-mask-subtract-chunk") {
+    const payload = workerData.payload ?? {};
+    const processedEntries = subtractPolygonMaskForIndexedFeatures(
+      payload.indexedFeatures ?? [],
+      payload.maskMultiPolygon ?? null,
+      payload.correctionTag ?? "sea-subtracted",
+    );
+    parentPort.postMessage({
+      chunkIndex: payload.chunkIndex ?? 0,
+      processedEntries,
+    });
+    return true;
+  }
+
+  if (workerData.task === "vector-assembly-job") {
+    const payload = workerData.payload ?? {};
+    const job = payload.job ?? {};
+    const result = runVectorAssemblyJob(job);
+    parentPort.postMessage({
+      jobId: String(job?.jobId ?? ""),
+      result,
     });
     return true;
   }

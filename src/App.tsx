@@ -1,6 +1,5 @@
 import { useState } from "react";
 import {
-  type CellLayerMode,
   LayerPanel,
   presetVisibility,
   type LayerControlId,
@@ -13,20 +12,11 @@ import { MapView } from "./map/MapView";
 export default function App() {
   const [visibility, setVisibility] = useState(presetVisibility.boundaries);
   const [viewMode, setViewMode] = useState<ViewMode>("boundaries");
-  const [cellLayerMode, setCellLayerMode] = useState<CellLayerMode>("hexes");
   const [settlementDisplayLevel, setSettlementDisplayLevel] =
     useState<SettlementDisplayLevel>("villages");
   const [resetToken, setResetToken] = useState(0);
   const [coordinateReadout, setCoordinateReadout] = useState<string | null>(null);
   const [zoomReadout, setZoomReadout] = useState<string | null>(null);
-
-  function handleChangeCellLayerMode(mode: CellLayerMode) {
-    setCellLayerMode(mode);
-    setVisibility((current) => ({
-      ...current,
-      hexes: true,
-    }));
-  }
 
   function handleToggleLayer(layerId: LayerControlId) {
     setVisibility((current) => ({
@@ -57,12 +47,10 @@ export default function App() {
           </p>
         </header>
         <LayerPanel
-          cellLayerMode={cellLayerMode}
           coordinateReadout={coordinateReadout}
           zoomReadout={zoomReadout}
           settlementDisplayLevel={settlementDisplayLevel}
           onApplyPreset={handleApplyPreset}
-          onChangeCellLayerMode={handleChangeCellLayerMode}
           onChangeSettlementDisplayLevel={setSettlementDisplayLevel}
           onReset={() => setResetToken((value) => value + 1)}
           onToggleLayer={handleToggleLayer}
@@ -72,7 +60,6 @@ export default function App() {
       </aside>
       <section className="map-stage">
         <MapView
-          cellLayerMode={cellLayerMode}
           layerVisibility={visibility}
           settlementDisplayLevel={settlementDisplayLevel}
           onCoordinateChange={setCoordinateReadout}

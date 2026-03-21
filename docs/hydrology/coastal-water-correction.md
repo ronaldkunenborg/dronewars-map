@@ -25,9 +25,10 @@ The correction flow combines:
 1. Build a theater coastal land mask from boundary geometry (including higher-detail Ukraine geometry where available).
 2. Correct sea polygons by subtracting the land mask (`correctedSeas = seas - landMask`).
 3. Clip corrected sea and water polygons to the current build bbox (geometry clipping, not just bbox-intersection filtering).
-4. Remove corrected sea space from inland water output (`water-bodies = water-bodies - correctedSeas`) so sea and inland polygons do not overlap.
-5. Apply hex-level sea completion fallback in configured problem hexes: `seaInHex = hexArea - landMaskInHex`.
-6. (Optional/disabled by default) apply stricter hex-specific OSM sea override with area-ratio guard.
+4. Apply hex-level sea completion fallback in configured problem hexes: `seaInHex = hexArea - landMaskInHex`.
+5. Apply ADM2 land/sea lockstep in configured hexes: inside those hexes, areas outside the ADM2-derived Ukraine border are rendered as sea, and country-fill is clipped to the same border.
+6. Remove corrected sea space from inland water output (`water-bodies = water-bodies - correctedSeas`) so sea and inland polygons do not overlap.
+7. (Optional/disabled by default) apply stricter hex-specific OSM sea override with area-ratio guard.
 
 ## Hex Sea Completion Fallback
 
@@ -47,6 +48,18 @@ Current configured completion set includes Odessa + Crimea task hexes:
 - `HX-E75-N12`
 - `HX-E77-N12`
 
+## Why Sea Completion And Lockstep Both Exist
+
+Both mechanisms are needed because they solve different failure modes:
+
+- `adm2LandSeaLockstepHexIds` enforces border-consistent land/sea behavior in selected hexes where Ukraine boundary geometry is present in the hex.
+- `coastalSeaCompletionHexIds` is a local fallback that forces sea from the land mask in known bad coastal hexes, including cases where lockstep may not fully apply due to boundary-intersection edge cases in that hex.
+
+Operational rule:
+
+- keep lockstep as the broad consistency control,
+- keep sea completion as a small curated safety net for stubborn coastal artifacts.
+
 ## Hex-Specific Override Guard
 
 For an explicit problem hex, the builder can also attempt a local OSM-based sea replacement.  
@@ -65,3 +78,4 @@ Typical log lines:
 - Rivers do not define coastline geometry. Coastline behavior comes from sea + water polygon processing.
 - This flow reuses cached source data during normal runs. External refreshes should only happen when explicitly requested.
 - This is the operational fix track; long-term higher-detail coastal source replacement is tracked separately in tasks.
+- The current coastal stabilization uses curated hex ID lists (`adm2LandSeaLockstepHexIds` and `coastalSeaCompletionHexIds`). If hex size, grid alignment, or theater scope changes, these curated lists can become invalid and produce wrong coastal behavior until they are regenerated/reviewed.

@@ -80,4 +80,22 @@ Notes:
 - Default TTL: one year
 - Rebuilds should mostly show `cache hit` after warm-up
 
+## Hydrology Dependency
+
+For correct targeted river repairs, `data:layers:public` depends on:
+
+- `reports/river-water-gap-checklist.json`
+
+If this report is missing or stale, targeted reconstruction scope can be wrong. Refresh it with:
+
+```bash
+npm run data:analytics:river-gaps
+```
+
+Scope note: targeted reconstruction does not blindly use every raw candidate hex.  
+The final scope is curated via manual include/exclude overrides in both:
+
+- `scripts/analytics/report-river-water-gaps.mjs` (report-generation curation)
+- `scripts/layers/fetch-public-layers.mjs` (build-time target curation)
+
 See [River Gap Repair Workflow](../hydrology/river-gap-repair.md) for hydrology-specific reconstruction details.

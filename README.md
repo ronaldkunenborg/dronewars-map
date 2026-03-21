@@ -12,7 +12,6 @@ The project currently includes:
 - a clickable hex debug panel
 - UI controls for presets, layer toggles, reset-to-Ukraine, legend, and coordinate readout
 - a settlements display-level selector (`Cities`, `Cities + Towns`, `Cities + Towns + Villages`)
-- a cell-layer mode switch between `Hex` and `Voronoi`
 - lightweight overlay slots for future frontlines, zones of control, artillery ranges, logistics routes, and force placement
 - a public-source data pipeline that generates and refreshes visible map layers using cached upstream downloads
 - a cached fetch path so repeated rebuilds reuse prior downloads instead of refetching everything
@@ -65,7 +64,6 @@ With the current processed data, the app should show:
 - water, seas, forests, wetlands, roads, railways, settlements, theater boundary, and oblast boundaries
 - raion-level oblast subdivisions at medium/high zoom
 - major-city urban extents beneath city labels
-- optional city-seeded Voronoi operational cells (when `Cell Layer` is set to `Voronoi`)
 - single dominant country labels (with Ukraine emphasized) that stay visible but become more subdued on zoom-in
 - oblast labels that appear at higher zoom and are smaller/subordinate to country labels
 - sidebar controls for visibility and presets
@@ -86,7 +84,6 @@ At the moment, the processed layers provide:
 - railways
 - major-city urban areas
 - settlements
-- settlement voronoi cells (city-seeded)
 
 ## Data Workflow
 
@@ -371,6 +368,9 @@ Outputs:
 - `reports/river-water-gap-checklist.json`
 - `reports/river-water-gap-checklist.md`
 
+Important: `reports/river-water-gap-checklist.json` is used by the hydrology build to choose targeted river-reconstruction hexes. It is not only a review artifact.
+Important: the final reconstruction scope is curated (manual include/exclude overrides in analytics and build scripts), so it can intentionally differ from the raw detected candidate list.
+
 Default scan behavior targets named major rivers (`feature length >= 40 km`) in-theater; use script args to broaden scope (for example `--feature-min-length-km=12 --include-all-hexes`).
 
 ### 2. Optional Local Pipeline Scaffolding
@@ -392,7 +392,6 @@ npm run data:preprocess:plan
 npm run data:preprocess
 npm run data:layers:plan
 npm run data:layers
-npm run data:layers:voronoi
 npm run data:hex:generate
 npm run data:hex:enrich
 npm run data:analytics
@@ -492,13 +491,11 @@ Implemented:
 - reset-to-Ukraine
 - scale bar
 - coordinate readout
-- cell-layer mode selector (`Hex` / `Voronoi`)
 - cell inspector with selection highlight
 - hex debug panel
 - overlay slot manager for future operational overlays
 - major-city urban extent fills under settlement labels
 - Ukrainian settlement names with English names below in parentheses when available
-- city-seeded Voronoi cells for alternative operational cell display
 - single dominant in-theater country labels (no repeated duplicates) with thicker country border lines
 - zoom-based label hierarchy where country labels become subdued and oblast labels appear inside provinces
 - ADM2 (raion) subdivision boundary overlay inside oblasts
