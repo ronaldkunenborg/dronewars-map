@@ -6,7 +6,8 @@
       "properties": {
         "id": "poi-airport-boryspil",
         "name": "Boryspil International Airport",
-        "category": "airport"
+        "category": "airport",
+        "icon": "poi-airport-large"
       },
       "geometry": {
         "type": "Point",
@@ -18,7 +19,8 @@
       "properties": {
         "id": "poi-airport-antonov",
         "name": "Antonov Airport",
-        "category": "airport"
+        "category": "airfield",
+        "icon": "poi-airfield"
       },
       "geometry": {
         "type": "Point",
@@ -54,7 +56,8 @@
       "properties": {
         "id": "poi-power-znpp",
         "name": "Zaporizhzhia Nuclear Power Plant",
-        "category": "power_plant"
+        "category": "nuclear_power_plant",
+        "icon": "poi-power-nuclear"
       },
       "geometry": {
         "type": "Point",
@@ -90,11 +93,62 @@
       "properties": {
         "id": "poi-military-mykolaiv-airbase",
         "name": "Kulbakino Air Base",
-        "category": "military_base"
+        "category": "airfield",
+        "icon": "poi-airfield-military"
       },
       "geometry": {
         "type": "Point",
         "coordinates": [31.919400, 46.966700]
+      }
+    },
+    {
+      "type": "Feature",
+      "properties": {
+        "id": "poi-steel-azovstal",
+        "name": "Azovstal Steel Complex",
+        "category": "steel_plant"
+      },
+      "geometry": {
+        "type": "Point",
+        "coordinates": [37.596900, 47.099700]
+      }
+    },
+    {
+      "type": "Feature",
+      "properties": {
+        "id": "poi-port-odesa",
+        "name": "Port of Odesa",
+        "category": "port",
+        "icon": "poi-port-civil"
+      },
+      "geometry": {
+        "type": "Point",
+        "coordinates": [30.756900, 46.492500]
+      }
+    },
+    {
+      "type": "Feature",
+      "properties": {
+        "id": "poi-rocket-yuzhmash",
+        "name": "Yuzhmash Rocket Production Site",
+        "category": "rocket_site"
+      },
+      "geometry": {
+        "type": "Point",
+        "coordinates": [35.056900, 48.435900]
+      }
+    },
+    {
+      "type": "Feature",
+      "properties": {
+        "id": "poi-port-sevastopol-military",
+        "name": "Sevastopol Military Port",
+        "category": "port",
+        "icon": "poi-port-military"
+      },
+      "geometry": {
+        "type": "Point",
+        "coordinates": [33.528100, 44.610800]
       }
     }
   ]

@@ -1,19 +1,17 @@
 import { useState } from "react";
 import {
   LayerPanel,
-  presetVisibility,
+  defaultLayerVisibility,
   type LayerControlId,
   type SettlementDisplayLevel,
-  type ViewMode,
 } from "./components/LayerPanel";
 import { ukraineTheaterConfig } from "./config";
 import { MapView } from "./map/MapView";
 
 export default function App() {
-  const [visibility, setVisibility] = useState(presetVisibility.boundaries);
-  const [viewMode, setViewMode] = useState<ViewMode>("boundaries");
+  const [visibility, setVisibility] = useState(defaultLayerVisibility);
   const [settlementDisplayLevel, setSettlementDisplayLevel] =
-    useState<SettlementDisplayLevel>("villages");
+    useState<SettlementDisplayLevel>("cities");
   const [resetToken, setResetToken] = useState(0);
   const [coordinateReadout, setCoordinateReadout] = useState<string | null>(null);
   const [zoomReadout, setZoomReadout] = useState<string | null>(null);
@@ -52,11 +50,6 @@ export default function App() {
     }));
   }
 
-  function handleApplyPreset(mode: ViewMode) {
-    setViewMode(mode);
-    setVisibility(presetVisibility[mode]);
-  }
-
   return (
     <main className="app-shell">
       <aside className="sidebar">
@@ -77,11 +70,9 @@ export default function App() {
           coordinateReadout={coordinateReadout}
           zoomReadout={zoomReadout}
           settlementDisplayLevel={settlementDisplayLevel}
-          onApplyPreset={handleApplyPreset}
           onChangeSettlementDisplayLevel={setSettlementDisplayLevel}
           onReset={() => setResetToken((value) => value + 1)}
           onToggleLayer={handleToggleLayer}
-          viewMode={viewMode}
           visibility={visibility}
         />
       </aside>
