@@ -427,6 +427,12 @@ function resolveComputeWorkerConcurrency(requested) {
   return Math.max(1, Math.min(parsed, cpuParallelism));
 }
 const computeWorkerConcurrency = resolveComputeWorkerConcurrency(requestedComputeWorkerCount);
+const quickTestHexSpreadWarningKm = 120;
+const wetlandMinApproxAreaKm2 = 2;
+const wetlandCorridorEnhancementEnabled = true;
+const wetlandCorridorDistanceKm = 0.5;
+const wetlandCorridorMergeDistanceKm = 0.5;
+const wetlandCorridorMinClusterAreaKm2 = 0.2;
 const coastalSeaCompletionHexIds = [
   "HX-E36-N22",
   "HX-E53-N11",
@@ -3896,6 +3902,21 @@ function kilometersToLongitudeDegrees(km, latitude) {
   return km / safeKmPerDegreeLongitude;
 }
 
+function haversineDistanceKm(fromPoint, toPoint) {
+  const earthRadiusKm = 6371.0088;
+  const latitudeDelta = ((toPoint[1] - fromPoint[1]) * Math.PI) / 180;
+  const longitudeDelta = ((toPoint[0] - fromPoint[0]) * Math.PI) / 180;
+  const fromLatitudeRadians = (fromPoint[1] * Math.PI) / 180;
+  const toLatitudeRadians = (toPoint[1] * Math.PI) / 180;
+  const a =
+    Math.sin(latitudeDelta / 2) ** 2 +
+    Math.cos(fromLatitudeRadians) *
+      Math.cos(toLatitudeRadians) *
+      Math.sin(longitudeDelta / 2) ** 2;
+
+  return 2 * earthRadiusKm * Math.asin(Math.sqrt(a));
+}
+
 // Approximate the shortest kilometer distance from a point to a line segment.
 function pointToSegmentDistanceKm(point, segmentStart, segmentEnd) {
   const referenceLatitude = (point[1] + segmentStart[1] + segmentEnd[1]) / 3;
@@ -4363,6 +4384,298 @@ async function fetchTiledAreaLayer(layerId, selectors, propertiesBuilder, option
   return {
     type: "FeatureCollection",
     features: [...featuresById.values()],
+  };
+}
+
+function approximateGeometryBoundsAreaKm2(geometry) {
+  if (!geometry) {
+    return 0;
+  }
+
+  if (geometry.type === "Polygon") {
+    const ring = geometry.coordinates?.[0] ?? [];
+    return approximateBoundsAreaKm2(ring);
+  }
+
+  if (geometry.type === "MultiPolygon") {
+    return geometry.coordinates.reduce((sum, polygon) => {
+      const ring = polygon?.[0] ?? [];
+      return sum + approximateBoundsAreaKm2(ring);
+    }, 0);
+  }
+
+  return 0;
+}
+
+function splitWetlandFeaturesByApproxArea(featureCollection, thresholdKm2) {
+  const features = featureCollection?.features ?? [];
+  const largeFeatures = [];
+  const smallFeatures = [];
+
+  for (const feature of features) {
+    const geometry = feature?.geometry;
+    if (!geometry || (geometry.type !== "Polygon" && geometry.type !== "MultiPolygon")) {
+      continue;
+    }
+
+    const approxAreaKm2 = approximateGeometryBoundsAreaKm2(geometry);
+    const target = approxAreaKm2 >= thresholdKm2 ? largeFeatures : smallFeatures;
+
+    target.push({
+      ...feature,
+      properties: {
+        ...(feature.properties ?? {}),
+        approxAreaKm2: Number(approxAreaKm2.toFixed(4)),
+      },
+    });
+  }
+
+  return {
+    large: {
+      type: "FeatureCollection",
+      features: largeFeatures,
+    },
+    small: {
+      type: "FeatureCollection",
+      features: smallFeatures,
+    },
+  };
+}
+
+function clusterWetlandCandidatesByDistance(candidates, mergeDistanceKm) {
+  if ((candidates ?? []).length === 0) {
+    return [];
+  }
+
+  const referenceLatitude =
+    candidates.reduce((sum, candidate) => sum + candidate.point[1], 0) / candidates.length;
+  const projected = candidates.map((candidate) => ({
+    ...candidate,
+    kmPoint: toKilometers(candidate.point, referenceLatitude),
+  }));
+  const cellSizeKm = Math.max(mergeDistanceKm, 0.05);
+  const bucketIndex = new Map();
+
+  for (const [index, candidate] of projected.entries()) {
+    const xCell = Math.floor(candidate.kmPoint[0] / cellSizeKm);
+    const yCell = Math.floor(candidate.kmPoint[1] / cellSizeKm);
+    const key = `${xCell}:${yCell}`;
+    const bucket = bucketIndex.get(key);
+
+    if (bucket) {
+      bucket.push(index);
+    } else {
+      bucketIndex.set(key, [index]);
+    }
+  }
+
+  const parent = projected.map((_, index) => index);
+  const find = (value) => {
+    let current = value;
+
+    while (parent[current] !== current) {
+      parent[current] = parent[parent[current]];
+      current = parent[current];
+    }
+
+    return current;
+  };
+  const unite = (left, right) => {
+    const leftRoot = find(left);
+    const rightRoot = find(right);
+
+    if (leftRoot !== rightRoot) {
+      parent[rightRoot] = leftRoot;
+    }
+  };
+
+  for (const [index, candidate] of projected.entries()) {
+    const xCell = Math.floor(candidate.kmPoint[0] / cellSizeKm);
+    const yCell = Math.floor(candidate.kmPoint[1] / cellSizeKm);
+
+    for (let deltaX = -1; deltaX <= 1; deltaX += 1) {
+      for (let deltaY = -1; deltaY <= 1; deltaY += 1) {
+        const bucket = bucketIndex.get(`${xCell + deltaX}:${yCell + deltaY}`);
+
+        if (!bucket) {
+          continue;
+        }
+
+        for (const neighborIndex of bucket) {
+          if (neighborIndex <= index) {
+            continue;
+          }
+
+          const neighbor = projected[neighborIndex];
+          const distance = haversineDistanceKm(candidate.point, neighbor.point);
+
+          if (distance <= mergeDistanceKm) {
+            unite(index, neighborIndex);
+          }
+        }
+      }
+    }
+  }
+
+  const clustersByRoot = new Map();
+
+  for (let index = 0; index < projected.length; index += 1) {
+    const root = find(index);
+    const cluster = clustersByRoot.get(root) ?? [];
+    cluster.push(projected[index]);
+    clustersByRoot.set(root, cluster);
+  }
+
+  return [...clustersByRoot.values()];
+}
+
+function mergeWetlandsNearWaterBodyCorridor(
+  baselineWetlands,
+  smallWetlandCandidates,
+  corridorWaterBodies,
+  options = {},
+) {
+  const {
+    corridorDistanceKm = wetlandCorridorDistanceKm,
+    mergeDistanceKm = wetlandCorridorMergeDistanceKm,
+    minClusterAreaKm2 = wetlandCorridorMinClusterAreaKm2,
+  } = options;
+  const corridorEntries = (corridorWaterBodies?.features ?? [])
+    .filter((feature) =>
+      feature?.geometry?.type === "Polygon" || feature?.geometry?.type === "MultiPolygon",
+    )
+    .map((feature) => ({
+      feature,
+      bounds: geometryBounds(feature.geometry),
+    }));
+
+  if (corridorEntries.length === 0) {
+    return baselineWetlands;
+  }
+
+  const corridorIndex = buildBoundsSpatialIndex(corridorEntries, 0.2);
+  const candidates = [];
+
+  for (const feature of smallWetlandCandidates?.features ?? []) {
+    const geometry = feature?.geometry;
+
+    if (!geometry || (geometry.type !== "Polygon" && geometry.type !== "MultiPolygon")) {
+      continue;
+    }
+
+    const point = geometryRepresentativePoint(geometry);
+
+    if (!point) {
+      continue;
+    }
+
+    const searchBounds = bboxAroundPointKm(point, corridorDistanceKm);
+    const nearbyWaterEntries = queryBoundsSpatialIndex(corridorIndex, searchBounds);
+
+    if (nearbyWaterEntries.length === 0) {
+      continue;
+    }
+
+    const distanceKm = minDistanceToWaterEntriesNearPointKm(
+      point,
+      nearbyWaterEntries,
+      corridorDistanceKm,
+    );
+
+    if (!Number.isFinite(distanceKm) || distanceKm > corridorDistanceKm) {
+      continue;
+    }
+
+    const approxAreaKm2 = Number(feature.properties?.approxAreaKm2 ?? approximateGeometryBoundsAreaKm2(geometry));
+
+    candidates.push({
+      feature,
+      geometry,
+      point,
+      approxAreaKm2,
+      wetlandType:
+        feature.properties?.type ??
+        feature.properties?.wetland ??
+        feature.properties?.natural ??
+        "wetland",
+    });
+  }
+
+  if (candidates.length === 0) {
+    return baselineWetlands;
+  }
+
+  const clusters = clusterWetlandCandidatesByDistance(candidates, mergeDistanceKm);
+  const mergedFeatures = [];
+  let nextId = 1;
+
+  for (const cluster of clusters) {
+    const clusterAreaKm2 = cluster.reduce(
+      (sum, candidate) => sum + (Number(candidate.approxAreaKm2) || 0),
+      0,
+    );
+
+    if (clusterAreaKm2 < minClusterAreaKm2) {
+      continue;
+    }
+
+    const clusterTypeCounts = new Map();
+    let mergedClipGeometry = null;
+
+    for (const candidate of cluster) {
+      const clipGeometry = toClipMultiPolygon(candidate.geometry);
+
+      if (!clipGeometry) {
+        continue;
+      }
+
+      clusterTypeCounts.set(
+        candidate.wetlandType,
+        (clusterTypeCounts.get(candidate.wetlandType) ?? 0) + 1,
+      );
+      mergedClipGeometry = mergedClipGeometry
+        ? polygonClipping.union(mergedClipGeometry, clipGeometry)
+        : clipGeometry;
+    }
+
+    const mergedGeometry = fromClipMultiPolygon(mergedClipGeometry);
+
+    if (!mergedGeometry) {
+      continue;
+    }
+
+    const dominantWetlandType = [...clusterTypeCounts.entries()]
+      .sort((left, right) => right[1] - left[1])[0]?.[0] ?? "wetland";
+
+    const featureId = `wetland-corridor-${nextId++}`;
+    mergedFeatures.push({
+      type: "Feature",
+      id: featureId,
+      properties: {
+        id: featureId,
+        type: dominantWetlandType,
+        source: "wetland-corridor-water-bodies",
+        corridorDistanceKm,
+        mergeDistanceKm,
+        clusterApproxAreaKm2: Number(clusterAreaKm2.toFixed(4)),
+        clusterFeatureCount: cluster.length,
+      },
+      geometry: mergedGeometry,
+    });
+  }
+
+  if (mergedFeatures.length === 0) {
+    return baselineWetlands;
+  }
+
+  const baseFeatures = baselineWetlands?.features ?? [];
+
+  return {
+    type: "FeatureCollection",
+    features: [
+      ...baseFeatures,
+      ...mergedFeatures,
+    ],
   };
 }
 
@@ -6519,12 +6832,17 @@ async function resolveHexOnlyScope(hexIds) {
       north: Number.NEGATIVE_INFINITY,
     },
   );
+  const diagonalKm = pointDistanceKm(
+    [bounds.west, bounds.south],
+    [bounds.east, bounds.north],
+  );
 
   return {
     requestedHexIds,
     foundHexIds,
     missingHexIds,
     bounds,
+    diagonalKm,
     maskGeometry,
   };
 }
@@ -6994,6 +7312,16 @@ async function main() {
       `(bbox ${buildExtentBbox.west.toFixed(4)},${buildExtentBbox.south.toFixed(4)} ` +
       `to ${buildExtentBbox.east.toFixed(4)},${buildExtentBbox.north.toFixed(4)}).`,
     );
+    if (
+      hexOnlyScope.foundHexIds.length > 1 &&
+      Number.isFinite(hexOnlyScope.diagonalKm) &&
+      hexOnlyScope.diagonalKm > quickTestHexSpreadWarningKm
+    ) {
+      console.warn(
+        `--hex-only selection is geographically spread (diagonal ~${hexOnlyScope.diagonalKm.toFixed(1)} km). ` +
+        `For faster quick tests, pick nearby hexes when possible.`,
+      );
+    }
   }
 
   if (cacheReportMode) {
@@ -7044,7 +7372,7 @@ async function main() {
         type: tags.wetland ?? tags.natural ?? "wetland",
       }),
       {
-        minApproxAreaKm2: 2,
+        minApproxAreaKm2: 0,
         maxVertices: 32,
         bbox: buildExtentBbox,
       },
@@ -7321,11 +7649,14 @@ async function main() {
       type: tags.wetland ?? tags.natural ?? "wetland",
     }),
     {
-      minApproxAreaKm2: 2,
+      minApproxAreaKm2: 0,
       maxVertices: 32,
       bbox: buildExtentBbox,
     },
   );
+  const splitWetlands = splitWetlandFeaturesByApproxArea(wetlands, wetlandMinApproxAreaKm2);
+  const baselineWetlands = splitWetlands.large;
+  const smallWetlandCandidates = splitWetlands.small;
   const osmWaterBodiesPrototype = await fetchTiledAreaLayer(
     "water-bodies",
     ['["natural"="water"]', "[water]", '["waterway"="riverbank"]', '["landuse"="reservoir"]'],
@@ -7451,7 +7782,7 @@ async function main() {
     "layers/water-bodies.geojson": clippedWaterBodiesPrototype,
     "layers/water-bodies-osm-prototype.geojson": osmWaterBodiesPrototype,
     "layers/seas.geojson": clippedSeas,
-    "layers/wetlands.geojson": wetlands,
+    "layers/wetlands.geojson": baselineWetlands,
     "layers/forests.geojson": forests,
     "layers/roads.geojson": clippedRoads,
     "layers/railways.geojson": clippedRailways,
@@ -7664,7 +7995,26 @@ async function main() {
   console.log(
     `Coastal stage: corrected country-boundaries (${formatElapsedMs(Date.now() - countryTrimStartedAt)}).`,
   );
+  let correctedWetlands = filteredLayers["layers/wetlands.geojson"];
+  if (wetlandCorridorEnhancementEnabled) {
+    const wetlandEnhancementStartedAt = Date.now();
+    correctedWetlands = mergeWetlandsNearWaterBodyCorridor(
+      correctedWetlands,
+      smallWetlandCandidates,
+      correctedWaterBodies,
+      {
+        corridorDistanceKm: wetlandCorridorDistanceKm,
+        mergeDistanceKm: wetlandCorridorMergeDistanceKm,
+        minClusterAreaKm2: wetlandCorridorMinClusterAreaKm2,
+      },
+    );
+    console.log(
+      `Task 76 pilot: wetland corridor enhancement completed ` +
+      `(${formatElapsedMs(Date.now() - wetlandEnhancementStartedAt)}).`,
+    );
+  }
   filteredLayers["layers/water-bodies.geojson"] = correctedWaterBodies;
+  filteredLayers["layers/wetlands.geojson"] = correctedWetlands;
   filteredLayers["layers/seas.geojson"] = correctedSeasFinal;
   filteredLayers["layers/country-boundaries.geojson"] = correctedCountryBoundaries;
   filteredLayers["layers/theater-boundary.geojson"] = admBoundaryTopology.adm0Outer;

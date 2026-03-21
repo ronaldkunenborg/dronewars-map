@@ -54,6 +54,16 @@ Pending tasks are listed under ## Pending tasks.
 ## Pending Tasks
 
 76. [pending] Improve inland hydrology and wetland quality (non-coastal scope): continue promoting higher-detail inland OSM water geometry quality and implement wetlands upgrade using OSM wetlands + ESA WorldCover support. Keep this task focused on inland rivers/lakes/wetlands quality and exclude sea-land border reconciliation (handled by `74`/`75`).
+Findings summary (current pipeline):
+- Wetland tag coverage is broad enough (`natural=wetland` + `wetland=*`, including marsh/swamp/bog/fen/reedbed/wet_meadow), so missing coverage is primarily not a tag-selection problem.
+- Main loss is filtering/simplification: `minApproxAreaKm2=2` and `maxVertices=32` drop most fragmented wetlands (especially in floodplains).
+- Merge-only at small radii has limited effect theater-wide (`100m`/`250m` minimal gain), while `500m` begins to recover meaningful area.
+- For operational intent (mechanized mobility), the user priority is more wetland indicators near river/water corridors; non-river inland fragments are lower priority.
+Intended solution:
+- Use processed `water-bodies` as the primary corridor mask for wetland enhancement.
+- Keep existing large wetlands (`>=2 km²`) as baseline.
+- Add a second pass from raw small wetlands (`<2 km²`) constrained to a corridor around processed `water-bodies`, then merge nearby fragments and retain corridor clusters via lower threshold.
+- Make corridor/merge/threshold values configurable (initial tuning target: corridor `~500m`, merge `250-500m`, lower retained-area threshold for corridor clusters).
 
 82. [pending] Rework elevation hillshade visual balance: current terrain appears too shadowed while mountain forms remain insufficiently legible. Increase relief contrast while making low-elevation areas near-transparent. Run controlled experiments on small map sections first (style/raster parameter sweeps and side-by-side comparisons), then apply the best-performing configuration theater-wide.
 
