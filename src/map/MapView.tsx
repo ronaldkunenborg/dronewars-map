@@ -54,8 +54,45 @@ type SearchResultEntry =
   };
 type SettlementSearchResult = Extract<SearchResultEntry, { kind: "settlement" }>;
 type HexSearchResult = Extract<SearchResultEntry, { kind: "hex" }>;
+type FeatureCollectionLike = {
+  type: "FeatureCollection";
+  features: Array<{
+    type?: string;
+    properties?: Record<string, unknown>;
+    geometry?: {
+      type?: string;
+      coordinates?: unknown;
+    };
+  }>;
+};
 
 const poiPrototypePath = new URL("../assets/poi-prototype.geojson", import.meta.url).href;
+const poiAirfieldPngPath = new URL("../assets/poi-icons/poi-airfield.png", import.meta.url).href;
+const poiAirfieldSvgPath = new URL("../assets/poi-icons/poi-airfield.svg", import.meta.url).href;
+const poiAirportLargePngPath = new URL("../assets/poi-icons/poi-airport-large.png", import.meta.url).href;
+const poiAirportLargeSvgPath = new URL("../assets/poi-icons/poi-airport-large.svg", import.meta.url).href;
+const poiAirfieldMilitaryPngPath = new URL("../assets/poi-icons/poi-airfield-military.png", import.meta.url).href;
+const poiAirfieldMilitarySvgPath = new URL("../assets/poi-icons/poi-airfield-military.svg", import.meta.url).href;
+const poiBridgePngPath = new URL("../assets/poi-icons/poi-bridge.png", import.meta.url).href;
+const poiBridgeSvgPath = new URL("../assets/poi-icons/poi-bridge.svg", import.meta.url).href;
+const poiDamPngPath = new URL("../assets/poi-icons/poi-dam.png", import.meta.url).href;
+const poiDamSvgPath = new URL("../assets/poi-icons/poi-dam.svg", import.meta.url).href;
+const poiPowerPngPath = new URL("../assets/poi-icons/poi-power.png", import.meta.url).href;
+const poiPowerSvgPath = new URL("../assets/poi-icons/poi-power.svg", import.meta.url).href;
+const poiPowerNuclearPngPath = new URL("../assets/poi-icons/poi-power-nuclear.png", import.meta.url).href;
+const poiPowerNuclearSvgPath = new URL("../assets/poi-icons/poi-power-nuclear.svg", import.meta.url).href;
+const poiMilitaryPngPath = new URL("../assets/poi-icons/poi-military.png", import.meta.url).href;
+const poiMilitarySvgPath = new URL("../assets/poi-icons/poi-military.svg", import.meta.url).href;
+const poiRocketPngPath = new URL("../assets/poi-icons/poi-rocket.png", import.meta.url).href;
+const poiRocketSvgPath = new URL("../assets/poi-icons/poi-rocket.svg", import.meta.url).href;
+const poiSteelPngPath = new URL("../assets/poi-icons/poi-steel.png", import.meta.url).href;
+const poiSteelSvgPath = new URL("../assets/poi-icons/poi-steel.svg", import.meta.url).href;
+const poiPortCivilPngPath = new URL("../assets/poi-icons/poi-port-civil.png", import.meta.url).href;
+const poiPortCivilSvgPath = new URL("../assets/poi-icons/poi-port-civil.svg", import.meta.url).href;
+const poiPortMilitaryPngPath = new URL("../assets/poi-icons/poi-port-military.png", import.meta.url).href;
+const poiPortMilitarySvgPath = new URL("../assets/poi-icons/poi-port-military.svg", import.meta.url).href;
+const poiGenericPngPath = new URL("../assets/poi-icons/poi-generic.png", import.meta.url).href;
+const poiGenericSvgPath = new URL("../assets/poi-icons/poi-generic.svg", import.meta.url).href;
 
 
 function toRadians(value: number) {
@@ -316,6 +353,203 @@ async function loadSettlementSearchEntries(processedData: ProcessedMapData) {
     .filter((entry) => entry.nameUk !== "");
 }
 
+async function applySettlementCityDedupe(
+  map: MapLibreMap,
+  processedData: ProcessedMapData,
+) {
+  const settlementsLayer = processedData.layers.find((layer) => layer.id === "settlements");
+  if (!settlementsLayer) {
+    return;
+  }
+
+  const response = await fetch(settlementsLayer.sourcePath, {
+    headers: {
+      Accept: "application/json",
+    },
+  });
+
+  if (!response.ok) {
+    return;
+  }
+
+  const geojson = (await response.json()) as FeatureCollectionLike;
+  if (geojson.type !== "FeatureCollection" || !Array.isArray(geojson.features)) {
+    return;
+  }
+
+  const deduped = dedupeNearbyCitySettlements(geojson);
+  const source =
+    (map.getSource("processed-settlements") as GeoJSONSource | undefined) ??
+    (map.getSource("settlements") as GeoJSONSource | undefined);
+  source?.setData(deduped as unknown as GeoJSON.FeatureCollection);
+}
+
+function disperseNearbyPoiFeatures(geojson: FeatureCollectionLike): FeatureCollectionLike {
+  const next = JSON.parse(JSON.stringify(geojson)) as FeatureCollectionLike;
+  const points = next.features
+    .map((feature, index) => ({ feature, index }))
+    .filter(({ feature }) => feature.geometry?.type === "Point" && Array.isArray(feature.geometry.coordinates))
+    .map(({ feature, index }) => {
+      const coordinates = feature.geometry?.coordinates as unknown[];
+      return {
+        index,
+        longitude: Number(coordinates[0]),
+        latitude: Number(coordinates[1]),
+      };
+    });
+
+  const visited = new Set<number>();
+  const radiusKm = 1.1;
+  const groupingDistanceKm = 2.0;
+
+  for (const point of points) {
+    if (visited.has(point.index)) {
+      continue;
+    }
+
+    const group = points.filter((candidate) => {
+      if (visited.has(candidate.index)) {
+        return false;
+      }
+      return haversineKm([point.longitude, point.latitude], [candidate.longitude, candidate.latitude]) <= groupingDistanceKm;
+    });
+
+    if (group.length <= 1) {
+      visited.add(point.index);
+      continue;
+    }
+
+    const centerLongitude = group.reduce((sum, value) => sum + value.longitude, 0) / group.length;
+    const centerLatitude = group.reduce((sum, value) => sum + value.latitude, 0) / group.length;
+    const latitudeRadians = toRadians(centerLatitude);
+    const longitudeKmScale = Math.max(0.25, Math.cos(latitudeRadians)) * 111.32;
+
+    group.forEach((value, groupIndex) => {
+      const angle = (2 * Math.PI * groupIndex) / group.length;
+      const offsetLongitude = (radiusKm * Math.cos(angle)) / longitudeKmScale;
+      const offsetLatitude = (radiusKm * Math.sin(angle)) / 111.32;
+      const feature = next.features[value.index];
+      if (feature.geometry?.type === "Point" && Array.isArray(feature.geometry.coordinates)) {
+        feature.geometry.coordinates = [
+          centerLongitude + offsetLongitude,
+          centerLatitude + offsetLatitude,
+        ];
+      }
+      visited.add(value.index);
+    });
+  }
+
+  return next;
+}
+
+function dedupeNearbyCitySettlements(geojson: FeatureCollectionLike): FeatureCollectionLike {
+  const dedupePlaces = new Set(["city", "town"]);
+  const dedupeDistanceKm = 2.0;
+
+  const normalizeName = (value: string) => value
+    .normalize("NFKD")
+    .replace(/\p{Diacritic}/gu, "")
+    .toLowerCase()
+    .replace(/['’`]/g, "")
+    .replace(/[^\p{L}\p{N}]+/gu, "");
+
+  const rankFromId = (id: string) => {
+    if (id.startsWith("relation/")) {
+      return 2;
+    }
+    if (id.startsWith("way/")) {
+      return 1;
+    }
+    return 0;
+  };
+
+  type Candidate = {
+    index: number;
+    place: string;
+    nameKey: string;
+    id: string;
+    longitude: number;
+    latitude: number;
+    population: number;
+    sourceRank: number;
+  };
+
+  const candidates: Candidate[] = geojson.features
+    .map((feature, index) => ({ feature, index }))
+    .filter(({ feature }) => feature.geometry?.type === "Point" && Array.isArray(feature.geometry.coordinates))
+    .map(({ feature, index }) => {
+      const coordinates = feature.geometry?.coordinates as unknown[];
+      const place = String(feature.properties?.place ?? "");
+      const id = String(feature.properties?.id ?? "");
+      const population = parseNumber(feature.properties?.population) ?? 0;
+      const nameEn = parseString(feature.properties?.nameEn) ?? "";
+      const nameUk = parseString(feature.properties?.nameUk) ?? "";
+      const name = parseString(feature.properties?.name) ?? "";
+      const preferredName = nameEn || nameUk || name;
+      return {
+        index,
+        place,
+        nameKey: normalizeName(preferredName),
+        id,
+        longitude: Number(coordinates[0]),
+        latitude: Number(coordinates[1]),
+        population,
+        sourceRank: rankFromId(id),
+      };
+    })
+    .filter((candidate) => dedupePlaces.has(candidate.place) && candidate.nameKey !== "");
+
+  const grouped = new Map<string, Candidate[]>();
+  for (const candidate of candidates) {
+    const key = `${candidate.place}|${candidate.nameKey}`;
+    const group = grouped.get(key) ?? [];
+    group.push(candidate);
+    grouped.set(key, group);
+  }
+
+  const keepIndices = new Set<number>();
+
+  for (const group of grouped.values()) {
+    const remaining = [...group];
+    while (remaining.length > 0) {
+      const seed = remaining.shift();
+      if (!seed) {
+        break;
+      }
+
+      const cluster = [seed];
+      for (let index = remaining.length - 1; index >= 0; index -= 1) {
+        const candidate = remaining[index];
+        const distance = haversineKm(
+          [seed.longitude, seed.latitude],
+          [candidate.longitude, candidate.latitude],
+        );
+        if (distance <= dedupeDistanceKm) {
+          cluster.push(candidate);
+          remaining.splice(index, 1);
+        }
+      }
+
+      cluster.sort((left, right) =>
+        right.sourceRank - left.sourceRank ||
+        right.population - left.population,
+      );
+      keepIndices.add(cluster[0].index);
+    }
+  }
+
+  return {
+    ...geojson,
+    features: geojson.features.filter((feature, index) => {
+      const place = String(feature.properties?.place ?? "");
+      if (!dedupePlaces.has(place)) {
+        return true;
+      }
+      return keepIndices.has(index);
+    }),
+  };
+}
+
 type MapViewProps = {
   layerVisibility: LayerVisibility;
   settlementDisplayLevel: SettlementDisplayLevel;
@@ -502,6 +736,80 @@ function setSearchResultHexFeature(
   });
 }
 
+type PoiIconDefinition = {
+  id: string;
+  pngUrl: string;
+  svgUrl: string;
+};
+
+const poiIconDefinitions: PoiIconDefinition[] = [
+  { id: "poi-airfield", pngUrl: poiAirfieldPngPath, svgUrl: poiAirfieldSvgPath },
+  { id: "poi-airport-large", pngUrl: poiAirportLargePngPath, svgUrl: poiAirportLargeSvgPath },
+  { id: "poi-airfield-military", pngUrl: poiAirfieldMilitaryPngPath, svgUrl: poiAirfieldMilitarySvgPath },
+  { id: "poi-bridge", pngUrl: poiBridgePngPath, svgUrl: poiBridgeSvgPath },
+  { id: "poi-dam", pngUrl: poiDamPngPath, svgUrl: poiDamSvgPath },
+  { id: "poi-power", pngUrl: poiPowerPngPath, svgUrl: poiPowerSvgPath },
+  { id: "poi-power-nuclear", pngUrl: poiPowerNuclearPngPath, svgUrl: poiPowerNuclearSvgPath },
+  { id: "poi-military", pngUrl: poiMilitaryPngPath, svgUrl: poiMilitarySvgPath },
+  { id: "poi-rocket", pngUrl: poiRocketPngPath, svgUrl: poiRocketSvgPath },
+  { id: "poi-steel", pngUrl: poiSteelPngPath, svgUrl: poiSteelSvgPath },
+  { id: "poi-port-civil", pngUrl: poiPortCivilPngPath, svgUrl: poiPortCivilSvgPath },
+  { id: "poi-port-military", pngUrl: poiPortMilitaryPngPath, svgUrl: poiPortMilitarySvgPath },
+  { id: "poi-generic", pngUrl: poiGenericPngPath, svgUrl: poiGenericSvgPath },
+];
+
+async function loadIconImage(url: string) {
+  return new Promise<HTMLImageElement>((resolve, reject) => {
+    const image = new Image();
+    image.onload = () => resolve(image);
+    image.onerror = () => reject(new Error(`Failed to load icon ${url}`));
+    image.src = url;
+  });
+}
+
+function buildFallbackIconImage() {
+  const canvas = document.createElement("canvas");
+  canvas.width = 64;
+  canvas.height = 64;
+  const context = canvas.getContext("2d");
+
+  if (!context) {
+    return null;
+  }
+
+  context.fillStyle = "#0B2B50";
+  context.beginPath();
+  context.arc(32, 32, 18, 0, Math.PI * 2);
+  context.fill();
+  return context.getImageData(0, 0, 64, 64);
+}
+
+async function ensurePoiIcons(map: MapLibreMap) {
+  await Promise.all(
+    poiIconDefinitions.map(async (iconDefinition) => {
+      if (map.hasImage(iconDefinition.id)) {
+        return;
+      }
+
+      try {
+        let image: HTMLImageElement;
+        try {
+          image = await loadIconImage(iconDefinition.pngUrl);
+        } catch {
+          image = await loadIconImage(iconDefinition.svgUrl);
+        }
+        map.addImage(iconDefinition.id, image);
+      } catch (error) {
+        const fallbackIcon = buildFallbackIconImage();
+        if (fallbackIcon && !map.hasImage(iconDefinition.id)) {
+          map.addImage(iconDefinition.id, fallbackIcon);
+        }
+        console.warn(`POI icon load failed for ${iconDefinition.id}`, error);
+      }
+    }),
+  );
+}
+
 function ensurePoiPrototypeLayers(map: MapLibreMap) {
   if (!map.getSource("poi-prototype")) {
     map.addSource("poi-prototype", {
@@ -513,74 +821,59 @@ function ensurePoiPrototypeLayers(map: MapLibreMap) {
     });
   }
 
-  if (!map.getLayer("poi-prototype-circle")) {
-    map.addLayer({
-      id: "poi-prototype-circle",
-      type: "circle",
-      source: "poi-prototype",
-      paint: {
-        "circle-color": [
-          "match",
-          ["coalesce", ["get", "category"], "other"],
-          "airport",
-          "#b35b3e",
-          "dam",
-          "#4774a8",
-          "power_plant",
-          "#c39a47",
-          "bridge",
-          "#6f7f8f",
-          "military_base",
-          "#8a3f52",
-          "#8b8b8b",
-        ],
-        "circle-radius": [
-          "interpolate",
-          ["linear"],
-          ["zoom"],
-          4,
-          2.5,
-          8,
-          5,
-          12,
-          7,
-        ],
-        "circle-stroke-color": "#f5f2e8",
-        "circle-stroke-width": 1.2,
-        "circle-opacity": 0.92,
-      },
-    });
-  }
-
-  if (!map.getLayer("poi-prototype-star")) {
-    map.addLayer({
-      id: "poi-prototype-star",
-      type: "symbol",
-      source: "poi-prototype",
-      layout: {
-        "text-field": "★",
-        "text-font": ["Noto Sans Bold", "Noto Sans Regular", "Open Sans Bold", "Open Sans Regular"],
-        "text-size": [
-          "interpolate",
-          ["linear"],
-          ["zoom"],
-          4,
-          10,
-          8,
-          14,
-          12,
-          18,
-        ],
-        "text-allow-overlap": true,
-        "text-ignore-placement": true,
-      },
-      paint: {
-        "text-color": "#f1d16a",
-        "text-halo-color": "rgba(86, 45, 45, 0.95)",
-        "text-halo-width": 1.1,
-      },
-    });
-  }
+  void ensurePoiIcons(map).then(() => {
+    if (!map.getLayer("poi-prototype-icon")) {
+      map.addLayer({
+        id: "poi-prototype-icon",
+        type: "symbol",
+        source: "poi-prototype",
+        layout: {
+          "icon-image": [
+            "coalesce",
+            ["get", "icon"],
+            [
+              "match",
+              ["coalesce", ["get", "category"], "other"],
+              "airport",
+              "poi-airfield",
+              "airfield",
+              "poi-airfield",
+              "bridge",
+              "poi-bridge",
+              "dam",
+              "poi-dam",
+              "power_plant",
+              "poi-power",
+              "nuclear_power_plant",
+              "poi-power-nuclear",
+              "military_base",
+              "poi-military",
+              "rocket_site",
+              "poi-rocket",
+              "steel_plant",
+              "poi-steel",
+              "port",
+              "poi-port-civil",
+              "poi-generic",
+            ],
+          ],
+          "icon-size": [
+            "interpolate",
+            ["linear"],
+            ["zoom"],
+            4,
+            0.03,
+            8,
+            0.05,
+            12,
+            0.065,
+          ],
+          "icon-allow-overlap": true,
+          "icon-ignore-placement": true,
+        },
+      });
+    }
+  });
 
   if (!map.getLayer("poi-prototype-label")) {
     map.addLayer({
@@ -602,7 +895,7 @@ function ensurePoiPrototypeLayers(map: MapLibreMap) {
           12,
           13,
         ],
-        "text-offset": [0, 1.05],
+        "text-offset": [0, 1.2],
         "text-anchor": "top",
         "text-allow-overlap": false,
       },
@@ -627,7 +920,8 @@ function ensurePoiPrototypeLayers(map: MapLibreMap) {
     })
     .then((geojson) => {
       const source = map.getSource("poi-prototype") as GeoJSONSource | undefined;
-      source?.setData(geojson);
+      const normalized = disperseNearbyPoiFeatures(geojson as FeatureCollectionLike);
+      source?.setData(normalized as unknown as GeoJSON.FeatureCollection);
     })
     .catch(() => {
       const source = map.getSource("poi-prototype") as GeoJSONSource | undefined;
@@ -715,6 +1009,7 @@ export function MapView({
   const settlementsRef = useRef<SettlementSearchEntry[]>([]);
   const [status, setStatus] = useState("Loading local processed map data.");
   const [datasetInfo, setDatasetInfo] = useState<string | null>(null);
+  const [statusFaded, setStatusFaded] = useState(false);
   const [debugInfo, setDebugInfo] = useState<HexDebugInfo | null>(null);
   const [selectedHex, setSelectedHex] = useState<HexInspectorData | null>(null);
   const [hoveredHexId, setHoveredHexId] = useState<string | null>(null);
@@ -1126,7 +1421,10 @@ export function MapView({
         mapRef.current = map;
         map.on("mousemove", handleMouseMove);
         map.on("zoom", handleZoom);
-        map.once("idle", mountDebugHandler);
+        map.once("idle", () => {
+          mountDebugHandler();
+          void applySettlementCityDedupe(map, processedData);
+        });
         setStatus("Terrain shell loaded from local processed data.");
         setDatasetInfo(
           `${processedData.layers.length} local layers available. Hex dataset bound from processed storage.`,
@@ -1222,10 +1520,25 @@ export function MapView({
     onZoomChange(`Zoom: ${mapRef.current.getZoom().toFixed(2)}x`);
   }, [resetToken]);
 
+  useEffect(() => {
+    if (!status && !datasetInfo) {
+      return;
+    }
+
+    setStatusFaded(false);
+    const fadeTimeout = window.setTimeout(() => {
+      setStatusFaded(true);
+    }, 120);
+
+    return () => {
+      window.clearTimeout(fadeTimeout);
+    };
+  }, [status, datasetInfo]);
+
   return (
     <>
       <div className="map-root" ref={containerRef} />
-      <div className="map-status">
+      <div className={`map-status${statusFaded ? " is-faded" : ""}`}>
         <p className="placeholder-note">{status}</p>
         {datasetInfo ? <p className="placeholder-note">{datasetInfo}</p> : null}
       </div>
