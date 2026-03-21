@@ -4,6 +4,7 @@ import os from "node:os";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 import { spawn } from "node:child_process";
+import { Worker, isMainThread, parentPort, workerData } from "node:worker_threads";
 import polygonClipping from "polygon-clipping";
 import {
   buildSettlementVoronoiLayer,
@@ -68,9 +69,15 @@ import {
  *   Skips elevation/hillshade processing during the full public layer build (useful for quick vector-only refreshes).
  * - `--workers=<n>`
  *   Bounded concurrency for expensive independent stages (tile fetching and local PBF extraction); defaults to a safe value based on available CPU.
+ * - `--compute-workers=<n>`
+ *   CPU worker threads used for major river corridor reconstruction. Separate from fetch workers.
+ *   Defaults to `min(8, available CPU cores)`.
  * - `--hex-only=<hexId[,hexId...]>`
  *   Limits vector layer assembly to one or more operational hexes. The selected hex bounds are used as the working extent,
  *   and final vector outputs are clipped/filtered to the selected hex geometry mask.
+ * - `--coastal-only`
+ *   Re-runs only the coastal sea/water correction stage using the most recent cached post-hydrology stage output
+ *   for the current scope (`full theater` or the active `--hex-only` selection).
  * - `--smoke-test=static`
  *   Fetches only the static GeoBoundaries and Natural Earth sources, mainly to validate cache behavior quickly.
  * - `--smoke-test=settlements`
@@ -102,6 +109,7 @@ const cacheRoot = path.join(repoRoot, "data", "cache", "public-sources");
 const rawRoot = path.join(repoRoot, "data", "raw");
 const processedRoot = path.join(repoRoot, "data", "processed");
 const layersRoot = path.join(processedRoot, "layers");
+const stageCacheRoot = path.join(processedRoot, "_stage-cache");
 const reportsRoot = path.join(repoRoot, "reports");
 // Cached source responses stay reusable for up to one year unless explicitly refreshed.
 const cacheTtlMs = 365 * 24 * 60 * 60 * 1000;
@@ -355,9 +363,13 @@ const cacheReportMode = process.argv.includes("--cache-report");
 const elevationOnlyMode = process.argv.includes("--elevation-only");
 const skipHillshadeMode = process.argv.includes("--skip-hillshade");
 const skipElevationMode = process.argv.includes("--skip-elevation");
+const coastalOnlyMode = process.argv.includes("--coastal-only");
 const requestedWorkerCount = process.argv
   .find((argument) => argument.startsWith("--workers="))
   ?.slice("--workers=".length);
+const requestedComputeWorkerCount = process.argv
+  .find((argument) => argument.startsWith("--compute-workers="))
+  ?.slice("--compute-workers=".length);
 const hexOnlyIds = process.argv
   .flatMap((argument) => {
     if (!argument.startsWith("--hex-only=")) {
@@ -401,6 +413,34 @@ function resolveWorkerConcurrency(requested) {
 
 const workerConcurrency = resolveWorkerConcurrency(requestedWorkerCount);
 const tileFetchConcurrency = Math.max(1, Math.min(workerConcurrency, 4));
+function resolveComputeWorkerConcurrency(requested) {
+  const cpuParallelism = detectCpuParallelism();
+  const safeDefault = Math.max(1, Math.min(8, cpuParallelism));
+
+  if (requested === undefined) {
+    return safeDefault;
+  }
+
+  const parsed = Number.parseInt(requested, 10);
+
+  if (!Number.isFinite(parsed) || parsed < 1) {
+    console.warn(`Ignoring invalid --compute-workers value "${requested}". Using ${safeDefault}.`);
+    return safeDefault;
+  }
+
+  return Math.max(1, Math.min(parsed, cpuParallelism));
+}
+const computeWorkerConcurrency = resolveComputeWorkerConcurrency(requestedComputeWorkerCount);
+const coastalSeaCompletionHexIds = ["HX-E36-N22", "HX-E71-N12", "HX-E72-N11", "HX-E75-N12", "HX-E77-N12"];
+const countryFillExclusionHexIds = ["HX-E72-N11"];
+const adm2LandSeaLockstepHexIds = [
+  "HX-E33-N16",
+  "HX-E36-N22",
+  "HX-E71-N12",
+  "HX-E72-N11",
+  "HX-E75-N12",
+  "HX-E77-N12",
+];
 
 async function mapWithConcurrency(items, concurrency, mapper) {
   const results = new Array(items.length);
@@ -1353,6 +1393,53 @@ function buildCountryBoundaryLayer(featureCollection) {
     features: featureCollection.features
       .filter((feature) => feature.geometry?.type === "Polygon" || feature.geometry?.type === "MultiPolygon")
       .map(normalizeCountryNameProperties),
+  };
+}
+
+function replaceUkraineCountryBoundaryGeometry(countryBoundaryLayer, ukraineGeometry) {
+  if (
+    !countryBoundaryLayer ||
+    !Array.isArray(countryBoundaryLayer.features) ||
+    !ukraineGeometry
+  ) {
+    return countryBoundaryLayer;
+  }
+
+  let replaced = false;
+  const features = (countryBoundaryLayer.features ?? []).map((feature) => {
+    if (!isUkraineCountryFeature(feature)) {
+      return feature;
+    }
+
+    replaced = true;
+    return normalizeCountryNameProperties({
+      ...feature,
+      geometry: ukraineGeometry,
+    });
+  });
+
+  if (!replaced) {
+    features.push(normalizeCountryNameProperties({
+      type: "Feature",
+      properties: {
+        id: "UKR",
+        ISO_A3: "UKR",
+        ADM0_A3: "UKR",
+        WB_A3: "UKR",
+        NAME: "Ukraine",
+        NAME_EN: "Ukraine",
+        NAME_UK: "Україна",
+        name: "Ukraine",
+        nameEn: "Ukraine",
+        nameUk: "Україна",
+      },
+      geometry: ukraineGeometry,
+    }));
+  }
+
+  return {
+    type: "FeatureCollection",
+    features,
   };
 }
 
@@ -2415,11 +2502,306 @@ function unionPolygonFeatureCollectionGeometries(featureCollection, additionalGe
   return fromClipMultiPolygon(unioned);
 }
 
+function isUkraineCountryFeature(feature) {
+  const isoA3 = countryFeatureIsoA3(feature);
+  if (isoA3 === "UKR") {
+    return true;
+  }
+
+  const properties = feature?.properties ?? {};
+  const candidateValues = [
+    properties.id,
+    properties.ID,
+    properties.name,
+    properties.NAME,
+  ]
+    .filter((value) => value !== null && value !== undefined)
+    .map((value) => String(value).trim().toUpperCase());
+
+  return candidateValues.includes("UKR") || candidateValues.includes("UKRAINE");
+}
+
+function countryFeatureIsoA3(feature) {
+  const properties = feature?.properties ?? {};
+  const candidates = [
+    properties.iso_a3,
+    properties.ISO_A3,
+    properties.adm0_a3,
+    properties.ADM0_A3,
+    properties.wb_a3,
+    properties.WB_A3,
+    properties.sov_a3,
+    properties.SOV_A3,
+    properties.iso3,
+    properties.ISO3,
+  ];
+
+  for (const value of candidates) {
+    if (value !== null && value !== undefined) {
+      const normalized = String(value).trim().toUpperCase();
+      if (normalized.length >= 3) {
+        return normalized;
+      }
+    }
+  }
+
+  return null;
+}
+
 function buildTheaterCoastalLandMask(countryBoundaryLayer, ukraineAdm0Geometry) {
+  const nonUkraineCountryBoundaries = {
+    type: "FeatureCollection",
+    features: (countryBoundaryLayer?.features ?? []).filter(
+      (feature) => !isUkraineCountryFeature(feature),
+    ),
+  };
+
   return unionPolygonFeatureCollectionGeometries(
-    countryBoundaryLayer,
+    nonUkraineCountryBoundaries,
     ukraineAdm0Geometry ? [ukraineAdm0Geometry] : [],
   );
+}
+
+function applyHexCountryBoundaryFillExclusions(countryBoundaryLayer, hexLayer, options = {}) {
+  const {
+    hexIds = [],
+    keepIsoA3 = ["UKR"],
+  } = options;
+
+  if (
+    !countryBoundaryLayer ||
+    !Array.isArray(countryBoundaryLayer.features) ||
+    !hexLayer ||
+    !Array.isArray(hexLayer.features) ||
+    hexIds.length === 0
+  ) {
+    return countryBoundaryLayer;
+  }
+
+  const keepIsoSet = new Set(
+    keepIsoA3
+      .map((value) => String(value).trim().toUpperCase())
+      .filter(Boolean),
+  );
+  const exclusionHexLayer = {
+    type: "FeatureCollection",
+    features: (hexLayer.features ?? []).filter((feature) =>
+      hexIds.includes(String(feature?.properties?.id ?? "")),
+    ),
+  };
+  const exclusionMask = unionPolygonFeatures(exclusionHexLayer);
+
+  if (!exclusionMask) {
+    return countryBoundaryLayer;
+  }
+
+  const exclusionMaskMultiPolygon = toClipMultiPolygon(exclusionMask);
+
+  if (!exclusionMaskMultiPolygon) {
+    return countryBoundaryLayer;
+  }
+
+  let nextId = 1;
+  let clippedCount = 0;
+  const features = (countryBoundaryLayer.features ?? [])
+    .map((feature) => {
+      const geometry = feature?.geometry;
+      const geometryMultiPolygon = toClipMultiPolygon(geometry);
+
+      if (!geometry || !geometryMultiPolygon) {
+        return null;
+      }
+
+      const isoA3 = countryFeatureIsoA3(feature);
+      if (isoA3 && keepIsoSet.has(isoA3)) {
+        return {
+          ...feature,
+          id: feature.id ?? nextId++,
+        };
+      }
+
+      try {
+        const clipped = polygonClipping.difference(geometryMultiPolygon, exclusionMaskMultiPolygon);
+        const clippedGeometry = fromClipMultiPolygon(clipped);
+
+        if (!clippedGeometry) {
+          clippedCount += 1;
+          return null;
+        }
+
+        if (clippedGeometry !== geometry) {
+          clippedCount += 1;
+        }
+
+        return {
+          type: "Feature",
+          id: feature.id ?? nextId++,
+          properties: {
+            ...(feature.properties ?? {}),
+            coastalCorrection: "country-fill-hex-exclusion",
+          },
+          geometry: clippedGeometry,
+        };
+      } catch {
+        return {
+          ...feature,
+          id: feature.id ?? nextId++,
+        };
+      }
+    })
+    .filter(Boolean);
+
+  if (clippedCount > 0) {
+    console.log(
+      `Applied country-fill exclusion in hexes ${hexIds.join(", ")} ` +
+      `for non-[${[...keepIsoSet].join(", ")}] polygons (${clippedCount} features adjusted).`,
+    );
+  }
+
+  return {
+    type: "FeatureCollection",
+    features,
+  };
+}
+
+function applyHexAdm2LandSeaLockstep(
+  seaLayer,
+  countryBoundaryLayer,
+  hexLayer,
+  ukraineBoundaryGeometry,
+  options = {},
+) {
+  const { hexIds = [] } = options;
+
+  if (
+    !seaLayer ||
+    !Array.isArray(seaLayer.features) ||
+    !countryBoundaryLayer ||
+    !Array.isArray(countryBoundaryLayer.features) ||
+    !hexLayer ||
+    !Array.isArray(hexLayer.features) ||
+    !ukraineBoundaryGeometry ||
+    hexIds.length === 0
+  ) {
+    return {
+      seaLayer,
+      countryBoundaryLayer,
+    };
+  }
+
+  const ukraineBoundaryMultiPolygon = toClipMultiPolygon(ukraineBoundaryGeometry);
+
+  if (!ukraineBoundaryMultiPolygon) {
+    return {
+      seaLayer,
+      countryBoundaryLayer,
+    };
+  }
+
+  let resolvedSeaLayer = seaLayer;
+  let resolvedCountryLayer = countryBoundaryLayer;
+  let appliedHexCount = 0;
+  let nextSeaId = (seaLayer.features ?? []).length + 1;
+  let nextCountryId = (countryBoundaryLayer.features ?? []).length + 1;
+
+  for (const hexFeature of (hexLayer.features ?? [])) {
+    const hexId = String(hexFeature?.properties?.id ?? "");
+    if (!hexIds.includes(hexId)) {
+      continue;
+    }
+
+    const hexGeometry = hexFeature?.geometry;
+    const hexMaskMultiPolygon = toClipMultiPolygon(hexGeometry);
+    if (!hexGeometry || !hexMaskMultiPolygon) {
+      continue;
+    }
+
+    const ukraineInHexClip = polygonClipping.intersection(
+      ukraineBoundaryMultiPolygon,
+      hexMaskMultiPolygon,
+    );
+    const ukraineInHexGeometry = fromClipMultiPolygon(ukraineInHexClip);
+
+    // Only enforce lockstep in hexes that actually contain Ukraine boundary geometry.
+    if (!ukraineInHexGeometry) {
+      continue;
+    }
+
+    appliedHexCount += 1;
+    const seaInHexClip = polygonClipping.difference(hexMaskMultiPolygon, ukraineInHexClip);
+    const seaInHexGeometry = fromClipMultiPolygon(seaInHexClip);
+
+    resolvedSeaLayer = subtractPolygonMaskFromPolygonLayer(
+      resolvedSeaLayer,
+      hexGeometry,
+      "hex-adm2-lockstep-cut",
+    );
+    resolvedCountryLayer = subtractPolygonMaskFromPolygonLayer(
+      resolvedCountryLayer,
+      hexGeometry,
+      "hex-adm2-lockstep-cut",
+    );
+
+    if (seaInHexGeometry) {
+      resolvedSeaLayer = {
+        type: "FeatureCollection",
+        features: [
+          ...(resolvedSeaLayer.features ?? []),
+          {
+            type: "Feature",
+            id: nextSeaId++,
+            properties: {
+              name: "hex-adm2-lockstep-sea",
+              coastlineCorrection: "hex-adm2-lockstep",
+              hexId,
+            },
+            geometry: seaInHexGeometry,
+          },
+        ],
+      };
+    }
+
+    resolvedCountryLayer = {
+      type: "FeatureCollection",
+      features: [
+        ...(resolvedCountryLayer.features ?? []),
+        normalizeCountryNameProperties({
+          type: "Feature",
+          id: nextCountryId++,
+          properties: {
+            id: "UKR",
+            ISO_A3: "UKR",
+            ADM0_A3: "UKR",
+            WB_A3: "UKR",
+            NAME: "Ukraine",
+            NAME_EN: "Ukraine",
+            NAME_UK: "Україна",
+            name: "Ukraine",
+            nameEn: "Ukraine",
+            nameUk: "Україна",
+            coastalCorrection: "hex-adm2-lockstep",
+            hexId,
+          },
+          geometry: ukraineInHexGeometry,
+        }),
+      ],
+    };
+  }
+
+  if (appliedHexCount > 0) {
+    console.log(
+      `Applied ADM2 land/sea lockstep for ${appliedHexCount} hex(es) from set ${hexIds.join(", ")}.`,
+    );
+  } else {
+    console.log(
+      `ADM2 land/sea lockstep skipped: no Ukraine intersection found in hex set ${hexIds.join(", ")}.`,
+    );
+  }
+
+  return {
+    seaLayer: resolvedSeaLayer,
+    countryBoundaryLayer: resolvedCountryLayer,
+  };
 }
 
 function correctSeaLayerWithLandMask(seaLayer, landMaskGeometry) {
@@ -2480,6 +2862,99 @@ function subtractPolygonMaskFromPolygonLayer(polygonLayer, maskGeometry, correct
         }
       })
       .filter(Boolean),
+  };
+}
+
+function applyHexSeaCompletionFromLandMask(seaLayer, landMaskGeometry, hexLayer, options = {}) {
+  const { hexIds = [] } = options;
+
+  if (
+    !seaLayer ||
+    !Array.isArray(seaLayer.features) ||
+    !landMaskGeometry ||
+    !hexLayer ||
+    !Array.isArray(hexLayer.features) ||
+    hexIds.length === 0
+  ) {
+    return seaLayer;
+  }
+
+  const selectedHexLayer = {
+    type: "FeatureCollection",
+    features: (hexLayer.features ?? []).filter((feature) =>
+      hexIds.includes(String(feature?.properties?.id ?? "")),
+    ),
+  };
+  const selectedHexMask = unionPolygonFeatures(selectedHexLayer);
+
+  if (!selectedHexMask) {
+    return seaLayer;
+  }
+
+  const selectedHexMaskMultiPolygon = toClipMultiPolygon(selectedHexMask);
+  const landMaskMultiPolygon = toClipMultiPolygon(landMaskGeometry);
+
+  if (!selectedHexMaskMultiPolygon || !landMaskMultiPolygon) {
+    return seaLayer;
+  }
+
+  const features = [];
+  let nextId = 1;
+
+  for (const seaFeature of seaLayer.features ?? []) {
+    const seaMultiPolygon = toClipMultiPolygon(seaFeature?.geometry);
+
+    if (!seaMultiPolygon) {
+      continue;
+    }
+
+    try {
+      const outsideTargetHex = polygonClipping.difference(seaMultiPolygon, selectedHexMaskMultiPolygon);
+      const outsideGeometry = fromClipMultiPolygon(outsideTargetHex);
+
+      if (outsideGeometry) {
+        features.push({
+          type: "Feature",
+          id: nextId++,
+          properties: seaFeature.properties ?? {},
+          geometry: outsideGeometry,
+        });
+      }
+    } catch {
+      features.push({
+        type: "Feature",
+        id: nextId++,
+        properties: seaFeature.properties ?? {},
+        geometry: seaFeature.geometry,
+      });
+    }
+  }
+
+  try {
+    const completedSea = polygonClipping.difference(selectedHexMaskMultiPolygon, landMaskMultiPolygon);
+    const completedSeaGeometry = fromClipMultiPolygon(completedSea);
+
+    if (completedSeaGeometry) {
+      features.push({
+        type: "Feature",
+        id: nextId++,
+        properties: {
+          name: "hex-sea-completion",
+          coastlineCorrection: "hex-landmask-completion",
+        },
+        geometry: completedSeaGeometry,
+      });
+      console.log(
+        `Hex sea completion applied from land-mask for ${hexIds.join(", ")}.`,
+      );
+    }
+  } catch {
+    // Keep fallback to original sea features when completion fails.
+  }
+
+  return {
+    type: "FeatureCollection",
+    features,
   };
 }
 
@@ -2836,7 +3311,7 @@ function dissolveUkraineFromOblasts(oblastPolygonLayer) {
 function buildBoundaryLineTopologyFromAdm2(adm2PolygonLayer) {
   const dissolvedOblastPolygons = dissolveAdm2ByOblast(adm2PolygonLayer);
   const ukraineGeometry = dissolveUkraineFromOblasts(dissolvedOblastPolygons);
-  const theaterBoundaryMinSegmentKm = 0.6;
+  const theaterBoundaryMinSegmentKm = 0.2;
   const simplifiedUkraineGeometry = simplifyPolygonGeometryByMinSegmentKm(
     ukraineGeometry,
     theaterBoundaryMinSegmentKm,
@@ -2922,6 +3397,7 @@ function buildBoundaryLineTopologyFromAdm2(adm2PolygonLayer) {
     adm2Internal,
     dissolvedOblastPolygons,
     ukraineGeometry,
+    ukraineBoundaryGeometry: simplifiedUkraineGeometry ?? ukraineGeometry,
   };
 }
 
@@ -3009,9 +3485,11 @@ function pointWithinBorderBuffer(point, geometry, bufferKm) {
   return false;
 }
 
-// Prefer richer OSM object types when deduplicating overlapping settlement records.
+// Prefer stable place anchors when deduplicating overlapping settlement records.
 function settlementTypePreference(id) {
-  if (id.startsWith("relation/")) {
+  // For place labels, OSM place nodes are usually the intended map anchor.
+  // Relation/way centers can drift toward geometry centroids and look offset.
+  if (id.startsWith("node/")) {
     return 1;
   }
 
@@ -3582,6 +4060,56 @@ function bboxToPolygonGeometry(bbox) {
   };
 }
 
+function featureCollectionBounds(featureCollection) {
+  const features = featureCollection?.features ?? [];
+  if (features.length === 0) {
+    return null;
+  }
+
+  const bounds = {
+    west: Number.POSITIVE_INFINITY,
+    south: Number.POSITIVE_INFINITY,
+    east: Number.NEGATIVE_INFINITY,
+    north: Number.NEGATIVE_INFINITY,
+  };
+
+  for (const feature of features) {
+    const geometry = feature?.geometry;
+    if (!geometry) {
+      continue;
+    }
+    const geometryBbox = geometryBounds(geometry);
+    bounds.west = Math.min(bounds.west, geometryBbox.west);
+    bounds.south = Math.min(bounds.south, geometryBbox.south);
+    bounds.east = Math.max(bounds.east, geometryBbox.east);
+    bounds.north = Math.max(bounds.north, geometryBbox.north);
+  }
+
+  if (
+    !Number.isFinite(bounds.west) ||
+    !Number.isFinite(bounds.south) ||
+    !Number.isFinite(bounds.east) ||
+    !Number.isFinite(bounds.north)
+  ) {
+    return null;
+  }
+
+  return bounds;
+}
+
+function expandBbox(bbox, marginDegrees) {
+  if (!bbox) {
+    return null;
+  }
+
+  return {
+    west: bbox.west - marginDegrees,
+    south: bbox.south - marginDegrees,
+    east: bbox.east + marginDegrees,
+    north: bbox.north + marginDegrees,
+  };
+}
+
 function clipPolygonFeatureCollectionToBbox(featureCollection, bbox) {
   const bboxMaskGeometry = bboxToPolygonGeometry(bbox);
 
@@ -3987,13 +4515,13 @@ function buildMajorRiverCorridorGapLayerSerial(
     maxMidpointGapDistanceKm,
     queryRadiusKm,
     maxCorridorFeatures,
+    progressEverySegments = 25000,
   } = options;
   const waterIndex = buildBoundsSpatialIndex(waterEntries);
   const corridorFeatures = [];
   let processedRiverFeatureCount = 0;
   let processedSegmentCount = 0;
   const startedAt = Date.now();
-  const progressEverySegments = 25000;
 
   for (const riverFeature of riverFeatures) {
     processedRiverFeatureCount += 1;
@@ -4006,7 +4534,7 @@ function buildMajorRiverCorridorGapLayerSerial(
     for (const [segmentStart, segmentEnd] of extractLineSegments(riverFeature.geometry)) {
       processedSegmentCount += 1;
 
-      if (processedSegmentCount % progressEverySegments === 0) {
+      if (progressEverySegments > 0 && processedSegmentCount % progressEverySegments === 0) {
         console.log(
           `Major river corridor progress: ${processedSegmentCount} segments scanned, ` +
           `${corridorFeatures.length} features appended ` +
@@ -4106,6 +4634,94 @@ function buildMajorRiverCorridorGapLayerSerial(
   };
 }
 
+function chunkArray(items, chunkCount) {
+  if (!Array.isArray(items) || items.length === 0 || chunkCount <= 1) {
+    return [items ?? []];
+  }
+
+  const effectiveChunkCount = Math.max(1, Math.min(chunkCount, items.length));
+  const chunks = Array.from({ length: effectiveChunkCount }, () => []);
+
+  for (let index = 0; index < items.length; index += 1) {
+    chunks[index % effectiveChunkCount].push(items[index]);
+  }
+
+  return chunks.filter((chunk) => chunk.length > 0);
+}
+
+function runMajorRiverCorridorChunkWorker(payload) {
+  return new Promise((resolve, reject) => {
+    const worker = new Worker(new URL(import.meta.url), {
+      workerData: {
+        task: "major-river-corridor-chunk",
+        payload,
+      },
+    });
+
+    worker.once("message", (message) => {
+      resolve(message);
+    });
+    worker.once("error", reject);
+    worker.once("exit", (code) => {
+      if (code !== 0) {
+        reject(new Error(`Major river corridor worker exited with code ${code}.`));
+      }
+    });
+  });
+}
+
+async function buildMajorRiverCorridorGapLayerParallel(
+  riverFeatures,
+  waterEntries,
+  coverageGeometry,
+  options,
+  computeWorkers,
+) {
+  const targetWorkers = Math.max(1, Math.min(computeWorkers, riverFeatures.length));
+
+  if (targetWorkers <= 1) {
+    const serial = buildMajorRiverCorridorGapLayerSerial(
+      riverFeatures,
+      waterEntries,
+      coverageGeometry,
+      options,
+    );
+    return {
+      ...serial,
+      usedWorkers: 1,
+    };
+  }
+
+  const riverChunks = chunkArray(riverFeatures, targetWorkers);
+  const workerPayloads = riverChunks.map((chunk, index) => ({
+    chunkIndex: index,
+    riverFeatures: chunk,
+    waterEntries,
+    coverageGeometry,
+    options: {
+      ...options,
+      progressEverySegments: 0,
+    },
+  }));
+  const workerResults = await Promise.all(
+    workerPayloads.map((payload) => runMajorRiverCorridorChunkWorker(payload)),
+  );
+  workerResults.sort((left, right) => left.chunkIndex - right.chunkIndex);
+
+  return {
+    corridorFeatures: workerResults.flatMap((result) => result.corridorFeatures ?? []),
+    processedRiverFeatureCount: workerResults.reduce(
+      (sum, result) => sum + Number(result.processedRiverFeatureCount ?? 0),
+      0,
+    ),
+    processedSegmentCount: workerResults.reduce(
+      (sum, result) => sum + Number(result.processedSegmentCount ?? 0),
+      0,
+    ),
+    usedWorkers: workerResults.length,
+  };
+}
+
 async function buildMajorRiverCorridorGapLayer(waterLayer, riverLineLayer, coverageGeometry) {
   const options = {
     riverHalfWidthKm: 0.085,
@@ -4142,15 +4758,33 @@ async function buildMajorRiverCorridorGapLayer(waterLayer, riverLineLayer, cover
     return emptyFeatureCollection();
   }
 
-  const serialResult = buildMajorRiverCorridorGapLayerSerial(
-    riverFeatures,
-    waterEntries,
-    coverageGeometry,
-    options,
-  );
-  let rawFeatures = serialResult.corridorFeatures;
-  const processedRiverFeatureCount = serialResult.processedRiverFeatureCount;
-  const processedSegmentCount = serialResult.processedSegmentCount;
+  let runResult;
+  try {
+    runResult = await buildMajorRiverCorridorGapLayerParallel(
+      riverFeatures,
+      waterEntries,
+      coverageGeometry,
+      options,
+      computeWorkerConcurrency,
+    );
+  } catch (error) {
+    console.warn(
+      `Major river corridor parallel scan failed; falling back to serial: ${error.message}`,
+    );
+    runResult = {
+      ...buildMajorRiverCorridorGapLayerSerial(
+        riverFeatures,
+        waterEntries,
+        coverageGeometry,
+        options,
+      ),
+      usedWorkers: 1,
+    };
+  }
+  let rawFeatures = runResult.corridorFeatures;
+  const processedRiverFeatureCount = runResult.processedRiverFeatureCount;
+  const processedSegmentCount = runResult.processedSegmentCount;
+  const usedWorkers = runResult.usedWorkers ?? 1;
 
   if (rawFeatures.length > options.maxCorridorFeatures) {
     console.warn(
@@ -4177,12 +4811,14 @@ async function buildMajorRiverCorridorGapLayer(waterLayer, riverLineLayer, cover
     console.log(
       `Major river corridor fill appended ${corridorFeatures.length} features ` +
       `after scanning ${processedSegmentCount} segments across ${processedRiverFeatureCount} river features ` +
+      `with ${usedWorkers} compute worker(s) ` +
       `(${formatElapsedMs(Date.now() - startedAt)}).`,
     );
   } else {
     console.log(
       `Major river corridor fill found no eligible segments ` +
       `after scanning ${processedSegmentCount} segments across ${processedRiverFeatureCount} river features ` +
+      `with ${usedWorkers} compute worker(s) ` +
       `(${formatElapsedMs(Date.now() - startedAt)}).`,
     );
   }
@@ -5302,6 +5938,68 @@ async function writeGeoJson(relativePath, data) {
   await writeFile(targetPath, JSON.stringify(data, null, 2), "utf8");
 }
 
+const postHydrologyStageCacheVersion = 1;
+
+function buildPostHydrologyStageScopeKey(hexOnlyScope) {
+  if (!hexOnlyScope?.foundHexIds?.length) {
+    return "full-theater";
+  }
+
+  return `hex-${hexOnlyScope.foundHexIds.slice().sort().join("_")}`
+    .replace(/[^a-zA-Z0-9_-]/g, "-")
+    .replace(/-+/g, "-");
+}
+
+function postHydrologyStageCachePath(scopeKey) {
+  return path.join(stageCacheRoot, `post-hydrology-${scopeKey}.json`);
+}
+
+async function writePostHydrologyStageCache(scopeKey, payload) {
+  await mkdir(stageCacheRoot, { recursive: true });
+  const filePath = postHydrologyStageCachePath(scopeKey);
+  await writeFile(
+    filePath,
+    JSON.stringify(
+      {
+        version: postHydrologyStageCacheVersion,
+        cachedAt: new Date().toISOString(),
+        scopeKey,
+        payload,
+      },
+      null,
+      2,
+    ),
+    "utf8",
+  );
+}
+
+async function readPostHydrologyStageCache(scopeKey) {
+  const filePath = postHydrologyStageCachePath(scopeKey);
+
+  if (!existsSync(filePath)) {
+    return null;
+  }
+
+  try {
+    const raw = await readFile(filePath, "utf8");
+    const parsed = JSON.parse(raw);
+
+    if (
+      !parsed ||
+      parsed.version !== postHydrologyStageCacheVersion ||
+      typeof parsed !== "object" ||
+      typeof parsed.payload !== "object" ||
+      parsed.payload === null
+    ) {
+      return null;
+    }
+
+    return parsed.payload;
+  } catch {
+    return null;
+  }
+}
+
 async function resolveHexOnlyScope(hexIds) {
   const requestedHexIds = [...new Set((hexIds ?? []).map((value) => String(value).trim()).filter(Boolean))];
 
@@ -5797,9 +6495,12 @@ async function main() {
   await mkdir(cacheRoot, { recursive: true });
   await mkdir(layersRoot, { recursive: true });
   const hexOnlyScope = await resolveHexOnlyScope(hexOnlyIds);
+  const postHydrologyScopeKey = buildPostHydrologyStageScopeKey(hexOnlyScope);
   const buildExtentBbox = hexOnlyScope?.bounds ?? theaterBbox;
   console.log(
-    `Using worker concurrency ${workerConcurrency} (tile fetch concurrency ${tileFetchConcurrency}).`,
+    `Using fetch worker concurrency ${workerConcurrency} ` +
+    `(tile fetch concurrency ${tileFetchConcurrency}), ` +
+    `compute workers ${computeWorkerConcurrency}.`,
   );
   if (hexOnlyScope) {
     console.log(
@@ -5897,6 +6598,158 @@ async function main() {
       },
     );
     console.log("Smoke test completed for Overpass water-body polygons.");
+    return;
+  }
+
+  if (coastalOnlyMode) {
+    const coastalOnlyStartedAt = Date.now();
+    const stagePayload = await readPostHydrologyStageCache(postHydrologyScopeKey);
+
+    if (!stagePayload) {
+      throw new Error(
+        `--coastal-only requires a post-hydrology cache for scope "${postHydrologyScopeKey}". ` +
+        `Run a normal build once first for this scope.`,
+      );
+    }
+
+    const theaterCoastalLandMask = buildTheaterCoastalLandMask(
+      stagePayload.countryBoundaries,
+      stagePayload.ukraineGeometry,
+    );
+    const coastalMaskStartedAt = Date.now();
+    const coastalMaskClippedToBbox = clipGeometryToMask(
+      theaterCoastalLandMask,
+      bboxToPolygonGeometry(buildExtentBbox),
+    ) ?? theaterCoastalLandMask;
+    console.log(
+      `Coastal-only stage: clipped coastal mask (${formatElapsedMs(Date.now() - coastalMaskStartedAt)}).`,
+    );
+    const seaCorrectionStartedAt = Date.now();
+    const correctedSeas = correctSeaLayerWithLandMask(
+      stagePayload.rawSeas,
+      coastalMaskClippedToBbox,
+    );
+    console.log(
+      `Coastal-only stage: corrected sea layer (${formatElapsedMs(Date.now() - seaCorrectionStartedAt)}).`,
+    );
+    const clipPrepStartedAt = Date.now();
+    const effectiveWaterBodiesClipped = clipPolygonFeatureCollectionToBbox(
+      stagePayload.effectiveWaterBodies,
+      buildExtentBbox,
+    );
+    const correctedSeasClipped = clipPolygonFeatureCollectionToBbox(correctedSeas, buildExtentBbox);
+    console.log(
+      `Coastal-only stage: clipped water/sea to bbox (${formatElapsedMs(Date.now() - clipPrepStartedAt)}).`,
+    );
+    const hexCellsPath = path.join(processedRoot, "hex-cells.geojson");
+    const hexCells = existsSync(hexCellsPath)
+      ? await readLocalGeoJson(hexCellsPath, "hex-cells")
+      : null;
+    let correctedSeasFinal = correctedSeasClipped;
+    let countryBoundariesForCoastal = stagePayload.countryBoundaries;
+    const hexIdsForSeaCompletion = coastalSeaCompletionHexIds;
+    const enableHexSpecificSeaOverrides = false;
+    if (hexCells) {
+      const seaCompletionStartedAt = Date.now();
+      correctedSeasFinal = applyHexSeaCompletionFromLandMask(
+        correctedSeasFinal,
+        coastalMaskClippedToBbox,
+        hexCells,
+        {
+          hexIds: hexIdsForSeaCompletion,
+        },
+      );
+      console.log(
+        `Coastal-only stage: hex sea completion (${formatElapsedMs(Date.now() - seaCompletionStartedAt)}).`,
+      );
+    }
+    if (enableHexSpecificSeaOverrides && hexCells) {
+      correctedSeasFinal = applyHexSpecificSeaOverrides(
+        correctedSeasClipped,
+        effectiveWaterBodiesClipped,
+        hexCells,
+        {
+          hexIds: coastalSeaCompletionHexIds,
+          maxSeaDistanceKm: 0.5,
+        },
+      );
+    }
+    if (hexCells) {
+      const lockstepStartedAt = Date.now();
+      const lockstepLayers = applyHexAdm2LandSeaLockstep(
+        correctedSeasFinal,
+        countryBoundariesForCoastal,
+        hexCells,
+        stagePayload.ukraineBoundaryGeometry ?? stagePayload.ukraineGeometry,
+        {
+          hexIds: adm2LandSeaLockstepHexIds,
+        },
+      );
+      correctedSeasFinal = lockstepLayers.seaLayer;
+      countryBoundariesForCoastal = lockstepLayers.countryBoundaryLayer;
+      console.log(
+        `Coastal-only stage: ADM2 land/sea lockstep (${formatElapsedMs(Date.now() - lockstepStartedAt)}).`,
+      );
+    }
+    const subtractionPrepStartedAt = Date.now();
+    const rawSeaBounds = featureCollectionBounds(stagePayload.rawSeas);
+    const coastalSubtractionBbox = expandBbox(rawSeaBounds, 0.8);
+    const seaSubtractionLayer = coastalSubtractionBbox
+      ? clipPolygonFeatureCollectionToBbox(correctedSeasFinal, coastalSubtractionBbox)
+      : correctedSeasFinal;
+    console.log(
+      `Coastal-only stage: prepared sea subtraction layer (${formatElapsedMs(Date.now() - subtractionPrepStartedAt)}).`,
+    );
+    const waterSubtractionStartedAt = Date.now();
+    const correctedWaterBodies = subtractPolygonMaskFromPolygonLayer(
+      effectiveWaterBodiesClipped,
+      unionPolygonFeatureCollectionGeometries(seaSubtractionLayer),
+      "corrected-sea-difference",
+    );
+    console.log(
+      `Coastal-only stage: corrected water-bodies (${formatElapsedMs(Date.now() - waterSubtractionStartedAt)}).`,
+    );
+    const countryTrimStartedAt = Date.now();
+    let correctedCountryBoundaries = subtractPolygonMaskFromPolygonLayer(
+      countryBoundariesForCoastal,
+      unionPolygonFeatureCollectionGeometries(seaSubtractionLayer),
+      "coastal-sea-trim",
+    );
+    if (hexCells) {
+      correctedCountryBoundaries = applyHexCountryBoundaryFillExclusions(
+        correctedCountryBoundaries,
+        hexCells,
+        {
+          hexIds: countryFillExclusionHexIds,
+          keepIsoA3: ["UKR"],
+        },
+      );
+    }
+    console.log(
+      `Coastal-only stage: corrected country-boundaries (${formatElapsedMs(Date.now() - countryTrimStartedAt)}).`,
+    );
+    const writesStartedAt = Date.now();
+
+    await writeGeoJson("layers/water-bodies.geojson", correctedWaterBodies);
+    await writeGeoJson("layers/seas.geojson", correctedSeasFinal);
+    await writeGeoJson("layers/country-boundaries.geojson", correctedCountryBoundaries);
+
+    const settlementsPath = path.join(layersRoot, "settlements.geojson");
+    if (existsSync(settlementsPath)) {
+      const settlements = await readLocalGeoJson(settlementsPath, "layers/settlements.geojson");
+      await writeGeoJson(
+        "layers/settlements.geojson",
+        filterPointFeaturesOutsidePolygons(settlements, correctedSeasFinal),
+      );
+    }
+    console.log(
+      `Coastal-only stage: wrote outputs (${formatElapsedMs(Date.now() - writesStartedAt)}).`,
+    );
+
+    console.log(
+      `Coastal-only update completed from post-hydrology cache scope "${postHydrologyScopeKey}" ` +
+      `(${formatElapsedMs(Date.now() - coastalOnlyStartedAt)}).`,
+    );
     return;
   }
 
@@ -6059,6 +6912,10 @@ async function main() {
     clippedAdm2Polygons,
   );
   const admBoundaryTopology = buildBoundaryLineTopologyFromAdm2(oblastSubdivisions);
+  filteredLayers["layers/country-boundaries.geojson"] = replaceUkraineCountryBoundaryGeometry(
+    filteredLayers["layers/country-boundaries.geojson"],
+    admBoundaryTopology.ukraineBoundaryGeometry,
+  );
   if (admBoundaryTopology.ukraineGeometry) {
     const splitRivers = splitLineFeatureCollectionByMask(
       filteredLayers["layers/rivers.geojson"],
@@ -6123,37 +6980,133 @@ async function main() {
     `Completed post-elevation hydrology reconstruction ` +
     `(${formatElapsedMs(Date.now() - postElevationHydrologyStartedAt)}).`,
   );
+  const rawSeasClipped = clipPolygonFeatureCollectionToBbox(seas, buildExtentBbox);
+  await writePostHydrologyStageCache(postHydrologyScopeKey, {
+    scopeHexIds: hexOnlyScope?.foundHexIds ?? [],
+    buildExtentBbox,
+    effectiveWaterBodies,
+    rawSeas: rawSeasClipped,
+    countryBoundaries: filteredLayers["layers/country-boundaries.geojson"],
+    ukraineGeometry: admBoundaryTopology.ukraineGeometry,
+    ukraineBoundaryGeometry: admBoundaryTopology.ukraineBoundaryGeometry,
+  });
+  console.log(`Cached post-hydrology stage: ${postHydrologyScopeKey}.`);
   const theaterCoastalLandMask = buildTheaterCoastalLandMask(
     filteredLayers["layers/country-boundaries.geojson"],
     admBoundaryTopology.ukraineGeometry,
   );
-  const correctedSeas = correctSeaLayerWithLandMask(seas, theaterCoastalLandMask);
+  const coastalMaskStartedAt = Date.now();
+  const coastalMaskClippedToBbox = clipGeometryToMask(
+    theaterCoastalLandMask,
+    bboxToPolygonGeometry(buildExtentBbox),
+  ) ?? theaterCoastalLandMask;
+  console.log(
+    `Coastal stage: clipped coastal mask (${formatElapsedMs(Date.now() - coastalMaskStartedAt)}).`,
+  );
+  const seaCorrectionStartedAt = Date.now();
+  const correctedSeas = correctSeaLayerWithLandMask(rawSeasClipped, coastalMaskClippedToBbox);
+  console.log(
+    `Coastal stage: corrected sea layer (${formatElapsedMs(Date.now() - seaCorrectionStartedAt)}).`,
+  );
+  const clipPrepStartedAt = Date.now();
   const effectiveWaterBodiesClipped = clipPolygonFeatureCollectionToBbox(
     effectiveWaterBodies,
     buildExtentBbox,
   );
   const correctedSeasClipped = clipPolygonFeatureCollectionToBbox(correctedSeas, buildExtentBbox);
+  console.log(
+    `Coastal stage: clipped water/sea to bbox (${formatElapsedMs(Date.now() - clipPrepStartedAt)}).`,
+  );
   const hexCellsPath = path.join(processedRoot, "hex-cells.geojson");
+  const hexCells = existsSync(hexCellsPath)
+    ? await readLocalGeoJson(hexCellsPath, "hex-cells")
+    : null;
   let correctedSeasFinal = correctedSeasClipped;
-  if (existsSync(hexCellsPath)) {
-    const hexCells = await readLocalGeoJson(hexCellsPath, "hex-cells");
+  let countryBoundariesForCoastal = filteredLayers["layers/country-boundaries.geojson"];
+  const hexIdsForSeaCompletion = coastalSeaCompletionHexIds;
+  const enableHexSpecificSeaOverrides = false;
+  if (hexCells) {
+    const seaCompletionStartedAt = Date.now();
+    correctedSeasFinal = applyHexSeaCompletionFromLandMask(
+      correctedSeasFinal,
+      coastalMaskClippedToBbox,
+      hexCells,
+      {
+        hexIds: hexIdsForSeaCompletion,
+      },
+    );
+    console.log(
+      `Coastal stage: hex sea completion (${formatElapsedMs(Date.now() - seaCompletionStartedAt)}).`,
+    );
+  }
+  if (enableHexSpecificSeaOverrides && hexCells) {
     correctedSeasFinal = applyHexSpecificSeaOverrides(
       correctedSeasClipped,
       effectiveWaterBodiesClipped,
       hexCells,
       {
-        hexIds: ["HX-E36-N22"],
+        hexIds: coastalSeaCompletionHexIds,
         maxSeaDistanceKm: 0.5,
       },
     );
   }
+  if (hexCells) {
+    const lockstepStartedAt = Date.now();
+    const lockstepLayers = applyHexAdm2LandSeaLockstep(
+      correctedSeasFinal,
+      countryBoundariesForCoastal,
+      hexCells,
+      admBoundaryTopology.ukraineBoundaryGeometry,
+      {
+        hexIds: adm2LandSeaLockstepHexIds,
+      },
+    );
+    correctedSeasFinal = lockstepLayers.seaLayer;
+    countryBoundariesForCoastal = lockstepLayers.countryBoundaryLayer;
+    console.log(
+      `Coastal stage: ADM2 land/sea lockstep (${formatElapsedMs(Date.now() - lockstepStartedAt)}).`,
+    );
+  }
+  const subtractionPrepStartedAt = Date.now();
+  const rawSeaBounds = featureCollectionBounds(rawSeasClipped);
+  const coastalSubtractionBbox = expandBbox(rawSeaBounds, 0.8);
+  const seaSubtractionLayer = coastalSubtractionBbox
+    ? clipPolygonFeatureCollectionToBbox(correctedSeasFinal, coastalSubtractionBbox)
+    : correctedSeasFinal;
+  console.log(
+    `Coastal stage: prepared sea subtraction layer (${formatElapsedMs(Date.now() - subtractionPrepStartedAt)}).`,
+  );
+  const waterSubtractionStartedAt = Date.now();
   const correctedWaterBodies = subtractPolygonMaskFromPolygonLayer(
     effectiveWaterBodiesClipped,
-    unionPolygonFeatureCollectionGeometries(correctedSeasFinal),
+    unionPolygonFeatureCollectionGeometries(seaSubtractionLayer),
     "corrected-sea-difference",
+  );
+  console.log(
+    `Coastal stage: corrected water-bodies (${formatElapsedMs(Date.now() - waterSubtractionStartedAt)}).`,
+  );
+  const countryTrimStartedAt = Date.now();
+  let correctedCountryBoundaries = subtractPolygonMaskFromPolygonLayer(
+    countryBoundariesForCoastal,
+    unionPolygonFeatureCollectionGeometries(seaSubtractionLayer),
+    "coastal-sea-trim",
+  );
+  if (hexCells) {
+    correctedCountryBoundaries = applyHexCountryBoundaryFillExclusions(
+      correctedCountryBoundaries,
+      hexCells,
+      {
+        hexIds: countryFillExclusionHexIds,
+        keepIsoA3: ["UKR"],
+      },
+    );
+  }
+  console.log(
+    `Coastal stage: corrected country-boundaries (${formatElapsedMs(Date.now() - countryTrimStartedAt)}).`,
   );
   filteredLayers["layers/water-bodies.geojson"] = correctedWaterBodies;
   filteredLayers["layers/seas.geojson"] = correctedSeasFinal;
+  filteredLayers["layers/country-boundaries.geojson"] = correctedCountryBoundaries;
   filteredLayers["layers/theater-boundary.geojson"] = admBoundaryTopology.adm0Outer;
   filteredLayers["layers/oblast-boundaries.geojson"] = admBoundaryTopology.adm1Shared;
   filteredLayers["layers/oblast-subdivisions.geojson"] = admBoundaryTopology.adm2Internal;
@@ -6371,7 +7324,39 @@ async function main() {
   console.log("Wrote processed public fallback layers and layers.json");
 }
 
-main().catch((error) => {
-  console.error(error);
-  process.exitCode = 1;
-});
+async function runWorkerTaskIfNeeded() {
+  if (isMainThread || !parentPort || !workerData?.task) {
+    return false;
+  }
+
+  if (workerData.task === "major-river-corridor-chunk") {
+    const payload = workerData.payload ?? {};
+    const result = buildMajorRiverCorridorGapLayerSerial(
+      payload.riverFeatures ?? [],
+      payload.waterEntries ?? [],
+      payload.coverageGeometry ?? null,
+      payload.options ?? {},
+    );
+    parentPort.postMessage({
+      chunkIndex: payload.chunkIndex ?? 0,
+      corridorFeatures: result.corridorFeatures ?? [],
+      processedRiverFeatureCount: result.processedRiverFeatureCount ?? 0,
+      processedSegmentCount: result.processedSegmentCount ?? 0,
+    });
+    return true;
+  }
+
+  throw new Error(`Unknown worker task: ${workerData.task}`);
+}
+
+runWorkerTaskIfNeeded()
+  .then((handled) => {
+    if (!handled) {
+      return main();
+    }
+    return null;
+  })
+  .catch((error) => {
+    console.error(error);
+    process.exitCode = 1;
+  });

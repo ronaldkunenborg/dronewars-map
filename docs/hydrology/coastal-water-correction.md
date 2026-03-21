@@ -26,11 +26,30 @@ The correction flow combines:
 2. Correct sea polygons by subtracting the land mask (`correctedSeas = seas - landMask`).
 3. Clip corrected sea and water polygons to the current build bbox (geometry clipping, not just bbox-intersection filtering).
 4. Remove corrected sea space from inland water output (`water-bodies = water-bodies - correctedSeas`) so sea and inland polygons do not overlap.
-5. Apply hex-specific coastal fallback only where explicitly configured (currently Odessa test hex), with safety guards.
+5. Apply hex-level sea completion fallback in configured problem hexes: `seaInHex = hexArea - landMaskInHex`.
+6. (Optional/disabled by default) apply stricter hex-specific OSM sea override with area-ratio guard.
 
-## Hex-Specific Fallback Guard
+## Hex Sea Completion Fallback
 
-For an explicit problem hex, the builder can attempt a local OSM-based sea replacement.  
+For known bad coastal hexes where coarse sea geometry creates wedges or cut-lines, the builder can replace sea inside the hex using only land geometry:
+
+- take the selected hex polygon,
+- subtract land mask from that hex,
+- write the remainder as sea in that hex.
+
+This avoids dependence on coarse upstream sea polygon shape in that local area.
+
+Current configured completion set includes Odessa + Crimea task hexes:
+
+- `HX-E36-N22`
+- `HX-E71-N12`
+- `HX-E72-N11`
+- `HX-E75-N12`
+- `HX-E77-N12`
+
+## Hex-Specific Override Guard
+
+For an explicit problem hex, the builder can also attempt a local OSM-based sea replacement.  
 This fallback is constrained by an area-ratio sanity check to avoid over-removing sea:
 
 - apply only when replacement area is reasonably close to the existing corrected sea area,

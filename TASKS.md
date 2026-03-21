@@ -41,6 +41,8 @@ Pending tasks are listed under ## Pending tasks.
 
 74. [pending] Fix Black Sea / Sea of Azov coastal land-sea mismatch in production layers (priority implementation task): reproduce and resolve issues around Odessa and Crimea (for example `HX-E36-N22`, `HX-E72-N11`, `HX-E75-N12`, `HX-E77-N12`) where sea overlaps land and/or inland water appears in sea space. Keep this as the operational fix track (theater-wide coastal land mask, recomputed `seas`, and `water-bodies` cleanup against corrected seas), with explicit before/after hex validation.
 
+74.1 [pending] Investigate and prototype parallelization for the `Starting post-elevation vector assembly...` stage, similar to hydrology compute-worker parallelism: identify CPU-heavy substeps, split safely into deterministic parallel units, and expose a bounded worker setting (separate from fetch workers) where beneficial.
+
 75. [pending] Prototype and evaluate an OSM-derived high-detail coastal water mask as the long-term coastal source upgrade: design a replacement-quality mask pipeline (coastline/water polygons), compare against the current Natural Earth coastal behavior in problematic strips, and define integration criteria so Task `74` can swap to this source without architectural changes. When finalized, re-check AGENTS.md and remove no-longer-needed temporary coastal rules.
 
 76. [pending] Improve inland hydrology and wetland quality (non-coastal scope): continue promoting higher-detail inland OSM water geometry quality and implement wetlands upgrade using OSM wetlands + ESA WorldCover support. Keep this task focused on inland rivers/lakes/wetlands quality and exclude sea-land border reconciliation (handled by `74`/`75`).
