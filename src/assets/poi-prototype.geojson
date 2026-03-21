@@ -1,0 +1,101 @@
+{
+  "type": "FeatureCollection",
+  "features": [
+    {
+      "type": "Feature",
+      "properties": {
+        "id": "poi-airport-boryspil",
+        "name": "Boryspil International Airport",
+        "category": "airport"
+      },
+      "geometry": {
+        "type": "Point",
+        "coordinates": [30.894699, 50.345001]
+      }
+    },
+    {
+      "type": "Feature",
+      "properties": {
+        "id": "poi-airport-antonov",
+        "name": "Antonov Airport",
+        "category": "airport"
+      },
+      "geometry": {
+        "type": "Point",
+        "coordinates": [30.201700, 50.603600]
+      }
+    },
+    {
+      "type": "Feature",
+      "properties": {
+        "id": "poi-dam-dniprohes",
+        "name": "DniproHES Dam",
+        "category": "dam"
+      },
+      "geometry": {
+        "type": "Point",
+        "coordinates": [35.094900, 47.872200]
+      }
+    },
+    {
+      "type": "Feature",
+      "properties": {
+        "id": "poi-dam-kyiv-hpp",
+        "name": "Kyiv Hydroelectric Dam",
+        "category": "dam"
+      },
+      "geometry": {
+        "type": "Point",
+        "coordinates": [30.534700, 50.585100]
+      }
+    },
+    {
+      "type": "Feature",
+      "properties": {
+        "id": "poi-power-znpp",
+        "name": "Zaporizhzhia Nuclear Power Plant",
+        "category": "power_plant"
+      },
+      "geometry": {
+        "type": "Point",
+        "coordinates": [34.585800, 47.510000]
+      }
+    },
+    {
+      "type": "Feature",
+      "properties": {
+        "id": "poi-bridge-south-kyiv",
+        "name": "Southern Bridge (Kyiv)",
+        "category": "bridge"
+      },
+      "geometry": {
+        "type": "Point",
+        "coordinates": [30.598900, 50.401500]
+      }
+    },
+    {
+      "type": "Feature",
+      "properties": {
+        "id": "poi-military-sevastopol",
+        "name": "Sevastopol Naval Base",
+        "category": "military_base"
+      },
+      "geometry": {
+        "type": "Point",
+        "coordinates": [33.528700, 44.612200]
+      }
+    },
+    {
+      "type": "Feature",
+      "properties": {
+        "id": "poi-military-mykolaiv-airbase",
+        "name": "Kulbakino Air Base",
+        "category": "military_base"
+      },
+      "geometry": {
+        "type": "Point",
+        "coordinates": [31.919400, 46.966700]
+      }
+    }
+  ]
+}

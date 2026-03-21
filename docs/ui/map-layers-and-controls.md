@@ -9,6 +9,7 @@
 - roads
 - railways
 - settlements
+- poi prototype
 - boundaries/labels
 - operational hexes
 

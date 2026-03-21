@@ -30,6 +30,7 @@ export const mapLayerVisibilityTargets = {
     "settlements-town-label",
     "settlements-village-label",
   ],
+  poi: ["poi-prototype-circle", "poi-prototype-star", "poi-prototype-label"],
   oblasts: [
     "country-boundaries-fill",
     "country-boundaries-line",

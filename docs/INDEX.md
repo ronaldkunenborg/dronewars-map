@@ -23,6 +23,7 @@ This project keeps quickstart and high-level context in `README.md`, with detail
 ## Data Policy
 
 - [External Sources Policy](data/external-sources.md)
+- [POI Source Selection](data/poi-source-selection.md)
 - [Attribution](ATTRIBUTION.md)
 
 ## UI

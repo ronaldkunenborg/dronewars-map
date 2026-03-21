@@ -1,5 +1,15 @@
 type LngLat = [number, number];
 
+export type HexInspectorDebugData = {
+  hexId: string;
+  trueCenterLngLat: LngLat | null;
+  trueCenterPixels: [number, number] | null;
+  clickLngLat: LngLat;
+  clickPixels: [number, number];
+  deltaTrueCenterPixels: [number, number] | null;
+  clickToTrueCenterKm: number | null;
+};
+
 export type HexInspectorData = {
   hexId: string;
   parentRegionName: string;
@@ -29,6 +39,7 @@ export type HexInspectorData = {
 };
 
 type HexInspectorProps = {
+  debugInfo?: HexInspectorDebugData | null;
   hexRadiusKm?: number;
   selectedHex: HexInspectorData | null;
   title?: string;
@@ -67,6 +78,7 @@ function formatLngLat(value: LngLat | null) {
 }
 
 export function HexInspector({
+  debugInfo = null,
   hexRadiusKm,
   selectedHex,
   title = "Cell Inspector",
@@ -83,40 +95,102 @@ export function HexInspector({
   return (
     <div className="hex-inspector">
       <h2>{title}</h2>
-      <p><strong>Hex:</strong> {selectedHex.hexId}</p>
-      <p><strong>Hex radius:</strong> {hexRadiusKm ?? "n/a"} km</p>
-      <p><strong>Region:</strong> {selectedHex.parentRegionName}</p>
-      <p><strong>Area:</strong> {formatNumber(selectedHex.areaKm2, 1)} km²</p>
-      <p><strong>Centroid:</strong> {formatLngLat(selectedHex.centroidLngLat)}</p>
-      <p><strong>True center:</strong> {formatLngLat(selectedHex.trueCenterLngLat)}</p>
+      <details className="hex-inspector__section" open>
+        <summary>Summary</summary>
+        <div className="hex-inspector__section-body">
+          <p><strong>Hex:</strong> {selectedHex.hexId}</p>
+          <p><strong>Hex radius:</strong> {hexRadiusKm ?? "n/a"} km</p>
+          <p><strong>Region:</strong> {selectedHex.parentRegionName}</p>
+          <p><strong>Area:</strong> {formatNumber(selectedHex.areaKm2, 1)} km²</p>
+          <p><strong>Centroid:</strong> {formatLngLat(selectedHex.centroidLngLat)}</p>
+          <p><strong>True center:</strong> {formatLngLat(selectedHex.trueCenterLngLat)}</p>
+        </div>
+      </details>
 
-      <h3>Capacity</h3>
-      <p><strong>Base capacity:</strong> {formatNumber(selectedHex.baseCapacity)}</p>
-      <p><strong>Effective capacity:</strong> {formatNumber(selectedHex.effectiveCapacity)}</p>
-      <p><strong>Assigned force count:</strong> {formatNumber(selectedHex.assignedForceCount)}</p>
-      <p><strong>Mobility score:</strong> {formatNumber(selectedHex.mobilityScore)}</p>
-      <p><strong>Defensibility score:</strong> {formatNumber(selectedHex.defensibilityScore)}</p>
+      <details className="hex-inspector__section">
+        <summary>Terrain</summary>
+        <div className="hex-inspector__section-body">
+          <p><strong>Dominant terrain:</strong> {selectedHex.terrainSummary?.dominantTerrain ?? "n/a"}</p>
+          <p><strong>Sea coverage:</strong> {formatPercent(selectedHex.terrainSummary?.seaCoverage ?? null)}</p>
+          <p><strong>Forest coverage:</strong> {formatPercent(selectedHex.terrainSummary?.forestCoverage ?? null)}</p>
+          <p><strong>Wetland coverage:</strong> {formatPercent(selectedHex.terrainSummary?.wetlandCoverage ?? null)}</p>
+          <p><strong>Open terrain:</strong> {formatPercent(selectedHex.terrainSummary?.openTerrainCoverage ?? null)}</p>
+          <p>
+            <strong>Water barrier:</strong>{" "}
+            {formatBoolean(selectedHex.terrainSummary?.waterBarrierPresence ?? null, "Present", "Absent")}
+          </p>
+          <p><strong>Elevation roughness:</strong> {formatNumber(selectedHex.terrainSummary?.elevationRoughness ?? null, 3)}</p>
+        </div>
+      </details>
 
-      <h3>Terrain</h3>
-      <p><strong>Dominant terrain:</strong> {selectedHex.terrainSummary?.dominantTerrain ?? "n/a"}</p>
-      <p><strong>Sea coverage:</strong> {formatPercent(selectedHex.terrainSummary?.seaCoverage ?? null)}</p>
-      <p><strong>Forest coverage:</strong> {formatPercent(selectedHex.terrainSummary?.forestCoverage ?? null)}</p>
-      <p><strong>Wetland coverage:</strong> {formatPercent(selectedHex.terrainSummary?.wetlandCoverage ?? null)}</p>
-      <p><strong>Open terrain:</strong> {formatPercent(selectedHex.terrainSummary?.openTerrainCoverage ?? null)}</p>
-      <p>
-        <strong>Water barrier:</strong>{" "}
-        {formatBoolean(selectedHex.terrainSummary?.waterBarrierPresence ?? null, "Present", "Absent")}
-      </p>
-      <p><strong>Elevation roughness:</strong> {formatNumber(selectedHex.terrainSummary?.elevationRoughness ?? null, 3)}</p>
+      <details className="hex-inspector__section">
+        <summary>Infrastructure</summary>
+        <div className="hex-inspector__section-body">
+          <p><strong>Road density:</strong> {formatNumber(selectedHex.infrastructureSummary?.roadDensity ?? null, 3)}</p>
+          <p>
+            <strong>Rail presence:</strong>{" "}
+            {formatBoolean(selectedHex.infrastructureSummary?.railPresence ?? null, "Present", "Absent")}
+          </p>
+          <p><strong>Settlement score:</strong> {formatNumber(selectedHex.infrastructureSummary?.settlementScore ?? null)}</p>
+          <p><strong>Strongest settlement class:</strong> {formatNumber(selectedHex.infrastructureSummary?.strongestPlaceScore ?? null)}</p>
+        </div>
+      </details>
 
-      <h3>Infrastructure</h3>
-      <p><strong>Road density:</strong> {formatNumber(selectedHex.infrastructureSummary?.roadDensity ?? null, 3)}</p>
-      <p>
-        <strong>Rail presence:</strong>{" "}
-        {formatBoolean(selectedHex.infrastructureSummary?.railPresence ?? null, "Present", "Absent")}
-      </p>
-      <p><strong>Settlement score:</strong> {formatNumber(selectedHex.infrastructureSummary?.settlementScore ?? null)}</p>
-      <p><strong>Strongest settlement class:</strong> {formatNumber(selectedHex.infrastructureSummary?.strongestPlaceScore ?? null)}</p>
+      <details className="hex-inspector__section">
+        <summary>Capacity</summary>
+        <div className="hex-inspector__section-body">
+          <p><strong>Base capacity:</strong> {formatNumber(selectedHex.baseCapacity)}</p>
+          <p><strong>Effective capacity:</strong> {formatNumber(selectedHex.effectiveCapacity)}</p>
+          <p><strong>Assigned force count:</strong> {formatNumber(selectedHex.assignedForceCount)}</p>
+          <p><strong>Mobility score:</strong> {formatNumber(selectedHex.mobilityScore)}</p>
+          <p><strong>Defensibility score:</strong> {formatNumber(selectedHex.defensibilityScore)}</p>
+        </div>
+      </details>
+
+      <details className="hex-inspector__section">
+        <summary>Debug</summary>
+        <div className="hex-inspector__section-body">
+          {debugInfo ? (
+            <>
+              <p><strong>Hex:</strong> {debugInfo.hexId}</p>
+              <p>
+                <strong>True center lng/lat:</strong>{" "}
+                {debugInfo.trueCenterLngLat
+                  ? `${debugInfo.trueCenterLngLat[0].toFixed(6)}, ${debugInfo.trueCenterLngLat[1].toFixed(6)}`
+                  : "n/a"}
+              </p>
+              <p>
+                <strong>True center px:</strong>{" "}
+                {debugInfo.trueCenterPixels
+                  ? `${debugInfo.trueCenterPixels[0].toFixed(2)}, ${debugInfo.trueCenterPixels[1].toFixed(2)}`
+                  : "n/a"}
+              </p>
+              <p>
+                <strong>Click lng/lat:</strong>{" "}
+                {debugInfo.clickLngLat[0].toFixed(6)}, {debugInfo.clickLngLat[1].toFixed(6)}
+              </p>
+              <p>
+                <strong>Click px:</strong>{" "}
+                {debugInfo.clickPixels[0].toFixed(2)}, {debugInfo.clickPixels[1].toFixed(2)}
+              </p>
+              <p>
+                <strong>Delta true center px:</strong>{" "}
+                {debugInfo.deltaTrueCenterPixels
+                  ? `${debugInfo.deltaTrueCenterPixels[0].toFixed(2)}, ${debugInfo.deltaTrueCenterPixels[1].toFixed(2)}`
+                  : "n/a"}
+              </p>
+              <p>
+                <strong>Click to true center:</strong>{" "}
+                {debugInfo.clickToTrueCenterKm !== null
+                  ? `${debugInfo.clickToTrueCenterKm.toFixed(4)} km`
+                  : "n/a"}
+              </p>
+            </>
+          ) : (
+            <p>Click inside a hex to inspect generated true-center debug details.</p>
+          )}
+        </div>
+      </details>
     </div>
   );
 }

@@ -5,7 +5,11 @@ import type {
   MapGeoJSONFeature,
   GeoJSONSource,
 } from "maplibre-gl";
-import { HexInspector, type HexInspectorData } from "../components/HexInspector";
+import {
+  HexInspector,
+  type HexInspectorData,
+  type HexInspectorDebugData,
+} from "../components/HexInspector";
 import {
   type HexPolygonGeoJson,
   loadHexOnlyProcessedData,
@@ -20,15 +24,7 @@ import { appConfig, ukraineTheaterConfig } from "../config";
 import { createBaseMap } from "./createMap";
 import { mapLayerVisibilityTargets } from "./layerRegistry";
 
-type HexDebugInfo = {
-  hexId: string;
-  trueCenterLngLat: [number, number] | null;
-  trueCenterPixels: [number, number] | null;
-  clickLngLat: [number, number];
-  clickPixels: [number, number];
-  deltaTrueCenterPixels: [number, number] | null;
-  clickToTrueCenterKm: number | null;
-};
+type HexDebugInfo = HexInspectorDebugData;
 
 type JsonObject = Record<string, unknown>;
 type Point = [number, number];
@@ -58,6 +54,8 @@ type SearchResultEntry =
   };
 type SettlementSearchResult = Extract<SearchResultEntry, { kind: "settlement" }>;
 type HexSearchResult = Extract<SearchResultEntry, { kind: "hex" }>;
+
+const poiPrototypePath = new URL("../assets/poi-prototype.geojson", import.meta.url).href;
 
 
 function toRadians(value: number) {
@@ -504,6 +502,142 @@ function setSearchResultHexFeature(
   });
 }
 
+function ensurePoiPrototypeLayers(map: MapLibreMap) {
+  if (!map.getSource("poi-prototype")) {
+    map.addSource("poi-prototype", {
+      type: "geojson",
+      data: {
+        type: "FeatureCollection",
+        features: [],
+      },
+    });
+  }
+
+  if (!map.getLayer("poi-prototype-circle")) {
+    map.addLayer({
+      id: "poi-prototype-circle",
+      type: "circle",
+      source: "poi-prototype",
+      paint: {
+        "circle-color": [
+          "match",
+          ["coalesce", ["get", "category"], "other"],
+          "airport",
+          "#b35b3e",
+          "dam",
+          "#4774a8",
+          "power_plant",
+          "#c39a47",
+          "bridge",
+          "#6f7f8f",
+          "military_base",
+          "#8a3f52",
+          "#8b8b8b",
+        ],
+        "circle-radius": [
+          "interpolate",
+          ["linear"],
+          ["zoom"],
+          4,
+          2.5,
+          8,
+          5,
+          12,
+          7,
+        ],
+        "circle-stroke-color": "#f5f2e8",
+        "circle-stroke-width": 1.2,
+        "circle-opacity": 0.92,
+      },
+    });
+  }
+
+  if (!map.getLayer("poi-prototype-star")) {
+    map.addLayer({
+      id: "poi-prototype-star",
+      type: "symbol",
+      source: "poi-prototype",
+      layout: {
+        "text-field": "★",
+        "text-font": ["Noto Sans Bold", "Noto Sans Regular", "Open Sans Bold", "Open Sans Regular"],
+        "text-size": [
+          "interpolate",
+          ["linear"],
+          ["zoom"],
+          4,
+          10,
+          8,
+          14,
+          12,
+          18,
+        ],
+        "text-allow-overlap": true,
+        "text-ignore-placement": true,
+      },
+      paint: {
+        "text-color": "#f1d16a",
+        "text-halo-color": "rgba(86, 45, 45, 0.95)",
+        "text-halo-width": 1.1,
+      },
+    });
+  }
+
+  if (!map.getLayer("poi-prototype-label")) {
+    map.addLayer({
+      id: "poi-prototype-label",
+      type: "symbol",
+      source: "poi-prototype",
+      minzoom: 7.5,
+      layout: {
+        "text-field": ["coalesce", ["get", "name"], ["get", "category"], "POI"],
+        "text-font": ["Noto Sans Regular", "Open Sans Regular"],
+        "text-size": [
+          "interpolate",
+          ["linear"],
+          ["zoom"],
+          7.5,
+          10,
+          10,
+          12,
+          12,
+          13,
+        ],
+        "text-offset": [0, 1.05],
+        "text-anchor": "top",
+        "text-allow-overlap": false,
+      },
+      paint: {
+        "text-color": "#4b4238",
+        "text-halo-color": "rgba(245, 242, 232, 0.95)",
+        "text-halo-width": 1.2,
+      },
+    });
+  }
+
+  fetch(poiPrototypePath, {
+    headers: {
+      Accept: "application/json",
+    },
+  })
+    .then(async (response) => {
+      if (!response.ok) {
+        throw new Error(`Failed to load ${poiPrototypePath}: ${response.status}`);
+      }
+      return response.json();
+    })
+    .then((geojson) => {
+      const source = map.getSource("poi-prototype") as GeoJSONSource | undefined;
+      source?.setData(geojson);
+    })
+    .catch(() => {
+      const source = map.getSource("poi-prototype") as GeoJSONSource | undefined;
+      source?.setData({
+        type: "FeatureCollection",
+        features: [],
+      });
+    });
+}
+
 function buildHexInspectorData(feature: MapGeoJSONFeature): HexInspectorData {
   const terrainSummary = parseJsonObject<{
     dominantTerrain?: unknown;
@@ -585,7 +719,6 @@ export function MapView({
   const [selectedHex, setSelectedHex] = useState<HexInspectorData | null>(null);
   const [hoveredHexId, setHoveredHexId] = useState<string | null>(null);
   const [detailsVisible, setDetailsVisible] = useState(true);
-  const [detailedVisible, setDetailedVisible] = useState(false);
   const [searchQuery, setSearchQuery] = useState("");
   const deferredSearchQuery = useDeferredValue(searchQuery);
   const [searchResults, setSearchResults] = useState<SearchResultEntry[]>([]);
@@ -961,6 +1094,7 @@ export function MapView({
       detachDebugHandler?.();
       detachDebugHandler = attachHexDebugHandler(map);
       ensureSearchResultHexLayers(map);
+      ensurePoiPrototypeLayers(map);
       applyLayerVisibility(map, layerVisibility);
       applyOperationalHexVisibility(map, layerVisibility.hexes);
       applySettlementDisplayLevel(map, layerVisibility.settlements, settlementDisplayLevel);
@@ -1110,15 +1244,6 @@ export function MapView({
               </span>
               <span className="cell-panel__toggle-text">{`Hex: ${hoveredHexId ?? "n/a"}`}</span>
             </button>
-            <span aria-hidden="true" className="cell-panel__control-spacer" />
-            <button
-              aria-pressed={detailedVisible}
-              className={`cell-panel__detail-toggle${detailedVisible ? " is-active" : ""}`}
-              onClick={() => setDetailedVisible((value) => !value)}
-              type="button"
-            >
-              Detailed
-            </button>
           </div>
           <form
             className="cell-panel__search-form"
@@ -1137,9 +1262,6 @@ export function MapView({
               type="search"
               value={searchQuery}
             />
-            <button className="cell-panel__search-button" type="submit">
-              Find
-            </button>
           </form>
         </div>
         {searchResults.length > 0 ? (
@@ -1175,54 +1297,11 @@ export function MapView({
         {detailsVisible ? (
           <div className="cell-panel__body" id="cell-details-panel">
             <HexInspector
+              debugInfo={debugInfo}
               hexRadiusKm={appConfig.hexRadiusKm}
               selectedHex={selectedHex}
               title="Cell Information"
             />
-            {detailedVisible ? (
-              <section className="cell-panel__detailed">
-                <h3>Detailed</h3>
-                {debugInfo ? (
-                  <>
-                    <p><strong>Hex:</strong> {debugInfo.hexId}</p>
-                    <p>
-                      <strong>True center lng/lat:</strong>{" "}
-                      {debugInfo.trueCenterLngLat
-                        ? `${debugInfo.trueCenterLngLat[0].toFixed(6)}, ${debugInfo.trueCenterLngLat[1].toFixed(6)}`
-                        : "n/a"}
-                    </p>
-                    <p>
-                      <strong>True center px:</strong>{" "}
-                      {debugInfo.trueCenterPixels
-                        ? `${debugInfo.trueCenterPixels[0].toFixed(2)}, ${debugInfo.trueCenterPixels[1].toFixed(2)}`
-                        : "n/a"}
-                    </p>
-                    <p>
-                      <strong>Click lng/lat:</strong>{" "}
-                      {debugInfo.clickLngLat[0].toFixed(6)}, {debugInfo.clickLngLat[1].toFixed(6)}
-                    </p>
-                    <p>
-                      <strong>Click px:</strong>{" "}
-                      {debugInfo.clickPixels[0].toFixed(2)}, {debugInfo.clickPixels[1].toFixed(2)}
-                    </p>
-                    <p>
-                      <strong>Delta true center px:</strong>{" "}
-                      {debugInfo.deltaTrueCenterPixels
-                        ? `${debugInfo.deltaTrueCenterPixels[0].toFixed(2)}, ${debugInfo.deltaTrueCenterPixels[1].toFixed(2)}`
-                        : "n/a"}
-                    </p>
-                    <p>
-                      <strong>Click to true center:</strong>{" "}
-                      {debugInfo.clickToTrueCenterKm !== null
-                        ? `${debugInfo.clickToTrueCenterKm.toFixed(4)} km`
-                        : "n/a"}
-                    </p>
-                  </>
-                ) : (
-                  <p>Click inside a hex to inspect the true generated center and click delta.</p>
-                )}
-              </section>
-            ) : null}
           </div>
         ) : null}
       </section>

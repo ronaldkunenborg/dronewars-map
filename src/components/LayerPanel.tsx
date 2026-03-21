@@ -9,6 +9,7 @@ export type LayerControlId =
   | "railways"
   | "airports"
   | "settlements"
+  | "poi"
   | "oblasts"
   | "hexes"
   | "contours"
@@ -44,6 +45,7 @@ const logisticsLayerControls: LayerControl[] = [
 
 const settlementsLayerControls: LayerControl[] = [
   { id: "settlements", label: "Settlements", description: "Populated places", color: "#5a4d3f", available: true },
+  { id: "poi", label: "POI (Prototype)", description: "Bridges, dams, power, military, airports", color: "#a14f4f", available: true },
 ];
 
 const boundariesLayerControls: LayerControl[] = [
@@ -60,6 +62,7 @@ export const defaultLayerVisibility: LayerVisibility = {
   railways: true,
   airports: false,
   settlements: false,
+  poi: false,
   oblasts: true,
   hexes: true,
   contours: false,
@@ -78,6 +81,7 @@ export const presetVisibility: Record<ViewMode, LayerVisibility> = {
     roads: false,
     railways: false,
     settlements: false,
+    poi: false,
     oblasts: false,
     hexes: false,
   },
@@ -91,6 +95,7 @@ export const presetVisibility: Record<ViewMode, LayerVisibility> = {
     roads: true,
     railways: true,
     settlements: false,
+    poi: false,
     oblasts: false,
     hexes: false,
   },
@@ -103,6 +108,7 @@ export const presetVisibility: Record<ViewMode, LayerVisibility> = {
     roads: true,
     railways: false,
     settlements: true,
+    poi: false,
     oblasts: true,
     hexes: false,
     hillshade: false,
@@ -116,6 +122,7 @@ export const presetVisibility: Record<ViewMode, LayerVisibility> = {
     roads: false,
     railways: false,
     settlements: false,
+    poi: false,
     oblasts: true,
     hexes: true,
     hillshade: false,
@@ -250,47 +257,32 @@ export function LayerPanel({
         <h2>Settlements</h2>
         <ul className="layer-list">
           {settlementsLayerControls.map((layer) => (
-            <li key={layer.id}>
-              <label className={`toggle-row${layer.available ? "" : " is-disabled"}`}>
-                <div className="layer-label">
-                  <strong>{layer.label}</strong>
-                  <span>{layer.description}</span>
-                </div>
-                <span className="toggle-row__controls">
-                  <span
-                    aria-hidden="true"
-                    className="layer-dot"
-                    style={{ "--dot-color": layer.color } as CSSProperties}
-                  />
-                  <input
-                    checked={visibility[layer.id]}
-                    disabled={!layer.available}
-                    onChange={() => onToggleLayer(layer.id)}
-                    type="checkbox"
-                  />
-                </span>
-              </label>
-              <div className="settlement-level">
-                <label className="settlement-level__label" htmlFor="settlement-level-select">
-                  Level
-                </label>
-                <select
-                  className="settlement-level__select"
-                  disabled={!visibility.settlements}
-                  id="settlement-level-select"
-                  onChange={(event) =>
-                    onChangeSettlementDisplayLevel(event.target.value as SettlementDisplayLevel)
-                  }
-                  value={settlementDisplayLevel}
-                >
-                  <option value="cities">Cities</option>
-                  <option value="towns">Cities + Towns</option>
-                  <option value="villages">Cities + Towns + Villages</option>
-                </select>
-              </div>
-            </li>
+            <LayerToggleRow
+              key={layer.id}
+              checked={visibility[layer.id]}
+              layer={layer}
+              onToggle={onToggleLayer}
+            />
           ))}
         </ul>
+        <div className="settlement-level">
+          <label className="settlement-level__label" htmlFor="settlement-level-select">
+            Settlement level
+          </label>
+          <select
+            className="settlement-level__select"
+            disabled={!visibility.settlements}
+            id="settlement-level-select"
+            onChange={(event) =>
+              onChangeSettlementDisplayLevel(event.target.value as SettlementDisplayLevel)
+            }
+            value={settlementDisplayLevel}
+          >
+            <option value="cities">Cities</option>
+            <option value="towns">Cities + Towns</option>
+            <option value="villages">Cities + Towns + Villages</option>
+          </select>
+        </div>
       </section>
 
       <section className="panel">
@@ -315,6 +307,7 @@ export function LayerPanel({
           <li><span className="legend-swatch legend-swatch--wetland" />Wetland</li>
           <li><span className="legend-swatch legend-swatch--road" />Road</li>
           <li><span className="legend-swatch legend-swatch--rail" />Railway</li>
+          <li><span className="legend-swatch legend-swatch--poi" />POI (Prototype)</li>
           <li><span className="legend-swatch legend-swatch--hex" />Operational hex</li>
         </ul>
       </section>
