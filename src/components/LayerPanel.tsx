@@ -29,8 +29,8 @@ type LayerControl = {
 const terrainLayerControls: LayerControl[] = [
   { id: "water", label: "Water", color: "#6f8fab", available: true },
   { id: "rivers", label: "Rivers", color: "#88a8c1", available: true },
-  { id: "wetlands", label: "Wetlands", color: "#91a98f", available: true },
-  { id: "forests", label: "Forests", color: "#7f9572", available: true },
+  { id: "wetlands", label: "Wetlands", color: "#9a8a63", available: true },
+  { id: "forests", label: "Forests", color: "#7a9660", available: true },
   { id: "hillshade", label: "Hillshade", color: "#727067", available: true },
 ];
 

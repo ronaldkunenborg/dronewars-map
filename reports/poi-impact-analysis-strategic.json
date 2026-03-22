@@ -1,0 +1,21 @@
+{
+  "generatedAt": "2026-03-22T14:55:02.406Z",
+  "profile": "strategic-filter",
+  "source": "Overpass tiled snapshot",
+  "dedupedElements": 0,
+  "classifiedPoiCount": 0,
+  "countsByType": {},
+  "spread": {
+    "totalHexes": 7960,
+    "occupiedHexes": 0,
+    "occupiedPct": 0,
+    "meanPerOccupiedHex": 0,
+    "medianPerOccupiedHex": 0,
+    "p90PerOccupiedHex": 0,
+    "p95PerOccupiedHex": 0,
+    "maxPerHex": 0,
+    "hexesWithGe5": 0,
+    "hexesWithGe10": 0
+  },
+  "topHexes": []
+}

@@ -1,0 +1,137 @@
+{
+  "generatedAt": "2026-03-22T14:35:02.462Z",
+  "source": "Overpass tiled snapshot (analysis for Task 88)",
+  "theater": {
+    "west": 22,
+    "south": 44,
+    "east": 40.5,
+    "north": 52.5
+  },
+  "rawTileCounts": [
+    {
+      "tile": 0,
+      "count": 34113
+    },
+    {
+      "tile": 1,
+      "count": 9389
+    },
+    {
+      "tile": 2,
+      "count": 8372
+    },
+    {
+      "tile": 3,
+      "count": 35132
+    },
+    {
+      "tile": 4,
+      "count": 11969
+    },
+    {
+      "tile": 5,
+      "count": 18096
+    },
+    {
+      "tile": 6,
+      "count": 22787
+    },
+    {
+      "tile": 7,
+      "count": 10263
+    },
+    {
+      "tile": 8,
+      "count": 9290
+    }
+  ],
+  "dedupedElements": 159377,
+  "classifiedPoiCount": 81023,
+  "countsByType": {
+    "dam": 7519,
+    "military_base": 20279,
+    "airfield": 821,
+    "steel": 18,
+    "port_civil": 15,
+    "bridge": 49644,
+    "power": 2591,
+    "airfield_military": 66,
+    "airport_large": 36,
+    "industrial_major": 25,
+    "power_nuclear": 9
+  },
+  "spread": {
+    "totalHexes": 7960,
+    "occupiedHexes": 6293,
+    "occupiedPct": 79.06,
+    "meanPerOccupiedHex": 12.87,
+    "medianPerOccupiedHex": 6,
+    "p90PerOccupiedHex": 28,
+    "p95PerOccupiedHex": 42,
+    "maxPerHex": 1122,
+    "hexesWithGe5": 3778,
+    "hexesWithGe10": 2226
+  },
+  "topHexes": [
+    {
+      "hexId": "HX-E20-N4",
+      "count": 1122
+    },
+    {
+      "hexId": "HX-E59-N17",
+      "count": 600
+    },
+    {
+      "hexId": "HX-E66-N42",
+      "count": 391
+    },
+    {
+      "hexId": "HX-E59-N29",
+      "count": 383
+    },
+    {
+      "hexId": "HX-E20-N3",
+      "count": 331
+    },
+    {
+      "hexId": "HX-E53-N19",
+      "count": 322
+    },
+    {
+      "hexId": "HX-E67-N25",
+      "count": 315
+    },
+    {
+      "hexId": "HX-E64-N45",
+      "count": 312
+    },
+    {
+      "hexId": "HX-E67-N41",
+      "count": 290
+    },
+    {
+      "hexId": "HX-E82-N31",
+      "count": 276
+    },
+    {
+      "hexId": "HX-E8-N3",
+      "count": 257
+    },
+    {
+      "hexId": "HX-E16-N59",
+      "count": 256
+    },
+    {
+      "hexId": "HX-E16-N28",
+      "count": 239
+    },
+    {
+      "hexId": "HX-E59-N15",
+      "count": 225
+    },
+    {
+      "hexId": "HX-E67-N40",
+      "count": 212
+    }
+  ]
+}

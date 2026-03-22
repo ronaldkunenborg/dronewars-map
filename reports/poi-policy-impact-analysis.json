@@ -1,0 +1,339 @@
+{
+  "summary": {
+    "generatedAt": "2026-03-22T15:45:30.069Z",
+    "rawClassifiedCounts": {
+      "airfield_any": 924,
+      "port_civil_any": 15,
+      "bridge_major_route": 30436,
+      "industrial_major": 31,
+      "military_polygon": 2764
+    },
+    "portsCivilTotal": 15,
+    "portsCivilNearCityTownOver100kWithin25km": 11,
+    "majorAirfieldCandidates": 238,
+    "strategicBridgeCandidatesNearMajorRivers": 63,
+    "militaryPolygonsTotal": 2764,
+    "militaryPolygonsWithArea": 0,
+    "militaryPolygonsAreaGe5km2": 0,
+    "militaryPolygonsAreaGe10km2": 0
+  },
+  "portsNear": [
+    {
+      "id": "node/6186340831",
+      "dKm": 2.2,
+      "city": "Galați",
+      "pop": 249432
+    },
+    {
+      "id": "node/6334345468",
+      "dKm": 23.61,
+      "city": "Миколаїв",
+      "pop": 480080
+    },
+    {
+      "id": "node/7089252752",
+      "dKm": 1.02,
+      "city": "Constanța",
+      "pop": 283872
+    },
+    {
+      "id": "node/7089342480",
+      "dKm": 9.54,
+      "city": "Constanța",
+      "pop": 283872
+    },
+    {
+      "id": "node/2415913729",
+      "dKm": 6.09,
+      "city": "Новороссийск",
+      "pop": 275795
+    },
+    {
+      "id": "way/1168951234",
+      "dKm": 1.44,
+      "city": "Новороссийск",
+      "pop": 275795
+    },
+    {
+      "id": "node/2415713029",
+      "dKm": 5.25,
+      "city": "Миколаїв",
+      "pop": 480080
+    },
+    {
+      "id": "node/2415720384",
+      "dKm": 3.76,
+      "city": "Миколаїв",
+      "pop": 480080
+    },
+    {
+      "id": "node/2415724465",
+      "dKm": 3.36,
+      "city": "Миколаїв",
+      "pop": 480080
+    },
+    {
+      "id": "node/6334389031",
+      "dKm": 15.93,
+      "city": "Миколаїв",
+      "pop": 480080
+    },
+    {
+      "id": "way/92079062",
+      "dKm": 2.87,
+      "city": "Ростов-на-Дону",
+      "pop": 1135968
+    }
+  ],
+  "industrialSamples": [
+    {
+      "id": "way/13417211",
+      "industrial": "steelmaking",
+      "landuse": "industrial",
+      "man_made": null,
+      "product": null,
+      "name": "Combinatul Siderurgic LIBERTY Galați"
+    },
+    {
+      "id": "way/88172678",
+      "industrial": "refinery",
+      "landuse": "industrial",
+      "man_made": null,
+      "product": null,
+      "name": "Rafinăria Arpechim"
+    },
+    {
+      "id": "way/88173179",
+      "industrial": "chemical",
+      "landuse": "industrial",
+      "man_made": null,
+      "product": null,
+      "name": null
+    },
+    {
+      "id": "way/88173247",
+      "industrial": "sugar_refinery",
+      "landuse": "industrial",
+      "man_made": null,
+      "product": null,
+      "name": "Fabrica de Zahar Lemarco Cristal"
+    },
+    {
+      "id": "way/88173512",
+      "industrial": "refinery",
+      "landuse": "industrial",
+      "man_made": null,
+      "product": null,
+      "name": "Rafinăria Petrobrazi"
+    },
+    {
+      "id": "way/88174778",
+      "industrial": "chemical",
+      "landuse": "industrial",
+      "man_made": null,
+      "product": null,
+      "name": "Uzina de preparare a uraniului"
+    },
+    {
+      "id": "way/88175576",
+      "industrial": "refinery",
+      "landuse": "industrial",
+      "man_made": null,
+      "product": null,
+      "name": "RAFO Onești"
+    },
+    {
+      "id": "way/88175668",
+      "industrial": "refinery",
+      "landuse": "industrial",
+      "man_made": null,
+      "product": null,
+      "name": "Rafinăria Dărmănești"
+    },
+    {
+      "id": "way/197719915",
+      "industrial": "refinery",
+      "landuse": "industrial",
+      "man_made": null,
+      "product": null,
+      "name": "Rafinăria Steaua Română Câmpina"
+    },
+    {
+      "id": "way/534767723",
+      "industrial": "steelworks",
+      "landuse": "industrial",
+      "man_made": null,
+      "product": null,
+      "name": "ArcelorMittal"
+    },
+    {
+      "id": "way/560990911",
+      "industrial": "refinery",
+      "landuse": "industrial",
+      "man_made": null,
+      "product": null,
+      "name": "Rafinăria Rompetrol Vega Ploiești"
+    },
+    {
+      "id": "way/603718172",
+      "industrial": "steelworks",
+      "landuse": "brownfield",
+      "man_made": null,
+      "product": null,
+      "name": "Fostul Combinat Siderurgic Hunedoara"
+    },
+    {
+      "id": "way/653231803",
+      "industrial": "chemical",
+      "landuse": "industrial",
+      "man_made": null,
+      "product": null,
+      "name": "Combinatul Chimic Ialomița"
+    },
+    {
+      "id": "way/921896532",
+      "industrial": "refinery",
+      "landuse": "industrial",
+      "man_made": null,
+      "product": null,
+      "name": "Petrotel-Lukoil"
+    },
+    {
+      "id": "way/88181773",
+      "industrial": "refinery",
+      "landuse": "industrial",
+      "man_made": null,
+      "product": null,
+      "name": "Terminal Petromidia"
+    },
+    {
+      "id": "relation/1307309",
+      "industrial": "refinery",
+      "landuse": "industrial",
+      "man_made": null,
+      "product": null,
+      "name": "Rafinăria Petromidia"
+    },
+    {
+      "id": "relation/13217487",
+      "industrial": "steelmaking",
+      "landuse": "industrial",
+      "man_made": null,
+      "product": null,
+      "name": null
+    },
+    {
+      "id": "way/50226696",
+      "industrial": "sugar_refinery",
+      "landuse": "industrial",
+      "man_made": null,
+      "product": null,
+      "name": "Fabrica de zahăr „Südzucker“"
+    },
+    {
+      "id": "way/374997171",
+      "industrial": "petrochemical",
+      "landuse": "industrial",
+      "man_made": "works",
+      "product": null,
+      "name": "ТОВ \"КАРПАТНАФТОХІМ\""
+    },
+    {
+      "id": "way/675657141",
+      "industrial": "refinery",
+      "landuse": "industrial",
+      "man_made": null,
+      "product": null,
+      "name": "Rafinăria Crișana Petrolsub"
+    },
+    {
+      "id": "way/833845775",
+      "industrial": "refinery",
+      "landuse": "industrial",
+      "man_made": null,
+      "product": null,
+      "name": "Fabrica de zahăr"
+    },
+    {
+      "id": "relation/16998484",
+      "industrial": "refinery",
+      "landuse": "industrial",
+      "man_made": null,
+      "product": null,
+      "name": "НПК \"Галичина\". Завод №2"
+    },
+    {
+      "id": "way/107177897",
+      "industrial": "steelmaking",
+      "landuse": "industrial",
+      "man_made": null,
+      "product": null,
+      "name": "ПАТ \"АрселорМіттал Кривий Ріг\""
+    },
+    {
+      "id": "relation/9541354",
+      "industrial": "chemical",
+      "landuse": "industrial",
+      "man_made": null,
+      "product": null,
+      "name": "ТОВ \"Прогрес-2010\""
+    },
+    {
+      "id": "relation/9752810",
+      "industrial": "chemical",
+      "landuse": "industrial",
+      "man_made": null,
+      "product": null,
+      "name": "ТОВ \"Кіровоградпостач\""
+    },
+    {
+      "id": "way/42258202",
+      "industrial": "chemical",
+      "landuse": "industrial",
+      "man_made": null,
+      "product": null,
+      "name": "Придніпровський хімічний завод"
+    },
+    {
+      "id": "way/266437541",
+      "industrial": "chemical",
+      "landuse": "industrial",
+      "man_made": null,
+      "product": null,
+      "name": "ДніпроАзот"
+    },
+    {
+      "id": "relation/12840613",
+      "industrial": "chemical",
+      "landuse": "industrial",
+      "man_made": null,
+      "product": null,
+      "name": "Гомельскі хімічны завод"
+    },
+    {
+      "id": "way/32259824",
+      "industrial": "steelmaking",
+      "landuse": "industrial",
+      "man_made": null,
+      "product": null,
+      "name": "Оскольский электрометаллургический комбинат им. А.А. Угарова"
+    },
+    {
+      "id": "way/742279025",
+      "industrial": "sugar_refinery",
+      "landuse": "industrial",
+      "man_made": null,
+      "product": null,
+      "name": null
+    },
+    {
+      "id": "way/1234898379",
+      "industrial": "refinery",
+      "landuse": "industrial",
+      "man_made": null,
+      "product": null,
+      "name": "Бобровский нефтеперерабатывающий завод"
+    }
+  ],
+  "topMilitaryAreas": []
+}

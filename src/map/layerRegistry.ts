@@ -433,7 +433,7 @@ const orderedLayerRegistry: OrderedLayerDefinition[] = [
         type: "fill",
         source: sourceId,
         paint: {
-          "fill-color": "#8ca88f",
+          "fill-color": "#9a8a63",
           "fill-opacity": 0.35,
         },
       },
@@ -448,7 +448,7 @@ const orderedLayerRegistry: OrderedLayerDefinition[] = [
         type: "fill",
         source: sourceId,
         paint: {
-          "fill-color": "#7d9470",
+          "fill-color": "#7a9660",
           "fill-opacity": 0.44,
         },
       },

@@ -68,13 +68,15 @@ Implementation status:
 
 83. [done] Created a layer-by-layer technical documentation set under `docs/layers/` with one concise spec per major layer (boundary stack, settlements/urban, hydrology layers, forests, roads, railways, and POI prototype): each sheet now records source(s), cache behavior, processing steps, transformation rules, known failure modes, and solved issues. Added index links from `docs/INDEX.md` to keep navigation centralized and avoid duplicating long narrative text in `README.md`.
 
-## Pending Tasks
+89. [done] Improve visual separation between wetlands and forests in map styling: shifted wetlands towards a browner tone and forests slightly greener in map rendering and layer-panel legend colors; user validated the result.
 
-Note: first test the build-up areas.
+88. [done] Replaced the manual POI prototype dataset with a full theater-wide processed POI pipeline from cached OSM data in `data:layers:public`, including first-attempt scoped inclusion rules (military/major airfields, nuclear plants, strategic bridges, civilian ports near 100k+ settlements, major industrial excluding sugar, missile/ballistic strategic facilities, and Azovstal override), deterministic deduplication, retained source tag metadata (including `aerodrome:type`), and rapid iteration support via `--poi-only`. Follow-up refinements applied after review: one civilian port indicator per qualifying city and stricter anti-noise filtering for Azovstal-name and rocket-site overtrigger cases.
+
+## Pending Tasks
 
 82. [pending] Rework elevation hillshade visual balance: current terrain appears too shadowed while mountain forms remain insufficiently legible. Increase relief contrast while making low-elevation areas near-transparent. Run controlled experiments on small map sections first (style/raster parameter sweeps and side-by-side comparisons), then apply the best-performing configuration theater-wide.
 
-88. [pending] Replace the manual POI prototype dataset with a full theater-wide POI pipeline from cached OSM data. Scope: extract and normalize airfields/airports, dams, power plants (including nuclear), bridges, ports, military bases, rocket facilities, and major industrial POIs; dedupe overlapping node/way/relation records deterministically; generate a processed POI layer in `data:layers:public`; and document source rules + tag mapping under `docs/data/`.
+90. [pending] Research whether dams should be represented as a dedicated map layer instead of POI markers: compare map readability, operational usefulness, and overlap with hydro/power semantics; propose source mapping, style behavior, and toggle strategy if split into a separate layer.
 
 ## Refinements
 

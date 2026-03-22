@@ -129,6 +129,8 @@ node scripts/layers/fetch-public-layers.mjs --refresh
 node scripts/layers/fetch-public-layers.mjs --refresh=natural-earth
 node scripts/layers/fetch-public-layers.mjs --refresh=elevation
 node scripts/layers/fetch-public-layers.mjs --refresh=overpass/settlements
+node scripts/layers/fetch-public-layers.mjs --skip-elevation --refresh=poi
+node scripts/layers/fetch-public-layers.mjs --skip-elevation --poi-only
 node scripts/layers/fetch-public-layers.mjs --smoke-test=static
 node scripts/layers/fetch-public-layers.mjs --smoke-test=settlements
 node scripts/layers/fetch-public-layers.mjs --smoke-test=wetlands
@@ -152,6 +154,9 @@ Notes for `--hex-only`:
 ```bash
 node scripts/layers/fetch-public-layers.mjs --skip-elevation --hex-only=HX-W19-N50 --refresh=osm/rivers/pbf-lines,osm/water-bodies/pbf-extract
 ```
+
+POI refresh tip: use `--refresh=poi` (not `--refresh=overpass/poi`).
+POI iteration tip: use `--poi-only` to rebuild only `layers/poi.geojson`.
 
 Raw intake bootstrap command (clean checkout preparation for local preprocess/layer builds):
 

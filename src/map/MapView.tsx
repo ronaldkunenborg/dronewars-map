@@ -886,7 +886,7 @@ async function ensurePoiIcons(map: MapLibreMap) {
   );
 }
 
-function ensurePoiPrototypeLayers(map: MapLibreMap) {
+function ensurePoiPrototypeLayers(map: MapLibreMap, poiSourcePath: string) {
   if (!map.getSource("poi-prototype")) {
     map.addSource("poi-prototype", {
       type: "geojson",
@@ -983,14 +983,14 @@ function ensurePoiPrototypeLayers(map: MapLibreMap) {
     });
   }
 
-  fetch(poiPrototypePath, {
+  fetch(poiSourcePath, {
     headers: {
       Accept: "application/json",
     },
   })
     .then(async (response) => {
       if (!response.ok) {
-        throw new Error(`Failed to load ${poiPrototypePath}: ${response.status}`);
+        throw new Error(`Failed to load ${poiSourcePath}: ${response.status}`);
       }
       return response.json();
     })
@@ -1083,6 +1083,7 @@ export function MapView({
   const mapRef = useRef<MapLibreMap | null>(null);
   const hexGeoJsonRef = useRef<HexPolygonGeoJson | null>(null);
   const settlementsRef = useRef<SettlementSearchEntry[]>([]);
+  const poiSourcePathRef = useRef<string>(poiPrototypePath);
   const [status, setStatus] = useState("Loading local processed map data.");
   const [datasetInfo, setDatasetInfo] = useState<string | null>(null);
   const [statusFaded, setStatusFaded] = useState(false);
@@ -1093,7 +1094,6 @@ export function MapView({
   const [searchQuery, setSearchQuery] = useState("");
   const deferredSearchQuery = useDeferredValue(searchQuery);
   const [searchResults, setSearchResults] = useState<SearchResultEntry[]>([]);
-  const [searchMessage, setSearchMessage] = useState<string | null>("Loading settlements and hexes for search.");
 
   useEffect(() => {
     const rawQuery = deferredSearchQuery.trim();
@@ -1103,11 +1103,6 @@ export function MapView({
 
     if (normalizedSettlementQuery === "" && normalizedHexQuery === "") {
       setSearchResults([]);
-      setSearchMessage(
-        settlementsRef.current.length > 0
-          ? "Search for a city, town, village, or hex ID."
-          : "Loading settlements and hexes for search.",
-      );
       return;
     }
 
@@ -1246,11 +1241,6 @@ export function MapView({
       .slice(0, 12);
 
     setSearchResults(rankedResults);
-    setSearchMessage(
-      rankedResults.length > 0
-        ? null
-        : `No results matched "${rawQuery}".`,
-    );
   }, [deferredSearchQuery]);
 
   function focusSettlement(entry: SettlementSearchEntry) {
@@ -1273,7 +1263,6 @@ export function MapView({
         essential: true,
       });
       setSearchQuery(settlementLabel(entry));
-      setSearchMessage(`Centered on ${settlementLabel(entry)}.`);
       return;
     }
 
@@ -1287,7 +1276,6 @@ export function MapView({
     setSelectedHex(buildHexInspectorData(containingHex as unknown as MapGeoJSONFeature));
     setDebugInfo(null);
     setSearchQuery(settlementLabel(entry));
-    setSearchMessage(`Centered on ${settlementLabel(entry)} in ${containingHex.properties.id}.`);
   }
 
   function focusHex(feature: HexPolygonGeoJson["features"][number]) {
@@ -1306,7 +1294,6 @@ export function MapView({
     setSelectedHex(buildHexInspectorData(feature as unknown as MapGeoJSONFeature));
     setDebugInfo(null);
     setSearchQuery(hexId);
-    setSearchMessage(`Centered on ${hexId}.`);
 
     if (bounds) {
       map.fitBounds(
@@ -1465,7 +1452,7 @@ export function MapView({
       detachDebugHandler?.();
       detachDebugHandler = attachHexDebugHandler(map);
       ensureSearchResultHexLayers(map);
-      ensurePoiPrototypeLayers(map);
+      ensurePoiPrototypeLayers(map, poiSourcePathRef.current);
       applyLayerVisibility(map, layerVisibility);
       applyOperationalHexVisibility(map, layerVisibility.hexes);
       applySettlementDisplayLevel(map, layerVisibility.settlements, settlementDisplayLevel);
@@ -1491,6 +1478,9 @@ export function MapView({
         }
 
         hexGeoJsonRef.current = processedData.hexGeoJson ?? null;
+        poiSourcePathRef.current =
+          processedData.layers.find((layer) => layer.id === "poi")?.sourcePath ??
+          poiPrototypePath;
 
         map.remove();
         map = createBaseMap(containerRef.current, processedData);
@@ -1513,7 +1503,6 @@ export function MapView({
             }
 
             settlementsRef.current = entries;
-            setSearchMessage("Search for a city, town, village, or hex ID.");
           })
           .catch(() => {
             if (disposed) {
@@ -1521,7 +1510,6 @@ export function MapView({
             }
 
             settlementsRef.current = [];
-            setSearchMessage("Settlement search is unavailable. Hex search is still available.");
           });
       })
       .catch(() => {
@@ -1533,6 +1521,7 @@ export function MapView({
 
             hexGeoJsonRef.current = processedData.hexGeoJson ?? null;
             settlementsRef.current = [];
+            poiSourcePathRef.current = poiPrototypePath;
 
             map.remove();
             map = createBaseMap(containerRef.current, processedData);
@@ -1545,7 +1534,6 @@ export function MapView({
             setDatasetInfo(
               "Hex cells are loaded from processed storage. Build layers.json and thematic layers to populate terrain sources.",
             );
-            setSearchMessage("Settlement search is unavailable. Hex search is still available.");
           })
           .catch(() => {
             if (disposed) {
@@ -1680,8 +1668,6 @@ export function MapView({
               </li>
             ))}
           </ul>
-        ) : searchMessage ? (
-          <p className="cell-panel__search-message">{searchMessage}</p>
         ) : null}
         {detailsVisible ? (
           <div className="cell-panel__body" id="cell-details-panel">

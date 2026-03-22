@@ -19,6 +19,8 @@ node scripts/layers/fetch-public-layers.mjs --elevation-only
 node scripts/layers/fetch-public-layers.mjs --skip-elevation
 node scripts/layers/fetch-public-layers.mjs --refresh
 node scripts/layers/fetch-public-layers.mjs --refresh=natural-earth
+node scripts/layers/fetch-public-layers.mjs --skip-elevation --refresh=poi
+node scripts/layers/fetch-public-layers.mjs --skip-elevation --poi-only
 node scripts/layers/fetch-public-layers.mjs --smoke-test=water-bodies
 node scripts/layers/fetch-public-layers.mjs --coastal-only
 node scripts/layers/fetch-public-layers.mjs --skip-elevation --workers=4 --compute-workers=8
@@ -45,6 +47,13 @@ If river/water PBF extracts were cached for larger extents, force scoped refresh
 ```bash
 node scripts/layers/fetch-public-layers.mjs --skip-elevation --hex-only=HX-W19-N50 --refresh=osm/rivers/pbf-lines,osm/water-bodies/pbf-extract
 ```
+
+POI refresh note:
+
+- use `--refresh=poi` (not `--refresh=overpass/poi`) because refresh matching is segment-based in this builder
+- if POI tiles are cached with timed-out/empty payloads, clear `data/cache/public-sources/overpass/poi/*.json` and rerun
+- Overpass timeout/error payloads are treated as invalid and are not persisted as valid cache entries; failed tiles are retried after a 10-second pause using single-worker retry behavior
+- use `--poi-only` when iterating on POI rules; it rebuilds only `layers/poi.geojson` (and updates the `poi` entry in `layers.json`) without running full hydrology/coastal stages
 
 ## Split Stage: Coastal-Only Rebuild
 

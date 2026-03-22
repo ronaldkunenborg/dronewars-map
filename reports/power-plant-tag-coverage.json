@@ -1,0 +1,76 @@
+{
+  "generatedAt": "2026-03-22T15:20:40.598Z",
+  "totalPowerPlants": 2601,
+  "withCapacity": 487,
+  "withoutCapacity": 2114,
+  "withCapacityPct": 18.72,
+  "capacityKnownMwTotal": 103429.42,
+  "withWikiData": 163,
+  "withWikipedia": 127,
+  "withAnyWiki": 167,
+  "withAnyWikiPct": 6.42,
+  "sourceTypeCounts": {
+    "solar": 1160,
+    "gas": 301,
+    "coal": 47,
+    "nuclear": 9,
+    "hydro": 167,
+    "unknown": 822,
+    "oil": 4,
+    "wind": 76,
+    "diesel": 5,
+    "biomass": 8,
+    "wood": 1,
+    "waste": 1
+  },
+  "sourceTypeWithCapacityCounts": {
+    "gas": 65,
+    "coal": 34,
+    "nuclear": 9,
+    "hydro": 104,
+    "solar": 204,
+    "oil": 1,
+    "wind": 62,
+    "unknown": 6,
+    "diesel": 1,
+    "waste": 1
+  },
+  "tileStats": [
+    {
+      "tile": 1,
+      "count": 332
+    },
+    {
+      "tile": 2,
+      "count": 186
+    },
+    {
+      "tile": 3,
+      "count": 211
+    },
+    {
+      "tile": 4,
+      "count": 422
+    },
+    {
+      "tile": 5,
+      "count": 283
+    },
+    {
+      "tile": 6,
+      "count": 306
+    },
+    {
+      "tile": 7,
+      "count": 545
+    },
+    {
+      "tile": 8,
+      "count": 223
+    },
+    {
+      "tile": 9,
+      "count": 96
+    }
+  ]
+}

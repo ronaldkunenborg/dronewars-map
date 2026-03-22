@@ -66,6 +66,9 @@ import polygonClipping from "polygon-clipping";
  * - `--urban-only`
  *   Rebuilds only `layers/major-city-urban-areas.geojson` from cached Natural Earth urban areas,
  *   anchored to the existing processed settlements layer.
+ * - `--poi-only`
+ *   Rebuilds only `layers/poi.geojson` from cached/refreshable Overpass POI tiles plus required
+ *   settlement and river references used by POI classification rules.
  * - `--workers=<n>`
  *   Bounded concurrency for expensive independent stages (tile fetching and local PBF extraction); defaults to a safe value based on available CPU.
  * - `--compute-workers=<n>`
@@ -363,6 +366,7 @@ const elevationOnlyMode = process.argv.includes("--elevation-only");
 const skipHillshadeMode = process.argv.includes("--skip-hillshade");
 const skipElevationMode = process.argv.includes("--skip-elevation");
 const urbanOnlyMode = process.argv.includes("--urban-only");
+const poiOnlyMode = process.argv.includes("--poi-only");
 const coastalOnlyMode = process.argv.includes("--coastal-only");
 const requestedWorkerCount = process.argv
   .find((argument) => argument.startsWith("--workers="))
@@ -1521,7 +1525,17 @@ async function fetchOverpassJsonWithFallback(urls, query, cacheKey) {
     const cached = await readCachedJson(cacheKey);
 
     if (cached !== null) {
-      return cached;
+      const validation = validateOverpassResponse(cached);
+      if (validation.valid) {
+        return cached;
+      }
+
+      console.warn(`cache skip ${cacheKey} (invalid overpass payload: ${validation.reason})`);
+      try {
+        await unlink(cachePathForKey(cacheKey));
+      } catch {
+        // Ignore cleanup errors; fallback fetch below still proceeds.
+      }
     }
   }
 
@@ -1529,19 +1543,61 @@ async function fetchOverpassJsonWithFallback(urls, query, cacheKey) {
 
   for (const url of urls) {
     try {
-      return await fetchJsonWithCache(cacheKey, url, {
+      console.log(`fetch      ${cacheKey}`);
+      const response = await fetch(url, {
         method: "POST",
         headers: {
           "Content-Type": "text/plain;charset=UTF-8",
         },
         body: query,
       });
+
+      if (!response.ok) {
+        throw new Error(`Failed to fetch ${url}: ${response.status}`);
+      }
+
+      const data = await response.json();
+      const validation = validateOverpassResponse(data);
+      if (!validation.valid) {
+        throw new Error(`Invalid Overpass payload (${validation.reason})`);
+      }
+
+      await writeCachedJson(cacheKey, data);
+      return data;
     } catch (error) {
       lastError = error;
     }
   }
 
   throw lastError ?? new Error("Failed to fetch Overpass data.");
+}
+
+function validateOverpassResponse(payload) {
+  if (!payload || typeof payload !== "object") {
+    return { valid: false, reason: "non-object payload" };
+  }
+
+  if (!Array.isArray(payload.elements)) {
+    return { valid: false, reason: "missing elements array" };
+  }
+
+  const remark = typeof payload.remark === "string" ? payload.remark.toLowerCase() : "";
+  const invalidRemarkPatterns = [
+    "runtime error",
+    "timed out",
+    "timeout",
+    "parse error",
+    "bad request",
+  ];
+  if (invalidRemarkPatterns.some((pattern) => remark.includes(pattern))) {
+    return { valid: false, reason: `remark=${payload.remark}` };
+  }
+
+  return { valid: true };
+}
+
+function delay(ms) {
+  return new Promise((resolve) => setTimeout(resolve, ms));
 }
 
 // Query named populated places within the theater bounds for map labels and point analytics.
@@ -1566,6 +1622,57 @@ ${selectors.map((selector) => `  way${selector}(${bbox.south},${bbox.west},${bbo
 ${selectors.map((selector) => `  relation${selector}(${bbox.south},${bbox.west},${bbox.north},${bbox.east});`).join("\n")}
 );
 out tags geom;
+`.trim();
+}
+
+function overpassPoiQuery(bbox) {
+  return `
+[out:json][timeout:180];
+(
+  node["aeroway"="aerodrome"](${bbox.south},${bbox.west},${bbox.north},${bbox.east});
+  way["aeroway"="aerodrome"](${bbox.south},${bbox.west},${bbox.north},${bbox.east});
+  relation["aeroway"="aerodrome"](${bbox.south},${bbox.west},${bbox.north},${bbox.east});
+
+  node["power"="plant"](${bbox.south},${bbox.west},${bbox.north},${bbox.east});
+  way["power"="plant"](${bbox.south},${bbox.west},${bbox.north},${bbox.east});
+  relation["power"="plant"](${bbox.south},${bbox.west},${bbox.north},${bbox.east});
+
+  way["bridge"]["highway"~"motorway|trunk|primary|secondary"](${bbox.south},${bbox.west},${bbox.north},${bbox.east});
+  relation["bridge"]["highway"~"motorway|trunk|primary|secondary"](${bbox.south},${bbox.west},${bbox.north},${bbox.east});
+  way["bridge"]["railway"="rail"](${bbox.south},${bbox.west},${bbox.north},${bbox.east});
+  relation["bridge"]["railway"="rail"](${bbox.south},${bbox.west},${bbox.north},${bbox.east});
+
+  node["landuse"="port"](${bbox.south},${bbox.west},${bbox.north},${bbox.east});
+  way["landuse"="port"](${bbox.south},${bbox.west},${bbox.north},${bbox.east});
+  relation["landuse"="port"](${bbox.south},${bbox.west},${bbox.north},${bbox.east});
+  node["industrial"="port"](${bbox.south},${bbox.west},${bbox.north},${bbox.east});
+  way["industrial"="port"](${bbox.south},${bbox.west},${bbox.north},${bbox.east});
+  relation["industrial"="port"](${bbox.south},${bbox.west},${bbox.north},${bbox.east});
+  node["port"](${bbox.south},${bbox.west},${bbox.north},${bbox.east});
+  way["port"](${bbox.south},${bbox.west},${bbox.north},${bbox.east});
+  relation["port"](${bbox.south},${bbox.west},${bbox.north},${bbox.east});
+  node["seamark:type"="harbour"](${bbox.south},${bbox.west},${bbox.north},${bbox.east});
+  way["seamark:type"="harbour"](${bbox.south},${bbox.west},${bbox.north},${bbox.east});
+  relation["seamark:type"="harbour"](${bbox.south},${bbox.west},${bbox.north},${bbox.east});
+  node["harbour"](${bbox.south},${bbox.west},${bbox.north},${bbox.east});
+  way["harbour"](${bbox.south},${bbox.west},${bbox.north},${bbox.east});
+  relation["harbour"](${bbox.south},${bbox.west},${bbox.north},${bbox.east});
+
+  node["industrial"~"steel|steelmaking|steelworks|refinery|chemical|petrochemical|sugar_refinery",i](${bbox.south},${bbox.west},${bbox.north},${bbox.east});
+  way["industrial"~"steel|steelmaking|steelworks|refinery|chemical|petrochemical|sugar_refinery",i](${bbox.south},${bbox.west},${bbox.north},${bbox.east});
+  relation["industrial"~"steel|steelmaking|steelworks|refinery|chemical|petrochemical|sugar_refinery",i](${bbox.south},${bbox.west},${bbox.north},${bbox.east});
+
+  node["military"="missile"](${bbox.south},${bbox.west},${bbox.north},${bbox.east});
+  way["military"="missile"](${bbox.south},${bbox.west},${bbox.north},${bbox.east});
+  relation["military"="missile"](${bbox.south},${bbox.west},${bbox.north},${bbox.east});
+  node["missile"](${bbox.south},${bbox.west},${bbox.north},${bbox.east});
+  way["missile"](${bbox.south},${bbox.west},${bbox.north},${bbox.east});
+  relation["missile"](${bbox.south},${bbox.west},${bbox.north},${bbox.east});
+  node["name"~"Azovstal|Азовсталь",i](${bbox.south},${bbox.west},${bbox.north},${bbox.east});
+  way["name"~"Azovstal|Азовсталь",i](${bbox.south},${bbox.west},${bbox.north},${bbox.east});
+  relation["name"~"Azovstal|Азовсталь",i](${bbox.south},${bbox.west},${bbox.north},${bbox.east});
+);
+out center tags;
 `.trim();
 }
 
@@ -4508,6 +4615,100 @@ function addOverpassRelationFeatures(featuresById, elements, propertiesBuilder, 
   }
 }
 
+async function fetchOverpassTilesWithRetry(options) {
+  const {
+    layerId,
+    tiles,
+    urls,
+    queryBuilder,
+    cacheKeyBuilder,
+    startedAt = Date.now(),
+    allowEmptyFallback = false,
+  } = options;
+
+  const layerConcurrency = Math.min(tileFetchConcurrency, tiles.length);
+  const responses = new Array(tiles.length);
+  const failedTiles = [];
+  let completedTileCount = 0;
+
+  const fetchTile = async (tile, tileIndex) => {
+    try {
+      const response = await fetchOverpassJsonWithFallback(
+        urls,
+        queryBuilder(tile),
+        cacheKeyBuilder(tile, tileIndex),
+      );
+      responses[tileIndex] = response;
+    } catch (error) {
+      failedTiles.push({
+        tile,
+        tileIndex,
+        error: error instanceof Error ? error : new Error(String(error)),
+      });
+    } finally {
+      completedTileCount += 1;
+      console.log(
+        `[${layerId}] tile ${tileIndex + 1}/${tiles.length} complete ` +
+        `(${completedTileCount}/${tiles.length}, elapsed ${formatElapsedMs(Date.now() - startedAt)})`,
+      );
+    }
+  };
+
+  await mapWithConcurrency(tiles, layerConcurrency, fetchTile);
+
+  if (failedTiles.length > 0) {
+    console.warn(
+      `[${layerId}] first pass failed for ${failedTiles.length}/${tiles.length} tile(s); ` +
+      "retrying failed tiles in 10s with workers=1.",
+    );
+    await delay(10_000);
+  }
+
+  const unresolved = [];
+  for (const failed of failedTiles) {
+    try {
+      const response = await fetchOverpassJsonWithFallback(
+        urls,
+        queryBuilder(failed.tile),
+        cacheKeyBuilder(failed.tile, failed.tileIndex),
+      );
+      responses[failed.tileIndex] = response;
+      console.log(
+        `[${layerId}] retry success tile ${failed.tileIndex + 1}/${tiles.length} ` +
+        `(elapsed ${formatElapsedMs(Date.now() - startedAt)})`,
+      );
+    } catch (error) {
+      const resolvedError = error instanceof Error ? error : new Error(String(error));
+      unresolved.push({
+        tileIndex: failed.tileIndex,
+        error: resolvedError,
+      });
+      console.warn(
+        `[${layerId}] retry failed tile ${failed.tileIndex + 1}/${tiles.length}: ${resolvedError.message}`,
+      );
+    }
+  }
+
+  if (unresolved.length > 0) {
+    if (allowEmptyFallback) {
+      for (const failed of unresolved) {
+        responses[failed.tileIndex] = { elements: [] };
+      }
+      console.warn(
+        `[${layerId}] continuing with empty fallback for ${unresolved.length} unresolved tile(s).`,
+      );
+    } else {
+      const first = unresolved[0];
+      throw new Error(
+        `[${layerId}] unresolved tile fetch failures after retry (${unresolved.length} tile(s), ` +
+        `first tile ${first.tileIndex + 1}: ${first.error.message})`,
+      );
+    }
+  }
+
+  return responses;
+}
+
 // Fetch a tiled polygon layer from Overpass and merge deduplicated way features across tiles.
 async function fetchTiledAreaLayer(layerId, selectors, propertiesBuilder, options) {
   const bbox = options?.bbox ?? theaterBbox;
@@ -4515,29 +4716,22 @@ async function fetchTiledAreaLayer(layerId, selectors, propertiesBuilder, option
   const featuresById = new Map();
   const layerConcurrency = Math.min(tileFetchConcurrency, tiles.length);
   const layerStartedAt = Date.now();
-  let completedTileCount = 0;
 
   console.log(
     `[${layerId}] starting ${tiles.length} tiled requests (concurrency ${layerConcurrency})`,
   );
-  const tileResponses = await mapWithConcurrency(
+  const tileResponses = await fetchOverpassTilesWithRetry({
+    layerId,
     tiles,
-    layerConcurrency,
-    async (tile, tileIndex) => {
+    urls: [sources.terrainOverpassApi, sources.overpassFallbackApi, sources.overpassApi],
+    queryBuilder: (tile) => overpassAreaQuery(selectors, tile),
+    cacheKeyBuilder: (tile, tileIndex) => {
       const bboxKey = `${tile.west.toFixed(3)}_${tile.south.toFixed(3)}_${tile.east.toFixed(3)}_${tile.north.toFixed(3)}`;
-      const response = await fetchOverpassJsonWithFallback(
-        [sources.terrainOverpassApi, sources.overpassFallbackApi, sources.overpassApi],
-        overpassAreaQuery(selectors, tile),
-        `overpass/${layerId}/tile-${tileIndex}-${bboxKey}`,
-      );
-      completedTileCount += 1;
-      console.log(
-        `[${layerId}] tile ${tileIndex + 1}/${tiles.length} complete ` +
-        `(${completedTileCount}/${tiles.length}, elapsed ${formatElapsedMs(Date.now() - layerStartedAt)})`,
-      );
-      return response;
+      return `overpass/${layerId}/tile-${tileIndex}-${bboxKey}`;
     },
-  );
+    startedAt: layerStartedAt,
+    allowEmptyFallback: false,
+  });
 
   for (const response of tileResponses) {
     addOverpassWayFeatures(featuresById, response.elements ?? [], propertiesBuilder, options);
@@ -4552,6 +4746,360 @@ async function fetchTiledAreaLayer(layerId, selectors, propertiesBuilder, option
   return {
     type: "FeatureCollection",
     features: [...featuresById.values()],
+  };
+}
+
+async function fetchTiledPoiElements(options = {}) {
+  const bbox = options?.bbox ?? theaterBbox;
+  const tiles = buildBboxGrid(bbox, 3, 3);
+  const layerConcurrency = Math.min(tileFetchConcurrency, tiles.length);
+  const layerStartedAt = Date.now();
+
+  console.log(
+    `[poi] starting ${tiles.length} tiled requests (concurrency ${layerConcurrency})`,
+  );
+
+  const tileResponses = await fetchOverpassTilesWithRetry({
+    layerId: "poi",
+    tiles,
+    urls: [sources.terrainOverpassApi, sources.overpassFallbackApi, sources.overpassApi],
+    queryBuilder: (tile) => overpassPoiQuery(tile),
+    cacheKeyBuilder: (tile, tileIndex) => {
+      const bboxKey =
+        `${tile.west.toFixed(3)}_${tile.south.toFixed(3)}_${tile.east.toFixed(3)}_${tile.north.toFixed(3)}`;
+      return `overpass/poi/tile-${tileIndex}-${bboxKey}`;
+    },
+    startedAt: layerStartedAt,
+    allowEmptyFallback: true,
+  });
+
+  const elementsById = new Map();
+  for (const response of tileResponses) {
+    for (const element of response?.elements ?? []) {
+      elementsById.set(`${element?.type ?? "unknown"}/${element?.id ?? "unknown"}`, element);
+    }
+  }
+
+  console.log(
+    `[poi] merged ${elementsById.size} deduplicated elements ` +
+    `(elapsed ${formatElapsedMs(Date.now() - layerStartedAt)})`,
+  );
+
+  return [...elementsById.values()];
+}
+
+function overpassElementPoint(element) {
+  if (typeof element?.lon === "number" && typeof element?.lat === "number") {
+    return [element.lon, element.lat];
+  }
+
+  if (typeof element?.center?.lon === "number" && typeof element?.center?.lat === "number") {
+    return [element.center.lon, element.center.lat];
+  }
+
+  return null;
+}
+
+function normalizePoiTagValue(value) {
+  return typeof value === "string" ? value.trim() : "";
+}
+
+function normalizePoiTags(tags) {
+  const normalized = {};
+
+  for (const [key, value] of Object.entries(tags ?? {})) {
+    if (typeof value === "string") {
+      const trimmed = value.trim();
+      if (trimmed !== "") {
+        normalized[key] = trimmed;
+      }
+    } else if (typeof value === "number" || typeof value === "boolean") {
+      normalized[key] = value;
+    }
+  }
+
+  return normalized;
+}
+
+function buildMajorRiverReferenceLayer(riverLayer) {
+  return {
+    type: "FeatureCollection",
+    features: (riverLayer?.features ?? []).filter((feature) => {
+      const scalerank = Number(feature?.properties?.scalerank ?? 99);
+      return Number.isFinite(scalerank) && scalerank <= 5;
+    }),
+  };
+}
+
+function classifyPoiElement(element) {
+  const tags = element?.tags ?? {};
+  const lower = (key) => normalizePoiTagValue(tags[key]).toLowerCase();
+  const name = normalizePoiTagValue(tags.name);
+  const nameLower = name.toLowerCase();
+  const aeroway = lower("aeroway");
+  const aerodromeType = lower("aerodrome:type");
+  const military = lower("military");
+  const landuse = lower("landuse");
+  const portTag = lower("port");
+  const seamarkType = lower("seamark:type");
+  const harbour = lower("harbour");
+  const bridge = lower("bridge");
+  const power = lower("power");
+  const plantSource = `${lower("plant:source")} ${lower("generator:source")} ${lower("source")}`.trim();
+  const industrial = lower("industrial");
+  const hasMissileKey = normalizePoiTagValue(tags.missile) !== "";
+  const hasIata = normalizePoiTagValue(tags.iata) !== "";
+  const hasIcao = normalizePoiTagValue(tags.icao) !== "";
+
+  if (aeroway === "aerodrome") {
+    const militaryAirfield =
+      military.includes("airfield") ||
+      military.includes("air_base") ||
+      military.includes("base") ||
+      landuse === "military" ||
+      aerodromeType.includes("military");
+    if (militaryAirfield) {
+      return {
+        include: true,
+        category: "airfield_military",
+        icon: "poi-airfield-military",
+        reason: "military-airfield",
+      };
+    }
+
+    const majorAirfield =
+      hasIata ||
+      hasIcao ||
+      aerodromeType.includes("international") ||
+      aerodromeType.includes("public") ||
+      aerodromeType.includes("regional");
+    if (majorAirfield) {
+      return {
+        include: true,
+        category: "airport_large",
+        icon: "poi-airport-large",
+        reason: "major-airfield",
+      };
+    }
+
+    return { include: false, reason: "airfield-not-major" };
+  }
+
+  if (power === "plant") {
+    if (plantSource.includes("nuclear")) {
+      return {
+        include: true,
+        category: "nuclear_power_plant",
+        icon: "poi-power-nuclear",
+        reason: "nuclear-power",
+      };
+    }
+
+    return { include: false, reason: "non-nuclear-power" };
+  }
+
+  const militaryStrategicName =
+    nameLower.includes("missile") ||
+    nameLower.includes("ballistic") ||
+    nameLower.includes("ракет");
+  const strategicMissileSignal =
+    military === "missile" ||
+    hasMissileKey ||
+    ((military.includes("base") || military.includes("facility") || landuse === "military") &&
+      militaryStrategicName);
+  if (strategicMissileSignal) {
+    return {
+      include: true,
+      category: "rocket_site",
+      icon: "poi-rocket",
+      reason: "missile-strategic",
+    };
+  }
+
+  if (
+    landuse === "port" ||
+    industrial === "port" ||
+    harbour !== "" ||
+    portTag !== "" ||
+    seamarkType === "harbour"
+  ) {
+    if (military.includes("naval") || military.includes("base") || landuse === "military") {
+      return { include: false, reason: "military-port-excluded" };
+    }
+    return {
+      include: true,
+      category: "port",
+      icon: "poi-port-civil",
+      reason: "port-candidate",
+    };
+  }
+
+  if (bridge !== "" && bridge !== "no") {
+    return {
+      include: true,
+      category: "bridge",
+      icon: "poi-bridge",
+      reason: "bridge-candidate",
+    };
+  }
+
+  if (["steel", "steelmaking", "steelworks"].some((value) => industrial.includes(value))) {
+    return {
+      include: true,
+      category: "steel_plant",
+      icon: "poi-steel",
+      reason: "industrial-steel",
+    };
+  }
+
+  if (["refinery", "chemical", "petrochemical", "sugar_refinery"].some((value) => industrial.includes(value))) {
+    if (industrial.includes("sugar_refinery")) {
+      return { include: false, reason: "industrial-sugar-refinery-excluded" };
+    }
+
+    return {
+      include: true,
+      category: "industrial_major",
+      icon: "poi-generic",
+      reason: "industrial-major",
+    };
+  }
+
+  return { include: false, reason: "not-in-scope" };
+}
+
+function findNearestSettlementDistanceKm(point, settlements) {
+  let bestDistance = Number.POSITIVE_INFINITY;
+  let best = null;
+
+  for (const settlement of settlements) {
+    const distanceKm = pointDistanceKm(point, settlement.coordinates);
+    if (distanceKm < bestDistance) {
+      bestDistance = distanceKm;
+      best = settlement;
+    }
+  }
+
+  return best
+    ? { distanceKm: bestDistance, settlement: best }
+    : null;
+}
+
+function buildPoiLayerFromElements(elements, options = {}) {
+  const {
+    settlements = [],
+    rivers = emptyFeatureCollection(),
+    strategicBridgeDistanceKm = 0.35,
+    portSettlementMaxDistanceKm = 5,
+  } = options;
+  const majorRivers = buildMajorRiverReferenceLayer(rivers);
+  const featuresByKey = new Map();
+  let hasAzovstal = false;
+
+  for (const element of elements ?? []) {
+    const point = overpassElementPoint(element);
+    if (!point) {
+      continue;
+    }
+
+    const classification = classifyPoiElement(element);
+    if (!classification.include) {
+      continue;
+    }
+
+    let outputPoint = point;
+    let portSettlement = null;
+
+    if (classification.category === "port") {
+      const nearestSettlement = findNearestSettlementDistanceKm(point, settlements);
+      if (
+        !nearestSettlement ||
+        nearestSettlement.distanceKm > portSettlementMaxDistanceKm
+      ) {
+        continue;
+      }
+      portSettlement = nearestSettlement.settlement ?? null;
+      if (Array.isArray(portSettlement?.coordinates) && portSettlement.coordinates.length >= 2) {
+        outputPoint = portSettlement.coordinates;
+      }
+    }
+
+    if (classification.category === "bridge") {
+      const distanceKm = minDistanceToLineLayerKm(point, majorRivers);
+      if (!Number.isFinite(distanceKm) || distanceKm > strategicBridgeDistanceKm) {
+        continue;
+      }
+    }
+
+    const rawName = normalizePoiTagValue(element?.tags?.name) || null;
+    const name = classification.category === "port" && portSettlement?.name
+      ? `${portSettlement.name} Port`
+      : rawName;
+    const stableName = name ?? `${classification.category}-${outputPoint[0].toFixed(4)}-${outputPoint[1].toFixed(4)}`;
+    const dedupeKey = classification.category === "port"
+      ? `port|city-${outputPoint[0].toFixed(3)}-${outputPoint[1].toFixed(3)}`
+      : `${classification.category}|${stableName.toLowerCase()}|${outputPoint[0].toFixed(4)}|${outputPoint[1].toFixed(4)}`;
+
+    if (featuresByKey.has(dedupeKey)) {
+      continue;
+    }
+
+    const normalizedTags = normalizePoiTags(element?.tags ?? {});
+    featuresByKey.set(dedupeKey, {
+      type: "Feature",
+      properties: {
+        id: `poi/${element?.type ?? "unknown"}/${element?.id ?? "unknown"}`,
+        name,
+        category: classification.category,
+        icon: classification.icon,
+        sourceType: element?.type ?? null,
+        sourceId: element?.id ?? null,
+        inclusionReason: classification.reason,
+        portCity: classification.category === "port" ? (portSettlement?.name ?? null) : null,
+        osmTags: normalizedTags,
+      },
+      geometry: {
+        type: "Point",
+        coordinates: outputPoint,
+      },
+    });
+
+    if (classification.reason === "azovstal-override") {
+      hasAzovstal = true;
+    }
+  }
+
+  // Keep Azovstal visible as an explicit historic strategic POI even when OSM tagging/naming varies.
+  if (!hasAzovstal) {
+    const azovstalPoint = [37.6708, 47.1297];
+    const dedupeKey = `steel_plant|azovstal|${azovstalPoint[0].toFixed(4)}|${azovstalPoint[1].toFixed(4)}`;
+    if (!featuresByKey.has(dedupeKey)) {
+      featuresByKey.set(dedupeKey, {
+        type: "Feature",
+        properties: {
+          id: "poi/manual/azovstal",
+          name: "Azovstal",
+          category: "steel_plant",
+          icon: "poi-steel",
+          sourceType: "manual",
+          sourceId: "azovstal-override",
+          inclusionReason: "azovstal-manual-override",
+          osmTags: {
+            name: "Azovstal",
+            note: "Manual fallback for inconsistent/missing upstream OSM tags.",
+          },
+        },
+        geometry: {
+          type: "Point",
+          coordinates: azovstalPoint,
+        },
+      });
+    }
+  }
+
+  return {
+    type: "FeatureCollection",
+    features: [...featuresByKey.values()],
   };
 }
 
@@ -6913,6 +7461,50 @@ async function rebuildMajorCityUrbanLayerOnly(options = {}) {
   );
 }
 
+async function upsertPoiLayerCatalogEntry() {
+  const layersCatalogPath = path.join(processedRoot, "layers.json");
+  const poiEntry = {
+    id: "poi",
+    label: "Points of Interest",
+    category: "settlements",
+    geometryKind: "point",
+    path: "layers/poi.geojson",
+  };
+
+  let existingCatalog = {
+    generatedAt: new Date().toISOString(),
+    layers: [],
+  };
+
+  if (existsSync(layersCatalogPath)) {
+    const parsed = await readLocalGeoJson(layersCatalogPath, "layers.json");
+    if (parsed && typeof parsed === "object") {
+      existingCatalog = {
+        ...existingCatalog,
+        ...parsed,
+        layers: Array.isArray(parsed.layers) ? parsed.layers : [],
+      };
+    }
+  }
+
+  const layers = existingCatalog.layers ?? [];
+  const poiIndex = layers.findIndex((layer) => layer?.id === "poi");
+  if (poiIndex >= 0) {
+    layers[poiIndex] = {
+      ...layers[poiIndex],
+      ...poiEntry,
+    };
+  } else {
+    layers.push(poiEntry);
+  }
+
+  await writeGeoJson("layers.json", {
+    ...existingCatalog,
+    generatedAt: new Date().toISOString(),
+    layers,
+  });
+}
+
 const postHydrologyStageCacheVersion = 1;
 
 function buildPostHydrologyStageScopeKey(hexOnlyScope) {
@@ -7622,6 +8214,56 @@ async function main() {
     return;
   }
 
+  if (poiOnlyMode) {
+    const poiOnlyStartedAt = Date.now();
+    const [adm0Url, rivers, settlements, poiElements] = await Promise.all([
+      resolveGeoBoundariesDownload(sources.adm0Api, "geoboundaries/adm0-metadata"),
+      fetchJson(sources.rivers, "natural-earth/rivers"),
+      fetchOverpassJson(overpassPlaceQuery(buildExtentBbox)),
+      fetchTiledPoiElements({ bbox: buildExtentBbox }),
+    ]);
+    const theaterBoundary = await fetchJson(adm0Url, "geoboundaries/adm0-geometry");
+    const clippedRivers = filterFeatureCollectionToBbox(rivers, buildExtentBbox);
+    const settlementsLayer = overpassElementsToGeoJson(
+      settlements.elements ?? [],
+      theaterBoundary,
+    );
+    const strategicPortSettlements = (settlementsLayer?.features ?? [])
+      .filter((feature) => {
+        const place = String(feature?.properties?.place ?? "");
+        const population = Number(feature?.properties?.population ?? 0);
+        return (place === "city" || place === "town") && Number.isFinite(population) && population >= 100000;
+      })
+      .map((feature) => ({
+        name: feature?.properties?.name ?? feature?.properties?.nameUk ?? null,
+        population: Number(feature?.properties?.population ?? 0),
+        coordinates: feature?.geometry?.coordinates,
+      }))
+      .filter((entry) =>
+        Array.isArray(entry.coordinates) &&
+        entry.coordinates.length >= 2 &&
+        typeof entry.coordinates[0] === "number" &&
+        typeof entry.coordinates[1] === "number",
+      );
+
+    let poiLayer = buildPoiLayerFromElements(poiElements, {
+      settlements: strategicPortSettlements,
+      rivers: clippedRivers,
+    });
+
+    if (hexOnlyScope?.maskGeometry) {
+      poiLayer = filterFeatureCollectionToMask(poiLayer, hexOnlyScope.maskGeometry);
+    }
+
+    await writeGeoJson("layers/poi.geojson", poiLayer);
+    await upsertPoiLayerCatalogEntry();
+    console.log(
+      `POI-only rebuild wrote layers/poi.geojson (${poiLayer.features.length} features) ` +
+      `in ${formatElapsedMs(Date.now() - poiOnlyStartedAt)}.`,
+    );
+    return;
+  }
+
   if (coastalOnlyMode) {
     const coastalOnlyStartedAt = Date.now();
     const stagePayload = await readPostHydrologyStageCache(postHydrologyScopeKey);
@@ -7837,6 +8479,9 @@ async function main() {
     return result;
   });
   const settlements = await fetchOverpassJson(overpassPlaceQuery(buildExtentBbox));
+  const poiElements = await fetchTiledPoiElements({
+    bbox: buildExtentBbox,
+  });
   const forests = await fetchTiledAreaLayer(
     "forests",
     ['["landuse"="forest"]', '["natural"="wood"]'],
@@ -7981,6 +8626,27 @@ async function main() {
     clippedMajorCityUrbanAreas,
     settlementsLayer,
   );
+  const strategicPortSettlements = (settlementsLayer?.features ?? [])
+    .filter((feature) => {
+      const place = String(feature?.properties?.place ?? "");
+      const population = Number(feature?.properties?.population ?? 0);
+      return (place === "city" || place === "town") && Number.isFinite(population) && population >= 100000;
+    })
+    .map((feature) => ({
+      name: feature?.properties?.name ?? feature?.properties?.nameUk ?? null,
+      population: Number(feature?.properties?.population ?? 0),
+      coordinates: feature?.geometry?.coordinates,
+    }))
+    .filter((entry) =>
+      Array.isArray(entry.coordinates) &&
+      entry.coordinates.length >= 2 &&
+      typeof entry.coordinates[0] === "number" &&
+      typeof entry.coordinates[1] === "number",
+    );
+  const poiLayer = buildPoiLayerFromElements(poiElements, {
+    settlements: strategicPortSettlements,
+    rivers: clippedRivers,
+  });
   const clippedOblastBoundaries = prefilteredById.get("clipped-oblast-boundaries");
   const clippedAdm2Polygons = prefilteredById.get("clipped-adm2-polygons");
   const filteredLayers = {
@@ -8002,6 +8668,7 @@ async function main() {
     "layers/country-boundary-lines.geojson": clippedCountryBoundaryLines,
     "layers/major-city-urban-areas.geojson": settlementAnchoredUrbanAreas,
     "layers/settlements.geojson": settlementsLayer,
+    "layers/poi.geojson": poiLayer,
   };
   const alignedOblastSubdivisions = alignOblastSubdivisionBoundaries(
     clippedOblastBoundaries,
@@ -8411,6 +9078,13 @@ async function main() {
       category: "settlements",
       geometryKind: "point",
       path: "layers/settlements.geojson",
+    },
+    {
+      id: "poi",
+      label: "Points of Interest",
+      category: "settlements",
+      geometryKind: "point",
+      path: "layers/poi.geojson",
     },
     ...(elevationAvailable
       ? [
