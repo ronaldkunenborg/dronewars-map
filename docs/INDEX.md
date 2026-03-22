@@ -15,6 +15,7 @@ This project keeps quickstart and high-level context in `README.md`, with detail
 
 - [River Gap Repair Workflow](hydrology/river-gap-repair.md)
 - [Coastal Water Correction Workflow](hydrology/coastal-water-correction.md)
+- [Wetlands Corridor Enhancement](hydrology/wetlands-corridor-enhancement.md)
 
 ## Reports
 

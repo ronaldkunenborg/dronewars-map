@@ -38,6 +38,7 @@ Behavior:
 - selected hexes define the active extent bbox for fetch/extract stages
 - final vector outputs are clipped/filtered to the selected hex mask
 - `--workers` controls fetch/extract concurrency; `--compute-workers` controls major-river-corridor CPU worker threads
+- if selected hexes are far apart, the combined bbox grows and fetch/build time increases; prefer nearby hexes for quick tests
 
 If river/water PBF extracts were cached for larger extents, force scoped refresh:
 
@@ -99,3 +100,12 @@ The final scope is curated via manual include/exclude overrides in both:
 - `scripts/layers/fetch-public-layers.mjs` (build-time target curation)
 
 See [River Gap Repair Workflow](../hydrology/river-gap-repair.md) for hydrology-specific reconstruction details.
+
+## Wetlands Enhancement
+
+`data:layers:public` includes inland wetland enhancement near processed water corridors:
+
+- baseline wetlands retain large polygons
+- small wetland fragments are constrained by a processed `water-bodies` corridor, merged locally, and appended when cluster area passes a lower threshold
+
+See [Wetlands Corridor Enhancement](../hydrology/wetlands-corridor-enhancement.md) for details and tuning parameters.
