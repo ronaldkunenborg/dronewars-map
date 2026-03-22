@@ -39,20 +39,6 @@ Pending tasks are listed under ## Pending tasks.
 
 74.2 [done] Parallelized coastal `corrected water-bodies` subtraction in `data:layers:public` (including `--coastal-only`) using bounded compute workers with deterministic merge order and serial fallback on worker failure.
 
-77. [done] Introduce a minimal attribution documentation source at `docs/ATTRIBUTION.md` and link it from both `README.md` and `docs/INDEX.md`.
-
-78. [done] Added a simple in-app attribution footer/link (static text + link to `docs/ATTRIBUTION.md`) without per-layer dynamic resolution.
-
-79. [done] Added a lightweight manual attribution checklist for app/docs updates only in `docs/ATTRIBUTION.md`: verify in-app attribution footer/link visibility, docs link integrity, and source-list freshness (no export workflow scope).
-
-80. [done] Reworked map UI information density: attribution moved to a compact on-map chip, map status notices reduced in footprint, hex panel width reduced, and inspector content switched to collapsible sections (`Summary`, `Terrain`, `Infrastructure`, `Capacity`, `Debug`) so the separate `Detailed` toggle is no longer needed.
-
-81. [done] Created POI prototype track: selected OSM as the primary source after tradeoff analysis (`docs/data/poi-source-selection.md`), then added a non-builder prototype overlay loaded from `public/overlays/poi-prototype.geojson` and rendered in-app with category-colored icons/labels (bridges, dams, power plants, military bases, airports) behind a dedicated `POI (Prototype)` layer toggle for review.
-
-87. [done] Replaced POI prototype marker styling with a custom icon set and category mapping, switched icon loading to PNG-first with SVG fallback, and validated readability/overlap behavior at operational zooms.
-
-## Pending Tasks
-
 76. [done] Improve inland hydrology and wetland quality (non-coastal scope): continue promoting higher-detail inland OSM water geometry quality and implement wetlands upgrade using OSM wetlands + ESA WorldCover support. Keep this task focused on inland rivers/lakes/wetlands quality and exclude sea-land border reconciliation (handled by `74`/`75`).
 Findings summary (current pipeline):
 - Wetland tag coverage is broad enough (`natural=wetland` + `wetland=*`, including marsh/swamp/bog/fen/reedbed/wet_meadow), so missing coverage is primarily not a tag-selection problem.
@@ -68,9 +54,25 @@ Implementation status:
 - Implemented globally in `data:layers:public`: wetlands are split into baseline (`>=2 km²`) and small candidates, then small candidates near processed `water-bodies` are merged and appended using configurable corridor parameters.
 - User-validated visual outcome across pilot and broader scopes; task is complete.
 
-82. [pending] Rework elevation hillshade visual balance: current terrain appears too shadowed while mountain forms remain insufficiently legible. Increase relief contrast while making low-elevation areas near-transparent. Run controlled experiments on small map sections first (style/raster parameter sweeps and side-by-side comparisons), then apply the best-performing configuration theater-wide.
+77. [done] Introduce a minimal attribution documentation source at `docs/ATTRIBUTION.md` and link it from both `README.md` and `docs/INDEX.md`.
 
-83. [pending] Create a layer-by-layer technical documentation set under `docs/` (one document per major layer): for each layer, capture source(s), cache behavior, processing pipeline steps, transformation/merge rules, known failure modes, and what issues have already been solved. Link all layer docs from `docs/INDEX.md` and keep the set aligned with pipeline changes.
+78. [done] Added a simple in-app attribution footer/link (static text + link to `docs/ATTRIBUTION.md`) without per-layer dynamic resolution.
+
+79. [done] Added a lightweight manual attribution checklist for app/docs updates only in `docs/ATTRIBUTION.md`: verify in-app attribution footer/link visibility, docs link integrity, and source-list freshness (no export workflow scope).
+
+80. [done] Reworked map UI information density: attribution moved to a compact on-map chip, map status notices reduced in footprint, hex panel width reduced, and inspector content switched to collapsible sections (`Summary`, `Terrain`, `Infrastructure`, `Capacity`, `Debug`) so the separate `Detailed` toggle is no longer needed.
+
+81. [done] Created POI prototype track: selected OSM as the primary source after tradeoff analysis (`docs/data/poi-source-selection.md`), then added a non-builder prototype overlay loaded from `public/overlays/poi-prototype.geojson` and rendered in-app with category-colored icons/labels (bridges, dams, power plants, military bases, airports) behind a dedicated `POI (Prototype)` layer toggle for review.
+
+87. [done] Replaced POI prototype marker styling with a custom icon set and category mapping, switched icon loading to PNG-first with SVG fallback, and validated readability/overlap behavior at operational zooms.
+
+83. [done] Created a layer-by-layer technical documentation set under `docs/layers/` with one concise spec per major layer (boundary stack, settlements/urban, hydrology layers, forests, roads, railways, and POI prototype): each sheet now records source(s), cache behavior, processing steps, transformation rules, known failure modes, and solved issues. Added index links from `docs/INDEX.md` to keep navigation centralized and avoid duplicating long narrative text in `README.md`.
+
+## Pending Tasks
+
+Note: first test the build-up areas.
+
+82. [pending] Rework elevation hillshade visual balance: current terrain appears too shadowed while mountain forms remain insufficiently legible. Increase relief contrast while making low-elevation areas near-transparent. Run controlled experiments on small map sections first (style/raster parameter sweeps and side-by-side comparisons), then apply the best-performing configuration theater-wide.
 
 88. [pending] Replace the manual POI prototype dataset with a full theater-wide POI pipeline from cached OSM data. Scope: extract and normalize airfields/airports, dams, power plants (including nuclear), bridges, ports, military bases, rocket facilities, and major industrial POIs; dedupe overlapping node/way/relation records deterministically; generate a processed POI layer in `data:layers:public`; and document source rules + tag mapping under `docs/data/`.
 

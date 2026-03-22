@@ -63,6 +63,9 @@ import polygonClipping from "polygon-clipping";
  *   Only valid with `--elevation-only`; stages elevation but skips hillshade generation.
  * - `--skip-elevation`
  *   Skips elevation/hillshade processing during the full public layer build (useful for quick vector-only refreshes).
+ * - `--urban-only`
+ *   Rebuilds only `layers/major-city-urban-areas.geojson` from cached Natural Earth urban areas,
+ *   anchored to the existing processed settlements layer.
  * - `--workers=<n>`
  *   Bounded concurrency for expensive independent stages (tile fetching and local PBF extraction); defaults to a safe value based on available CPU.
  * - `--compute-workers=<n>`
@@ -359,6 +362,7 @@ const cacheReportMode = process.argv.includes("--cache-report");
 const elevationOnlyMode = process.argv.includes("--elevation-only");
 const skipHillshadeMode = process.argv.includes("--skip-hillshade");
 const skipElevationMode = process.argv.includes("--skip-elevation");
+const urbanOnlyMode = process.argv.includes("--urban-only");
 const coastalOnlyMode = process.argv.includes("--coastal-only");
 const requestedWorkerCount = process.argv
   .find((argument) => argument.startsWith("--workers="))
@@ -1571,8 +1575,86 @@ function filterMajorCityUrbanAreas(featureCollection) {
     type: "FeatureCollection",
     features: featureCollection.features.filter((feature) => {
       const maxPopulation = Number(feature.properties?.max_pop_al ?? 0);
-      return Number.isFinite(maxPopulation) && maxPopulation >= 200000;
+      if (!Number.isFinite(maxPopulation) || maxPopulation < 50000) {
+        return false;
+      }
+
+      const bounds = geometryBounds(feature.geometry);
+      const lngSpan = Math.abs((bounds.east ?? 0) - (bounds.west ?? 0));
+      const latSpan = Math.abs((bounds.north ?? 0) - (bounds.south ?? 0));
+      // Drop malformed antimeridian-style artifacts (for example world-spanning urban polygons).
+      if (lngSpan > 5 || latSpan > 5) {
+        return false;
+      }
+
+      return true;
     }),
+  };
+}
+
+function constrainUrbanAreasToSettlementAnchors(featureCollection, settlementsLayer, options = {}) {
+  const {
+    maxSettlementDistanceKm = 8,
+    minAnchorPopulation = 50000,
+  } = options;
+  const settlementAnchors = (settlementsLayer?.features ?? [])
+    .filter((feature) =>
+      feature?.geometry?.type === "Point" &&
+      Array.isArray(feature.geometry.coordinates) &&
+      feature.geometry.coordinates.length >= 2 &&
+      (feature.properties?.place === "city" || feature.properties?.place === "town") &&
+      Number(feature.properties?.population ?? 0) >= minAnchorPopulation,
+    )
+    .map((feature) => ({
+      point: feature.geometry.coordinates,
+      place: feature.properties?.place === "town" ? "town" : "city",
+    }));
+
+  if (settlementAnchors.length === 0) {
+    return featureCollection;
+  }
+
+  const keptFeatures = (featureCollection?.features ?? []).flatMap((feature) => {
+    if (!feature?.geometry) {
+      return [];
+    }
+
+    let bestAnchor = null;
+
+    for (const anchor of settlementAnchors) {
+      const distanceKm = pointInPolygonGeometry(anchor.point, feature.geometry)
+        ? 0
+        : pointDistanceToGeometryKm(anchor.point, feature.geometry);
+
+      if (!Number.isFinite(distanceKm) || distanceKm > maxSettlementDistanceKm) {
+        continue;
+      }
+
+      if (!bestAnchor || distanceKm < bestAnchor.distanceKm) {
+        bestAnchor = {
+          place: anchor.place,
+          distanceKm,
+        };
+      }
+    }
+
+    if (!bestAnchor) {
+      return [];
+    }
+
+    return [{
+      ...feature,
+      properties: {
+        ...(feature.properties ?? {}),
+        anchorPlace: bestAnchor.place,
+        anchorDistanceKm: Number(bestAnchor.distanceKm.toFixed(3)),
+      },
+    }];
+  });
+
+  return {
+    type: "FeatureCollection",
+    features: keptFeatures,
   };
 }
 
@@ -2038,6 +2120,15 @@ function normalizePopulation(value) {
   }
 
   return null;
+}
+
+function normalizeOptionalName(value) {
+  if (typeof value !== "string") {
+    return null;
+  }
+
+  const trimmed = value.trim();
+  return trimmed === "" ? null : trimmed;
 }
 
 // Normalize city names into a lookup key that is resilient to case, punctuation, and accent differences.
@@ -3994,9 +4085,10 @@ function pointToPointDistanceKm(left, right) {
 
 function settlementCanonicalName(feature) {
   return (
-    normalizeSettlementName(feature.properties.nameUk) ??
+    normalizeSettlementName(feature.properties.name) ??
     normalizeSettlementName(feature.properties.nameEn) ??
-    normalizeSettlementName(feature.properties.name)
+    normalizeSettlementName(feature.properties.nameUk) ??
+    null
   );
 }
 
@@ -4061,6 +4153,81 @@ function duplicateDistanceBetweenSettlements(left, right) {
   );
 }
 
+function isAreaLikeSettlementSource(settlementId) {
+  return typeof settlementId === "string" &&
+    (settlementId.startsWith("relation/") || settlementId.startsWith("way/"));
+}
+
+function isLikelyNearOverlapDuplicate(left, right) {
+  const leftPlace = left.properties.place;
+  const rightPlace = right.properties.place;
+  const bothCityOrTown =
+    (leftPlace === "city" || leftPlace === "town") &&
+    (rightPlace === "city" || rightPlace === "town");
+
+  if (!bothCityOrTown) {
+    return false;
+  }
+
+  const nameKeys = new Set(
+    [left.properties.nameUk, left.properties.nameEn, left.properties.name]
+      .map((value) => normalizeSettlementName(value))
+      .filter(Boolean),
+  );
+  const hasSharedNameKey = [right.properties.nameUk, right.properties.nameEn, right.properties.name]
+    .map((value) => normalizeSettlementName(value))
+    .filter(Boolean)
+    .some((value) => nameKeys.has(value));
+
+  if (hasSharedNameKey) {
+    return true;
+  }
+
+  const leftPopulation = left.properties.population ?? 0;
+  const rightPopulation = right.properties.population ?? 0;
+  const onePopulationMissing = leftPopulation <= 0 || rightPopulation <= 0;
+  const oneAreaLikeSource =
+    isAreaLikeSettlementSource(left.properties.id) ||
+    isAreaLikeSettlementSource(right.properties.id);
+
+  return onePopulationMissing && oneAreaLikeSource;
+}
+
+function dedupeNearOverlappingCityTowns(features) {
+  const nearOverlapDistanceKm = 0.35;
+  const deduped = [];
+
+  for (const feature of features) {
+    let merged = false;
+
+    for (let index = 0; index < deduped.length; index += 1) {
+      const candidate = deduped[index];
+      const distanceKm = pointToPointDistanceKm(
+        candidate.geometry.coordinates,
+        feature.geometry.coordinates,
+      );
+
+      if (distanceKm > nearOverlapDistanceKm) {
+        continue;
+      }
+
+      if (!isLikelyNearOverlapDuplicate(candidate, feature)) {
+        continue;
+      }
+
+      deduped[index] = choosePreferredSettlement(candidate, feature);
+      merged = true;
+      break;
+    }
+
+    if (!merged) {
+      deduped.push(feature);
+    }
+  }
+
+  return deduped;
+}
+
 // Collapse near-overlapping same-name settlements (node/way/relation and place-class duplicates).
 function dedupeSettlements(features) {
   const groupedByName = new Map();
@@ -4093,7 +4260,8 @@ function dedupeSettlements(features) {
     groupedByName.set(key, group);
   }
 
-  return [...groupedByName.values()].flat();
+  const groupedNameDeduped = [...groupedByName.values()].flat();
+  return dedupeNearOverlappingCityTowns(groupedNameDeduped);
 }
 
 // Reuse the strongest known city population for duplicate city names when a sibling record is missing one.
@@ -4703,8 +4871,8 @@ function overpassElementsToGeoJson(elements, theaterBoundary) {
 
       const place = tags.place ?? "locality";
       const rawPopulation = normalizePopulation(tags.population);
-      const nameUk = tags["name:uk"] ?? tags.name ?? null;
-      const nameEn = tags["name:en"] ?? null;
+      const nameUk = normalizeOptionalName(tags["name:uk"]) ?? normalizeOptionalName(tags.name);
+      const nameEn = normalizeOptionalName(tags["name:en"]);
 
       if (!nameUk) {
         return null;
@@ -6714,6 +6882,37 @@ async function writeGeoJson(relativePath, data) {
   await writeFile(targetPath, JSON.stringify(data, null, 2), "utf8");
 }
 
+async function rebuildMajorCityUrbanLayerOnly(options = {}) {
+  const { buildExtentBbox = theaterBbox, hexOnlyScope = null } = options;
+  const urbanAreas = await fetchJson(sources.urbanAreas, "natural-earth/urban-areas");
+  const clippedUrbanAreas = filterFeatureCollectionToBbox(urbanAreas, buildExtentBbox);
+  const thresholdedUrbanAreas = filterMajorCityUrbanAreas(clippedUrbanAreas);
+  const settlementsPath = path.join(layersRoot, "settlements.geojson");
+
+  if (!existsSync(settlementsPath)) {
+    throw new Error(
+      `--urban-only requires ${settlementsPath} to exist. ` +
+      `Run a normal public layer build once first.`,
+    );
+  }
+
+  const settlementsLayer = await readLocalGeoJson(settlementsPath, "layers/settlements.geojson");
+  let urbanAreasOutput = constrainUrbanAreasToSettlementAnchors(
+    thresholdedUrbanAreas,
+    settlementsLayer,
+  );
+
+  if (hexOnlyScope?.maskGeometry) {
+    urbanAreasOutput = filterFeatureCollectionToMask(urbanAreasOutput, hexOnlyScope.maskGeometry);
+  }
+
+  await writeGeoJson("layers/major-city-urban-areas.geojson", urbanAreasOutput);
+  console.log(
+    `Urban-only rebuild wrote layers/major-city-urban-areas.geojson ` +
+    `(${urbanAreasOutput.features.length} features).`,
+  );
+}
+
 const postHydrologyStageCacheVersion = 1;
 
 function buildPostHydrologyStageScopeKey(hexOnlyScope) {
@@ -7415,6 +7614,14 @@ async function main() {
     return;
   }
 
+  if (urbanOnlyMode) {
+    await rebuildMajorCityUrbanLayerOnly({
+      buildExtentBbox,
+      hexOnlyScope,
+    });
+    return;
+  }
+
   if (coastalOnlyMode) {
     const coastalOnlyStartedAt = Date.now();
     const stagePayload = await readPostHydrologyStageCache(postHydrologyScopeKey);
@@ -7770,6 +7977,10 @@ async function main() {
   const clippedCountryBoundaryLines = prefilteredById.get("country-boundary-lines-clipped");
   const clippedMajorCityUrbanAreas = prefilteredById.get("major-city-urban-filtered");
   const settlementsLayer = prefilteredById.get("settlements-layer");
+  const settlementAnchoredUrbanAreas = constrainUrbanAreasToSettlementAnchors(
+    clippedMajorCityUrbanAreas,
+    settlementsLayer,
+  );
   const clippedOblastBoundaries = prefilteredById.get("clipped-oblast-boundaries");
   const clippedAdm2Polygons = prefilteredById.get("clipped-adm2-polygons");
   const filteredLayers = {
@@ -7789,7 +8000,7 @@ async function main() {
     "layers/country-boundaries.geojson": countryBoundaryLayer,
     "layers/country-label-guides.geojson": emptyFeatureCollection(),
     "layers/country-boundary-lines.geojson": clippedCountryBoundaryLines,
-    "layers/major-city-urban-areas.geojson": clippedMajorCityUrbanAreas,
+    "layers/major-city-urban-areas.geojson": settlementAnchoredUrbanAreas,
     "layers/settlements.geojson": settlementsLayer,
   };
   const alignedOblastSubdivisions = alignOblastSubdivisionBoundaries(
@@ -8009,7 +8220,7 @@ async function main() {
       },
     );
     console.log(
-      `Task 76 pilot: wetland corridor enhancement completed ` +
+      `Wetland corridor enhancement completed ` +
       `(${formatElapsedMs(Date.now() - wetlandEnhancementStartedAt)}).`,
     );
   }

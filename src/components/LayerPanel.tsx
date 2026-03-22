@@ -59,7 +59,7 @@ export const defaultLayerVisibility: LayerVisibility = {
   railways: true,
   airports: false,
   settlements: false,
-  poi: false,
+  poi: true,
   oblasts: true,
   hexes: true,
   contours: false,

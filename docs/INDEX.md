@@ -31,6 +31,10 @@ This project keeps quickstart and high-level context in `README.md`, with detail
 
 - [Map Layers and Controls](ui/map-layers-and-controls.md)
 
+## Layer Specs
+
+- [Layer-by-Layer Technical Specs](layers/INDEX.md)
+
 ## Development Process
 
 - [Tasks and Governance](dev/tasks-and-governance.md)

@@ -538,6 +538,69 @@ function dedupeNearbyCitySettlements(geojson: FeatureCollectionLike): FeatureCol
     }
   }
 
+  const nearOverlapDistanceKm = 0.35;
+  const selectedCandidates = candidates
+    .filter((candidate) => keepIndices.has(candidate.index))
+    .sort((left, right) =>
+      right.sourceRank - left.sourceRank ||
+      right.population - left.population,
+    );
+  const finalKeepIndices = new Set<number>();
+  const keptByProximity: Candidate[] = [];
+
+  const candidateNameKeys = (candidate: Candidate, feature: FeatureCollectionLike["features"][number]) => {
+    const normalizeName = (value: string) => value
+      .normalize("NFKD")
+      .replace(/\p{Diacritic}/gu, "")
+      .toLowerCase()
+      .replace(/['’`]/g, "")
+      .replace(/[^\p{L}\p{N}]+/gu, "");
+    const properties = feature.properties ?? {};
+    return new Set(
+      [properties.nameUk, properties.nameEn, properties.name]
+        .filter((value): value is string => typeof value === "string" && value.trim() !== "")
+        .map((value) => normalizeName(value))
+        .filter((value) => value !== ""),
+    );
+  };
+
+  for (const candidate of selectedCandidates) {
+    const feature = geojson.features[candidate.index];
+    const currentNameKeys = candidateNameKeys(candidate, feature);
+    let merged = false;
+
+    for (const kept of keptByProximity) {
+      const distance = haversineKm(
+        [candidate.longitude, candidate.latitude],
+        [kept.longitude, kept.latitude],
+      );
+
+      if (distance > nearOverlapDistanceKm) {
+        continue;
+      }
+
+      const keptFeature = geojson.features[kept.index];
+      const keptNameKeys = candidateNameKeys(kept, keptFeature);
+      const sharesAnyName = [...currentNameKeys].some((key) => keptNameKeys.has(key));
+      const onePopulationMissing = candidate.population <= 0 || kept.population <= 0;
+      const oneAreaLikeSource =
+        candidate.sourceRank > 0 ||
+        kept.sourceRank > 0;
+
+      if (!sharesAnyName && !(onePopulationMissing && oneAreaLikeSource)) {
+        continue;
+      }
+
+      merged = true;
+      break;
+    }
+
+    if (!merged) {
+      finalKeepIndices.add(candidate.index);
+      keptByProximity.push(candidate);
+    }
+  }
+
   return {
     ...geojson,
     features: geojson.features.filter((feature, index) => {
@@ -545,7 +608,7 @@ function dedupeNearbyCitySettlements(geojson: FeatureCollectionLike): FeatureCol
       if (!dedupePlaces.has(place)) {
         return true;
       }
-      return keepIndices.has(index);
+      return finalKeepIndices.has(index);
     }),
   };
 }
@@ -602,6 +665,19 @@ function applySettlementDisplayLevel(
     ["settlements-village-circle", "settlements-village-label"],
     showVillages ? "visible" : "none",
   );
+
+  if (map.getLayer("major-city-urban-fill")) {
+    if (!settlementsVisible) {
+      map.setFilter("major-city-urban-fill", ["==", ["get", "anchorPlace"], "__none__"]);
+    } else if (settlementDisplayLevel === "cities") {
+      map.setFilter("major-city-urban-fill", ["==", ["get", "anchorPlace"], "city"]);
+    } else {
+      map.setFilter(
+        "major-city-urban-fill",
+        ["match", ["get", "anchorPlace"], ["city", "town"], true, false],
+      );
+    }
+  }
 }
 
 function ensureSelectedHexLayers(map: MapLibreMap) {

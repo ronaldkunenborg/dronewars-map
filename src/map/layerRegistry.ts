@@ -756,6 +756,7 @@ const orderedLayerRegistry: OrderedLayerDefinition[] = [
             [
               "all",
               ["has", "nameEn"],
+              ["!=", ["coalesce", ["get", "nameEn"], ""], ""],
               [
                 "!=",
                 ["coalesce", ["get", "nameEn"], ""],
@@ -810,6 +811,7 @@ const orderedLayerRegistry: OrderedLayerDefinition[] = [
             [
               "all",
               ["has", "nameEn"],
+              ["!=", ["coalesce", ["get", "nameEn"], ""], ""],
               [
                 "!=",
                 ["coalesce", ["get", "nameEn"], ""],
@@ -862,6 +864,7 @@ const orderedLayerRegistry: OrderedLayerDefinition[] = [
             [
               "all",
               ["has", "nameEn"],
+              ["!=", ["coalesce", ["get", "nameEn"], ""], ""],
               [
                 "!=",
                 ["coalesce", ["get", "nameEn"], ""],
