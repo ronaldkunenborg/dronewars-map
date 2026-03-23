@@ -17,6 +17,7 @@
 
 - City/town/village circles and labels.
 - Search index input.
+- Priority city star symbols for the curated city set (currently Kyiv, Dnipro, and Odesa), anchored to settlement point locations.
 
 ## Known limits
 

@@ -520,7 +520,7 @@ Boundary-stack decision (Task 62 progress):
 
 ### Label and Styling Notes
 
-- Priority city stars are aligned to the settlement point locations for Kyiv, Kharkiv, and Odesa.
+- Priority city stars are aligned to the settlement point locations for Kyiv, Dnipro, and Odesa.
 - Fallback population values are used for major city scaling to keep marker sizing stable when source population is missing.
 - Country labels use a single dominant in-theater treatment with zoom-based hierarchy, and country borders are intentionally thicker for readability.
 - Oblast subdivision (ADM2) lines are intentionally subordinate to ADM1: dashed, lighter color, and thinner-width hierarchy.

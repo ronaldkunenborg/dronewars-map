@@ -161,6 +161,7 @@ const sources = {
 const gdalTools = {
   warp: "gdalwarp",
   dem: "gdaldem",
+  calc: "gdal_calc.py",
   translate: "gdal_translate",
   tiles: "gdal2tiles.exe",
   ogr2ogr: "ogr2ogr",
@@ -168,6 +169,9 @@ const gdalTools = {
 };
 const hillshadeTileSize = 1024;
 const hillshadeTileZoomRange = "4-10";
+const hillshadeFadeStartElevationMeters = 180;
+const hillshadeFadeEndElevationMeters = 900;
+const assumedComputeWorkerMemoryBytes = 2 * 1024 * 1024 * 1024;
 
 const gdalCommandNames = new Set(Object.values(gdalTools));
 const osgeoBinDir = process.env.OSGEO4W_BIN ?? "C:\\OSGeo4W\\bin";
@@ -219,6 +223,42 @@ function resolveCommand(command) {
   ];
   const match = candidates.find((candidate) => existsSync(candidate));
   return match ?? command;
+}
+
+function resolvePythonCommandInvocation(command, args = []) {
+  if (process.platform !== "win32" || !command.toLowerCase().endsWith(".py")) {
+    return {
+      executable: resolveCommand(command),
+      args,
+      envCommand: command,
+    };
+  }
+
+  const scriptPath = resolveCommand(command);
+  const pythonCandidates = [
+    path.join(osgeoRootDir, "apps", "Python312", "python.exe"),
+    path.join(osgeoRootDir, "apps", "Python312", "python3.exe"),
+    path.join(osgeoBinDir, "python.exe"),
+    path.join(osgeoBinDir, "python3.exe"),
+    "python",
+    "py",
+  ];
+  const pythonExecutable = pythonCandidates.find((candidate) => {
+    if (candidate.includes(path.sep)) {
+      return existsSync(candidate);
+    }
+    return true;
+  }) ?? "python";
+
+  const pythonArgs = pythonExecutable.toLowerCase() === "py"
+    ? ["-3", scriptPath, ...args]
+    : [scriptPath, ...args];
+
+  return {
+    executable: pythonExecutable,
+    args: pythonArgs,
+    envCommand: command,
+  };
 }
 
 // Fallback populations for the 50 largest Ukrainian urban areas, used only when OSM settlement records omit population.
@@ -419,7 +459,12 @@ const workerConcurrency = resolveWorkerConcurrency(requestedWorkerCount);
 const tileFetchConcurrency = Math.max(1, Math.min(workerConcurrency, 4));
 function resolveComputeWorkerConcurrency(requested) {
   const cpuParallelism = detectCpuParallelism();
-  const safeDefault = Math.max(1, Math.min(8, cpuParallelism));
+  const totalMemoryBytes = os.totalmem();
+  const memoryWorkerCap = Number.isFinite(totalMemoryBytes) && totalMemoryBytes > 0
+    ? Math.max(1, Math.floor(totalMemoryBytes / assumedComputeWorkerMemoryBytes))
+    : 1;
+  const cpuSuggestedDefault = Math.max(2, Math.floor(cpuParallelism / 2));
+  const safeDefault = Math.max(1, Math.min(cpuSuggestedDefault, cpuParallelism, memoryWorkerCap));
 
   if (requested === undefined) {
     return safeDefault;
@@ -432,7 +477,14 @@ function resolveComputeWorkerConcurrency(requested) {
     return safeDefault;
   }
 
-  return Math.max(1, Math.min(parsed, cpuParallelism));
+  const memoryCapped = Math.max(1, Math.min(parsed, cpuParallelism, memoryWorkerCap));
+  if (memoryCapped !== parsed) {
+    console.warn(
+      `Reducing --compute-workers=${parsed} to ${memoryCapped} based on CPU/memory limits ` +
+      `(assumed ${Math.round(assumedComputeWorkerMemoryBytes / (1024 * 1024 * 1024))} GB per worker).`,
+    );
+  }
+  return memoryCapped;
 }
 const computeWorkerConcurrency = resolveComputeWorkerConcurrency(requestedComputeWorkerCount);
 const quickTestHexSpreadWarningKm = 120;
@@ -887,13 +939,13 @@ async function describeCacheEntry(cacheKey) {
 }
 
 function runCommand(command, args) {
-  const resolvedCommand = resolveCommand(command);
+  const invocation = resolvePythonCommandInvocation(command, args);
 
   return new Promise((resolve, reject) => {
-    const child = spawn(resolvedCommand, args, {
+    const child = spawn(invocation.executable, invocation.args, {
       stdio: "inherit",
       shell: false,
-      env: commandEnv(command),
+      env: commandEnv(invocation.envCommand),
     });
 
     child.on("exit", (code) => {
@@ -910,13 +962,13 @@ function runCommand(command, args) {
 }
 
 function runCommandCapture(command, args) {
-  const resolvedCommand = resolveCommand(command);
+  const invocation = resolvePythonCommandInvocation(command, args);
 
   return new Promise((resolve, reject) => {
-    const child = spawn(resolvedCommand, args, {
+    const child = spawn(invocation.executable, invocation.args, {
       stdio: ["ignore", "pipe", "pipe"],
       shell: false,
-      env: commandEnv(command),
+      env: commandEnv(invocation.envCommand),
     });
     let stdout = "";
     let stderr = "";
@@ -942,13 +994,13 @@ function runCommandCapture(command, args) {
 }
 
 function runCommandWithExitCode(command, args) {
-  const resolvedCommand = resolveCommand(command);
+  const invocation = resolvePythonCommandInvocation(command, args);
 
   return new Promise((resolve) => {
-    const child = spawn(resolvedCommand, args, {
+    const child = spawn(invocation.executable, invocation.args, {
       stdio: "ignore",
       shell: false,
-      env: commandEnv(command),
+      env: commandEnv(invocation.envCommand),
     });
 
     child.on("exit", (code) => {
@@ -1404,6 +1456,7 @@ async function ensureElevationOutputs() {
   }
 
   const gdaldemAvailable = await commandExists(gdalTools.dem);
+  const gdalCalcAvailable = await commandExists(gdalTools.calc);
   const gdalTranslateAvailable = await commandExists(gdalTools.translate);
   let gdalTilesAvailable = await commandExists(gdalTools.tiles);
 
@@ -1411,7 +1464,16 @@ async function ensureElevationOutputs() {
     throw new Error("`gdaldem` and `gdal_translate` are required for hillshade generation.");
   }
 
+  if (!gdalCalcAvailable) {
+    console.warn(
+      "gdal_calc.py is unavailable; hillshade elevation-gating is skipped and legacy hillshade output is used.",
+    );
+  }
+
+  const hillshadeRawTifPath = path.join(terrainRoot, "hillshade-raw.tif");
+  const hillshadeMaskedFloatTifPath = path.join(terrainRoot, "hillshade-masked-float.tif");
   const hillshadeTifPath = path.join(terrainRoot, "hillshade-clipped.tif");
+  const hillshadeMaskTifPath = path.join(terrainRoot, "hillshade-elevation-mask.tif");
   const hillshadePngPath = path.join(terrainRoot, "hillshade-clipped.png");
   const hillshadeTilesPath = path.join(terrainRoot, "hillshade-tiles");
   let hillshadeLayerPath = "terrain/hillshade-clipped.png";
@@ -1419,7 +1481,7 @@ async function ensureElevationOutputs() {
   await runCommand(gdalTools.dem, [
     "hillshade",
     processedElevationPath,
-    hillshadeTifPath,
+    hillshadeRawTifPath,
     "-z",
     "1.0",
     "-s",
@@ -1429,6 +1491,56 @@ async function ensureElevationOutputs() {
     "-az",
     "315",
     "-compute_edges",
+  ]);
+
+  if (gdalCalcAvailable) {
+    const elevationRangeMeters = Math.max(
+      1,
+      hillshadeFadeEndElevationMeters - hillshadeFadeStartElevationMeters,
+    );
+    const maskExpression =
+      `maximum(minimum((A-${hillshadeFadeStartElevationMeters})/${elevationRangeMeters},1),0)`;
+
+    await runCommand(gdalTools.calc, [
+      "-A",
+      processedElevationPath,
+      "--calc",
+      maskExpression,
+      "--NoDataValue",
+      "0",
+      "--type",
+      "Float32",
+      "--outfile",
+      hillshadeMaskTifPath,
+      "--overwrite",
+    ]);
+
+    await runCommand(gdalTools.calc, [
+      "-A",
+      hillshadeRawTifPath,
+      "-B",
+      hillshadeMaskTifPath,
+      "--calc",
+      "A*B",
+      "--NoDataValue",
+      "0",
+      "--type",
+      "Float32",
+      "--outfile",
+      hillshadeMaskedFloatTifPath,
+      "--overwrite",
+    ]);
+  } else {
+    await copyFile(hillshadeRawTifPath, hillshadeMaskedFloatTifPath);
+  }
+
+  // Stretch masked hillshade to 8-bit so downstream PNG/tiles keep readable contrast.
+  await runCommand(gdalTools.translate, [
+    "-ot",
+    "Byte",
+    "-scale",
+    hillshadeMaskedFloatTifPath,
+    hillshadeTifPath,
   ]);
 
   if (gdalTilesAvailable && !(await hasWorkingProjRuntime())) {
@@ -1467,6 +1579,16 @@ async function ensureElevationOutputs() {
     hillshadeTifPath,
     hillshadePngPath,
   ]);
+
+  if (existsSync(hillshadeRawTifPath)) {
+    await unlink(hillshadeRawTifPath);
+  }
+  if (existsSync(hillshadeMaskedFloatTifPath)) {
+    await unlink(hillshadeMaskedFloatTifPath);
+  }
+  if (existsSync(hillshadeMaskTifPath)) {
+    await unlink(hillshadeMaskTifPath);
+  }
 
   await writeCachedJson("elevation/selected-source", {
     generatedAt: new Date().toISOString(),
@@ -8092,6 +8214,12 @@ async function main() {
   const hexOnlyScope = await resolveHexOnlyScope(hexOnlyIds);
   const postHydrologyScopeKey = buildPostHydrologyStageScopeKey(hexOnlyScope);
   const buildExtentBbox = hexOnlyScope?.bounds ?? theaterBbox;
+  const availableCores = detectCpuParallelism();
+  const availableMemoryGb = os.totalmem() / (1024 ** 3);
+  console.log(
+    `Available cores: ${availableCores}\n` +
+    `Available memory: ${availableMemoryGb.toFixed(1)} GB.\n`,
+  );
   console.log(
     `Using fetch worker concurrency ${workerConcurrency} ` +
     `(tile fetch concurrency ${tileFetchConcurrency}), ` +

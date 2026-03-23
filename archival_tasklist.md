@@ -117,3 +117,77 @@ The moved tasks below are not yet explicitly recoverable from `README.md` alone 
 
 - 53.3
 - 56
+
+## Archive Update: 2026-03-23
+
+Moved from `TASKS.md` to archive while keeping only context-critical completed items in active planning.
+
+Moved task IDs:
+
+- 61, 62, 63, 64, 65, 66, 67
+- 68, 69, 70, 71, 72, 73
+- 74.1, 74.2, 86 (coastal diagnostics)
+- 77, 78, 79, 80, 81, 83, 87
+
+Rationale:
+
+- Outcomes are now directly understandable from current code paths and documentation under `docs/`, `README.md`, and current UI/build behavior.
+- Active `TASKS.md` retains only pending tasks plus context-critical completed tasks needed for near-term execution (coastal baseline, inland wetland baseline, POI baseline, and wetland/forest style baseline).
+
+### Moved Task Details
+
+#### Documentation and Source Governance
+
+61. [done] Created and expanded `EXTERNAL_SOURCES.md` with per-source usage, licensing/fair-use notes, and fit-for-purpose conclusions from generated source-feasibility reports.
+
+67. [done] Established the structured `docs/` tree and linked it from `README.md` (`docs/INDEX.md`, pipeline docs, hydrology docs, report index, data docs, UI docs, governance docs, ADRs).
+
+77. [done] Added minimal attribution source doc at `docs/ATTRIBUTION.md` and linked it from `README.md`/`docs/INDEX.md`.
+
+78. [done] Added simple in-app attribution footer/link to attribution documentation.
+
+79. [done] Added manual attribution checklist in `docs/ATTRIBUTION.md` for app/docs updates.
+
+83. [done] Added layer-by-layer technical specs under `docs/layers/` (source, cache, processing, failure modes, solved issues) and indexed them in `docs/INDEX.md`.
+
+#### Boundary and Coastal Baseline (Supporting Work)
+
+62. [done] Finalized ADM boundary stack from cached GADM ADM2 topology with coherent derived ADM0/ADM1/ADM2 rendering and removed UKR Natural Earth fallback mismatch.
+
+63. [done] Implemented maritime-aware ADM0 suppression logic where boundary coincides with sea frontage.
+
+64. [done] Improved ADM2 border styling hierarchy (contrast/opacity/width/dash tuning under ADM1).
+
+65. [done] Prototyped ADM0-derived coastal correction against Natural Earth seas; documented as insufficient and reverted maritime suppression change.
+
+73. [done] Prototyped WBOB boundary source on Ukraine subset; documented insufficiency for ADM2 detail and retained current source strategy.
+
+74.1 [done] Parallelized post-elevation vector assembly prefilter jobs with deterministic ordering and serial fallback.
+
+74.2 [done] Parallelized coastal corrected-water subtraction with deterministic ordering and serial fallback.
+
+86. [done] Added coastal lockstep eligibility analytics reports and command (`npm run data:analytics:coastal-lockstep`).
+
+#### Hydrology and Build Pipeline Support
+
+66. [done] Applied staged river-gap remediation using high-detail river reconstruction input for normal `water-bodies` visibility, with fallback reconstruction path retained.
+
+72. [done] Parallelized expensive public-layer stages (`--workers` bounded fetch/extract concurrency) with deterministic merge behavior.
+
+#### UI and Interaction Refinements
+
+68. [done] Moved search into top-left control row and integrated `Detailed` control into the Cell Information control group.
+
+69. [done] Widened cell panel toggle and added explicit open/close indicator (`▲`/`▼`).
+
+70. [done] Added hex-ID search support and focus/highlight behavior.
+
+71. [done] Added thicker yellow selected-hex highlight and stabilized selection by writing canonical GeoJSON features.
+
+80. [done] Reduced map UI information density: compact on-map attribution chip, smaller notices/panel, collapsible inspector sections.
+
+#### POI UI Prototype Refinements (Pre-Production Layer)
+
+81. [done] Created OSM-based POI prototype track and map toggle (`POI (Prototype)`) using static overlay source for review.
+
+87. [done] Replaced prototype POI marker styling with custom icon-set mapping, PNG-first loading with SVG fallback, and overlap/readability refinements.
