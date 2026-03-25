@@ -185,11 +185,11 @@ Refresh expectations:
 - a normal rerun of `npm run data:layers:public` should mostly report `cache hit` once the cache is warm
 - use `--refresh` only when you intentionally want to replace cached upstream responses
 - use `--cache-report` to see which source payloads are ready, missing, expired, or on an older schema
-- `--elevation-only` acquires cached elevation/hillshade via FABDEM 30m first, then Copernicus GLO-30 fallback
+- `--elevation-only` acquires cached elevation/hypsometric inputs via FABDEM 30m first, then Copernicus GLO-30 fallback
 
 ### OSGeo4W (Windows GDAL/PROJ)
 
-Elevation and hillshade generation rely on GDAL tools (`gdalwarp`, `gdaldem`, `gdal_translate`, `gdal2tiles`).
+Elevation and hypsometric-relief generation rely on GDAL tools (`gdalwarp`, `gdaldem`, `gdal_translate`, `gdal2tiles`).
 
 Install these OSGeo4W packages at minimum:
 
@@ -199,7 +199,7 @@ Install these OSGeo4W packages at minimum:
 - `proj-runtime-data`
 - `proj-data`
 
-Needed for tiled hillshade (`gdal2tiles`):
+Needed for tiled raster export (`gdal2tiles`):
 
 - `python3-gdal`
 
@@ -314,7 +314,13 @@ Current DEM subset benchmark (`2026-03-12`, subset scale `0.55`, approx area rat
 - `60m`: `17.8s` (`~1.99x` faster), combined `1107.87 MiB` (`~4.00x` smaller), medium-high detail retention
 - `90m`: `10.9s` (`~3.25x` faster), combined `492.79 MiB` (`~8.99x` smaller), medium detail retention
 
-Recommended default target for display/hillshade derivatives: `60m`, while retaining `30m` in raw cache as the high-detail source.
+Recommended default target for display derivatives: `60m`, while retaining `30m` in raw cache as the high-detail source.
+
+Current elevation rendering decision:
+
+- runtime map uses hypsometric relief only (`100% land coverage` mode plus `off`)
+- hillshade is not loaded/rendered in the web app to reduce browser memory pressure
+- bathymetry ingestion for sea areas is intentionally deferred (not pursued in current scope)
 
 4. Water-body source prototype comparison (Task 54):
 

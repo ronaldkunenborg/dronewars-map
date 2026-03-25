@@ -1,6 +1,6 @@
 # Windows OSGeo4W Setup
 
-Elevation and hillshade generation rely on GDAL/PROJ tools.
+Elevation and hypsometric-relief generation rely on GDAL/PROJ tools.
 
 ## Required Packages
 

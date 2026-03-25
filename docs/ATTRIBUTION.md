@@ -12,7 +12,7 @@ Use the following attribution text where map data is displayed:
 - Administrative boundaries: GeoBoundaries, GADM
 - Base thematic vectors (rivers, lakes, seas, roads, railways, urban areas): Natural Earth
 - OSM-derived thematic layers (for example settlements, forests, wetlands, OSM water extracts): OpenStreetMap contributors
-- Elevation / hillshade inputs: FABDEM 30m (preferred), Copernicus GLO-30 (fallback)
+- Elevation inputs (hypsometric relief): FABDEM 30m (preferred), Copernicus GLO-30 (fallback)
 - Landcover support layers: ESA WorldCover
 
 ## Links
