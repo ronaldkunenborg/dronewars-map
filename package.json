@@ -26,7 +26,8 @@
     "data:analytics:river-gaps": "node scripts/analytics/report-river-water-gaps.mjs",
     "data:analytics:coastal-lockstep": "node scripts/analytics/report-coastal-lockstep-eligibility.mjs",
     "data:analytics:hex-shading": "node scripts/analytics/prototype-osm-informed-hex-shading.mjs",
-    "data:export:hex": "node scripts/export/export-hex-dataset.mjs"
+    "data:export:hex": "node scripts/export/export-hex-dataset.mjs",
+    "cleanup:cache": "node scripts/cache/cleanup-public-cache.mjs"
   },
   "dependencies": {
     "maplibre-gl": "^5.2.0",

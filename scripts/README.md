@@ -39,3 +39,13 @@ Current analytics scripts:
 Current export scripts:
 
 - `scripts/export/export-hex-dataset.mjs`: publish the analytics-enriched hex dataset to the canonical app-facing path.
+
+Cache maintenance:
+
+- `scripts/cache/cleanup-public-cache.mjs`: remove selected regenerable folders under `data/cache/public-sources`.
+- `npm run cleanup:cache` runs a dry-run with the `standard` profile (no deletion).
+- add `-- --apply` to actually delete selected cache groups.
+- optional controls:
+  - `--profile=light|standard|full`
+  - `--include=group1,group2`
+  - `--exclude=group1,group2`

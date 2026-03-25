@@ -29,9 +29,6 @@ Pending tasks are listed under ## Pending tasks.
 
 97. [done] Validated the new elevation map in two stages: (1) nearby `--hex-only=HX-E72-N11,HX-E73-N11,HX-E72-N12` build run, (2) full theater `data:layers:public` build run; both completed successfully and produced `terrain-hypsometric-relief` outputs in `layers.json`.
 
-102. [done] Improved runtime memory reporting accuracy in `data:layers:public` preflight output: now logs both `System memory (total)` and `System memory (currently available/free)` with explicit labels, so operator-facing capacity signals are actionable instead of relying on total memory alone.
-
-## Pending Tasks
 
 98. [done] Finalized hypsometric coverage variants in one build pass so mode outputs are distinct: removed hillshade-mask coupling for `100m+` and `100% land` alpha generation, kept `current` tied to the existing mask, and confirmed distinct variant artifacts for `current`, `100m+`, `100% land`, and `100% land+sea` plus runtime `off` mode toggle.
 
@@ -41,7 +38,13 @@ Pending tasks are listed under ## Pending tasks.
 
 98.3. [done] Closed sea bathymetry ingestion as intentionally out-of-scope for now: evaluated available local candidate (`Bathymetric-map-of-the-Black-Sea.ppm`) and found it non-georeferenced image-only input, not suitable for direct ingestion without manual georeferencing + legend calibration. Decision: do not pursue sea bathymetry pipeline at this time (`overkill` for current objective); keep the active elevation product land-only.
 
-105. [pending] If you create links they have the form "https://file+.vscode-resource.vscode-cdn.net/c%3A/Users/RonaldKunenborg/.vscode/extensions/openai.chatgpt-26.323.20928-win32-x64/webview/" - but they don't work. 
+102. [done] Improved runtime memory reporting accuracy in `data:layers:public` preflight output: now logs both `System memory (total)` and `System memory (currently available/free)` with explicit labels, so operator-facing capacity signals are actionable instead of relying on total memory alone.
+
+105. [done] Closed as upstream extension issue (no local repo patch path). Observation: links are rewritten to `https://file+.vscode-resource.vscode-cdn.net/...` webview resource URLs and do not reliably open local workspace files in this rendering path. Decision: treat as Codex VS Code extension limitation and use plain-text absolute paths as operational workaround. Related upstream issues: `#13277` (hyperlinks non-clickable), `#12661` (`file://` opens in browser), `#14745` (webview load/render regressions), `#14079` (Windows path/link rendering in app).
+
+## Pending Tasks
+
+[106]. Move icons for ports to the right side of the city or town icon.
 
 ## Refinements
 
