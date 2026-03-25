@@ -1,5 +1,6 @@
 import { useState } from "react";
 import {
+  type ElevationReliefMode,
   LayerPanel,
   defaultLayerVisibility,
   type LayerControlId,
@@ -12,6 +13,8 @@ export default function App() {
   const [visibility, setVisibility] = useState(defaultLayerVisibility);
   const [settlementDisplayLevel, setSettlementDisplayLevel] =
     useState<SettlementDisplayLevel>("cities");
+  const [elevationReliefMode, setElevationReliefMode] =
+    useState<ElevationReliefMode>("full_land");
   const [resetToken, setResetToken] = useState(0);
   const [coordinateReadout, setCoordinateReadout] = useState<string | null>(null);
   const [zoomReadout, setZoomReadout] = useState<string | null>(null);
@@ -70,6 +73,8 @@ export default function App() {
           coordinateReadout={coordinateReadout}
           zoomReadout={zoomReadout}
           settlementDisplayLevel={settlementDisplayLevel}
+          elevationReliefMode={elevationReliefMode}
+          onChangeElevationReliefMode={setElevationReliefMode}
           onChangeSettlementDisplayLevel={setSettlementDisplayLevel}
           onReset={() => setResetToken((value) => value + 1)}
           onToggleLayer={handleToggleLayer}
@@ -80,6 +85,7 @@ export default function App() {
         <MapView
           layerVisibility={visibility}
           settlementDisplayLevel={settlementDisplayLevel}
+          elevationReliefMode={elevationReliefMode}
           onCoordinateChange={setCoordinateReadout}
           onZoomChange={setZoomReadout}
           resetToken={resetToken}

@@ -1,4 +1,5 @@
 import { useState, type CSSProperties } from "react";
+import hypsometricRamp from "../config/hypsometric-ramp.json";
 
 export type LayerControlId =
   | "water"
@@ -12,10 +13,10 @@ export type LayerControlId =
   | "poi"
   | "oblasts"
   | "hexes"
-  | "contours"
-  | "hillshade";
+  | "contours";
 
 export type SettlementDisplayLevel = "cities" | "towns" | "villages";
+export type ElevationReliefMode = "off" | "full_land";
 
 export type LayerVisibility = Record<LayerControlId, boolean>;
 
@@ -31,7 +32,6 @@ const terrainLayerControls: LayerControl[] = [
   { id: "rivers", label: "Rivers", color: "#88a8c1", available: true },
   { id: "wetlands", label: "Wetlands", color: "#9a8a63", available: true },
   { id: "forests", label: "Forests", color: "#7a9660", available: true },
-  { id: "hillshade", label: "Hillshade", color: "#727067", available: true },
 ];
 
 const logisticsLayerControls: LayerControl[] = [
@@ -63,13 +63,27 @@ export const defaultLayerVisibility: LayerVisibility = {
   oblasts: true,
   hexes: true,
   contours: false,
-  hillshade: false,
 };
+
+type HypsometricRampClass = {
+  id: string;
+  domain: "sea" | "land";
+  minMeters: number;
+  maxMeters: number;
+  colorHex: string;
+  label: string;
+};
+
+const hypsometricClasses = (Array.isArray(hypsometricRamp.classes)
+  ? hypsometricRamp.classes
+  : []) as HypsometricRampClass[];
 
 type LayerPanelProps = {
   coordinateReadout: string | null;
   zoomReadout: string | null;
   settlementDisplayLevel: SettlementDisplayLevel;
+  elevationReliefMode: ElevationReliefMode;
+  onChangeElevationReliefMode: (mode: ElevationReliefMode) => void;
   onChangeSettlementDisplayLevel: (level: SettlementDisplayLevel) => void;
   onReset: () => void;
   onToggleLayer: (layerId: LayerControlId) => void;
@@ -113,6 +127,8 @@ export function LayerPanel({
   coordinateReadout,
   zoomReadout,
   settlementDisplayLevel,
+  elevationReliefMode,
+  onChangeElevationReliefMode,
   onChangeSettlementDisplayLevel,
   onReset,
   onToggleLayer,
@@ -130,6 +146,22 @@ export function LayerPanel({
 
       <section className="panel">
         <h2>Terrain</h2>
+        <div className="settlement-level">
+          <label className="settlement-level__label" htmlFor="elevation-relief-mode-select">
+            Elevation relief mode
+          </label>
+          <select
+            className="settlement-level__select"
+            id="elevation-relief-mode-select"
+            onChange={(event) =>
+              onChangeElevationReliefMode(event.target.value as ElevationReliefMode)
+            }
+            value={elevationReliefMode}
+          >
+            <option value="off">Off</option>
+            <option value="full_land">100% land coverage</option>
+          </select>
+        </div>
         <ul className="layer-list">
           {terrainLayerControls.map((layer) => (
             <LayerToggleRow
@@ -217,14 +249,31 @@ export function LayerPanel({
           <span className="panel-collapse-toggle__indicator">{legendOpen ? "▲" : "▼"}</span>
         </button>
         {legendOpen ? (
-          <ul className="legend-list">
-            <li><span className="legend-swatch legend-swatch--water" />Water bodies + rivers</li>
-            <li><span className="legend-swatch legend-swatch--forest" />Forest</li>
-            <li><span className="legend-swatch legend-swatch--wetland" />Wetland</li>
-            <li><span className="legend-swatch legend-swatch--road" />Road</li>
-            <li><span className="legend-swatch legend-swatch--rail" />Railway</li>
-            <li><span className="legend-swatch legend-swatch--settlements" />Settlements</li>
-          </ul>
+          <>
+            <ul className="legend-list">
+              <li><span className="legend-swatch legend-swatch--water" />Water bodies + rivers</li>
+              <li><span className="legend-swatch legend-swatch--forest" />Forest</li>
+              <li><span className="legend-swatch legend-swatch--wetland" />Wetland</li>
+              <li><span className="legend-swatch legend-swatch--road" />Road</li>
+              <li><span className="legend-swatch legend-swatch--rail" />Railway</li>
+              <li><span className="legend-swatch legend-swatch--settlements" />Settlements</li>
+            </ul>
+            <section className="elevation-legend" aria-label="Elevation classes">
+              <h3>Elevation (m)</h3>
+              <ul className="elevation-legend__list">
+                {hypsometricClasses.map((entry) => (
+                  <li key={entry.id}>
+                    <span
+                      aria-hidden="true"
+                      className="elevation-legend__swatch"
+                      style={{ "--elevation-swatch-color": entry.colorHex } as CSSProperties}
+                    />
+                    <span>{entry.label}</span>
+                  </li>
+                ))}
+              </ul>
+            </section>
+          </>
         ) : null}
       </section>
 

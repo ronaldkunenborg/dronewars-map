@@ -1,0 +1,23 @@
+{
+  "version": "1.0.0",
+  "label": "Operational Hypsometric Ramp",
+  "classes": [
+    { "id": "sea_very_deep", "domain": "sea", "minMeters": -11000, "maxMeters": -4000, "colorHex": "#0d4f8b", "label": "< -4000 m" },
+    { "id": "sea_deep", "domain": "sea", "minMeters": -4000, "maxMeters": -2000, "colorHex": "#1f6ca8", "label": "-4000 to -2000 m" },
+    { "id": "sea_shelf_deep", "domain": "sea", "minMeters": -2000, "maxMeters": -1000, "colorHex": "#3e86bb", "label": "-2000 to -1000 m" },
+    { "id": "sea_shelf_mid", "domain": "sea", "minMeters": -1000, "maxMeters": -200, "colorHex": "#61a3cb", "label": "-1000 to -200 m" },
+    { "id": "sea_shallow", "domain": "sea", "minMeters": -200, "maxMeters": 0, "colorHex": "#a8d2e6", "label": "-200 to 0 m" },
+    { "id": "land_low_0_50", "domain": "land", "minMeters": 0, "maxMeters": 50, "colorHex": "#d8e6ae", "label": "0 to 50 m" },
+    { "id": "land_low_50_100", "domain": "land", "minMeters": 50, "maxMeters": 100, "colorHex": "#cadd93", "label": "50 to 100 m" },
+    { "id": "land_low_100_200", "domain": "land", "minMeters": 100, "maxMeters": 200, "colorHex": "#b9cf78", "label": "100 to 200 m" },
+    { "id": "land_200_300", "domain": "land", "minMeters": 200, "maxMeters": 300, "colorHex": "#ddd296", "label": "200 to 300 m" },
+    { "id": "land_300_500", "domain": "land", "minMeters": 300, "maxMeters": 500, "colorHex": "#ebd8a6", "label": "300 to 500 m" },
+    { "id": "land_500_800", "domain": "land", "minMeters": 500, "maxMeters": 800, "colorHex": "#efc780", "label": "500 to 800 m" },
+    { "id": "land_800_1200", "domain": "land", "minMeters": 800, "maxMeters": 1200, "colorHex": "#e2ab5f", "label": "800 to 1200 m" },
+    { "id": "land_1200_1600", "domain": "land", "minMeters": 1200, "maxMeters": 1600, "colorHex": "#cf8d48", "label": "1200 to 1600 m" },
+    { "id": "land_1600_2200", "domain": "land", "minMeters": 1600, "maxMeters": 2200, "colorHex": "#b8733a", "label": "1600 to 2200 m" },
+    { "id": "land_2200_3000", "domain": "land", "minMeters": 2200, "maxMeters": 3000, "colorHex": "#96552f", "label": "2200 to 3000 m" },
+    { "id": "land_3000_4000", "domain": "land", "minMeters": 3000, "maxMeters": 4000, "colorHex": "#7a4530", "label": "3000 to 4000 m" },
+    { "id": "land_4000_plus", "domain": "land", "minMeters": 4000, "maxMeters": 9000, "colorHex": "#ece8df", "label": "> 4000 m" }
+  ]
+}

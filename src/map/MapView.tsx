@@ -17,6 +17,7 @@ import {
   type ProcessedMapData,
 } from "../data/loadProcessedData";
 import type {
+  ElevationReliefMode,
   LayerVisibility,
   SettlementDisplayLevel,
 } from "../components/LayerPanel";
@@ -616,6 +617,7 @@ function dedupeNearbyCitySettlements(geojson: FeatureCollectionLike): FeatureCol
 type MapViewProps = {
   layerVisibility: LayerVisibility;
   settlementDisplayLevel: SettlementDisplayLevel;
+  elevationReliefMode: ElevationReliefMode;
   onCoordinateChange: (value: string | null) => void;
   onZoomChange: (value: string | null) => void;
   resetToken: number;
@@ -1072,9 +1074,32 @@ function applyLayerVisibility(map: MapLibreMap, visibility: LayerVisibility) {
   }
 }
 
+function applyElevationReliefMode(
+  map: MapLibreMap,
+  mode: ElevationReliefMode,
+  waterLayerVisible: boolean,
+) {
+  if (map.getLayer("hypsometric-relief-full-land-raster")) {
+    map.setLayoutProperty(
+      "hypsometric-relief-full-land-raster",
+      "visibility",
+      mode === "full_land" ? "visible" : "none",
+    );
+  }
+
+  if (map.getLayer("sea-fill")) {
+    map.setLayoutProperty(
+      "sea-fill",
+      "visibility",
+      waterLayerVisible ? "visible" : "none",
+    );
+  }
+}
+
 export function MapView({
   layerVisibility,
   settlementDisplayLevel,
+  elevationReliefMode,
   onCoordinateChange,
   onZoomChange,
   resetToken,
@@ -1454,6 +1479,7 @@ export function MapView({
       ensureSearchResultHexLayers(map);
       ensurePoiPrototypeLayers(map, poiSourcePathRef.current);
       applyLayerVisibility(map, layerVisibility);
+      applyElevationReliefMode(map, elevationReliefMode, layerVisibility.water);
       applyOperationalHexVisibility(map, layerVisibility.hexes);
       applySettlementDisplayLevel(map, layerVisibility.settlements, settlementDisplayLevel);
       onZoomChange(`Zoom: ${map.getZoom().toFixed(2)}x`);
@@ -1564,13 +1590,14 @@ export function MapView({
     }
 
     applyLayerVisibility(mapRef.current, layerVisibility);
+    applyElevationReliefMode(mapRef.current, elevationReliefMode, layerVisibility.water);
     applyOperationalHexVisibility(mapRef.current, layerVisibility.hexes);
     applySettlementDisplayLevel(
       mapRef.current,
       layerVisibility.settlements,
       settlementDisplayLevel,
     );
-  }, [layerVisibility, settlementDisplayLevel]);
+  }, [elevationReliefMode, layerVisibility, settlementDisplayLevel]);
 
   useEffect(() => {
     if (!mapRef.current) {

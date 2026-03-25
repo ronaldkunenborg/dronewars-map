@@ -37,6 +37,10 @@ import polygonClipping from "polygon-clipping";
  * - `data/processed/terrain/elevation-clipped.tif` (when GDAL tools are available)
  * - `data/processed/terrain/hillshade-clipped.tif` (when GDAL tools are available)
  * - `data/processed/terrain/hillshade-clipped.png` (when GDAL tools are available)
+ * - `data/processed/terrain/hypsometric-relief-current.png` (when GDAL tools are available)
+ * - `data/processed/terrain/hypsometric-relief-100m-plus.png` (when GDAL tools are available)
+ * - `data/processed/terrain/hypsometric-relief-full-land.png` (when GDAL tools are available)
+ * - `data/processed/terrain/hypsometric-relief-full-theater-sea.png` (when GDAL tools are available)
  * - `data/raw/terrain/ukraine-elevation.tif` (when GDAL tools are available)
  * - `data/processed/layers.json`
  *
@@ -162,7 +166,10 @@ const gdalTools = {
   warp: "gdalwarp",
   dem: "gdaldem",
   calc: "gdal_calc.py",
+  rasterize: "gdal_rasterize",
+  info: "gdalinfo",
   translate: "gdal_translate",
+  buildVrt: "gdalbuildvrt",
   tiles: "gdal2tiles.exe",
   ogr2ogr: "ogr2ogr",
   locationInfo: "gdallocationinfo",
@@ -179,6 +186,16 @@ const hillshadeMultiAzimuthShadowWeight = 0.7;
 const hillshadeIntensityGain = 2.0;
 const hillshadePostCurveContrast = 1.35;
 const hillshadePostCurveGamma = 0.85;
+const hypsometricTileSize = 1024;
+const hypsometricTileZoomRange = "4-10";
+const hypsometricReliefMinShadeFactor = 0.62;
+const hypsometricReliefMaxShadeFactor = 1.0;
+const hypsometricRampDefinitionPath = path.join(
+  repoRoot,
+  "src",
+  "config",
+  "hypsometric-ramp.json",
+);
 const assumedComputeWorkerMemoryBytes = 2 * 1024 * 1024 * 1024;
 
 const gdalCommandNames = new Set(Object.values(gdalTools));
@@ -1431,6 +1448,80 @@ async function ensureCopernicusElevationCache() {
   return readCachedBinary(cacheKey);
 }
 
+function parseHexColorToRgb(hexColor) {
+  if (typeof hexColor !== "string" || !/^#[0-9a-fA-F]{6}$/.test(hexColor)) {
+    throw new Error(`Invalid hypsometric ramp color: ${String(hexColor)}`);
+  }
+
+  return {
+    r: Number.parseInt(hexColor.slice(1, 3), 16),
+    g: Number.parseInt(hexColor.slice(3, 5), 16),
+    b: Number.parseInt(hexColor.slice(5, 7), 16),
+  };
+}
+
+let cachedHypsometricRampDefinition = null;
+
+async function loadHypsometricRampDefinition() {
+  if (cachedHypsometricRampDefinition) {
+    return cachedHypsometricRampDefinition;
+  }
+
+  const raw = await readFile(hypsometricRampDefinitionPath, "utf8");
+  const parsed = JSON.parse(raw);
+  const classes = Array.isArray(parsed?.classes) ? parsed.classes : null;
+
+  if (!classes || classes.length === 0) {
+    throw new Error("Hypsometric ramp definition has no classes.");
+  }
+
+  const validatedClasses = classes.map((entry, index) => {
+    const minMeters = Number(entry?.minMeters);
+    const maxMeters = Number(entry?.maxMeters);
+    const colorHex = String(entry?.colorHex ?? "");
+    if (!Number.isFinite(minMeters) || !Number.isFinite(maxMeters)) {
+      throw new Error(`Hypsometric ramp class ${index} has invalid min/max.`);
+    }
+    if (maxMeters <= minMeters) {
+      throw new Error(`Hypsometric ramp class ${index} max must exceed min.`);
+    }
+    parseHexColorToRgb(colorHex);
+    return {
+      id: String(entry?.id ?? `class_${index}`),
+      label: String(entry?.label ?? `${minMeters} to ${maxMeters} m`),
+      domain: String(entry?.domain ?? "land"),
+      minMeters,
+      maxMeters,
+      colorHex,
+    };
+  });
+
+  validatedClasses.sort((left, right) => left.minMeters - right.minMeters);
+  for (let index = 1; index < validatedClasses.length; index += 1) {
+    if (validatedClasses[index].minMeters < validatedClasses[index - 1].minMeters) {
+      throw new Error("Hypsometric ramp classes are not sorted by minMeters.");
+    }
+  }
+
+  cachedHypsometricRampDefinition = {
+    version: String(parsed?.version ?? "unknown"),
+    label: String(parsed?.label ?? "Hypsometric Ramp"),
+    classes: validatedClasses,
+  };
+  return cachedHypsometricRampDefinition;
+}
+
+async function writeHypsometricColorTableFile(outputPath, rampDefinition) {
+  const lines = rampDefinition.classes.map((entry) => {
+    const rgb = parseHexColorToRgb(entry.colorHex);
+    return `${entry.minMeters} ${rgb.r} ${rgb.g} ${rgb.b}`;
+  });
+  const highest = rampDefinition.classes[rampDefinition.classes.length - 1];
+  const highestRgb = parseHexColorToRgb(highest.colorHex);
+  lines.push(`${highest.maxMeters} ${highestRgb.r} ${highestRgb.g} ${highestRgb.b}`);
+  await writeFile(outputPath, `${lines.join("\n")}\n`, "utf8");
+}
+
 async function ensureElevationOutputs() {
   const gdalwarpAvailable = await commandExists(gdalTools.warp);
 
@@ -1464,12 +1555,18 @@ async function ensureElevationOutputs() {
   if (skipHillshadeMode) {
     return {
       hillshadeLayerPath: "terrain/hillshade-clipped.png",
+      hypsometricCurrentLayerPath: "terrain/hypsometric-relief-current.png",
+      hypsometric100mPlusLayerPath: "terrain/hypsometric-relief-100m-plus.png",
+      hypsometricFullLandLayerPath: "terrain/hypsometric-relief-full-land.png",
+      hypsometricFullTheaterSeaLayerPath: "terrain/hypsometric-relief-full-theater-sea.png",
     };
   }
 
   const gdaldemAvailable = await commandExists(gdalTools.dem);
   const gdalCalcAvailable = await commandExists(gdalTools.calc);
+  const gdalRasterizeAvailable = await commandExists(gdalTools.rasterize);
   const gdalTranslateAvailable = await commandExists(gdalTools.translate);
+  const gdalBuildVrtAvailable = await commandExists(gdalTools.buildVrt);
   let gdalTilesAvailable = await commandExists(gdalTools.tiles);
 
   if (!gdaldemAvailable || !gdalTranslateAvailable) {
@@ -1492,6 +1589,20 @@ async function ensureElevationOutputs() {
   const hillshadePngPath = path.join(terrainRoot, "hillshade-clipped.png");
   const hillshadeTilesPath = path.join(terrainRoot, "hillshade-tiles");
   let hillshadeLayerPath = "terrain/hillshade-clipped.png";
+  const hypsometricColorTablePath = path.join(terrainRoot, "hypsometric-ramp.txt");
+  const hypsometricColorTifPath = path.join(terrainRoot, "hypsometric-color-relief.tif");
+  const hypsometricReliefFullTheaterSeaTifPath = path.join(terrainRoot, "hypsometric-relief-full-theater-sea.tif");
+  const hypsometricCurrentTifPath = path.join(terrainRoot, "hypsometric-relief-current.tif");
+  const hypsometric100mPlusTifPath = path.join(terrainRoot, "hypsometric-relief-100m-plus.tif");
+  const hypsometricFullLandTifPath = path.join(terrainRoot, "hypsometric-relief-full-land.tif");
+  const hypsometricCurrentPngPath = path.join(terrainRoot, "hypsometric-relief-current.png");
+  const hypsometric100mPlusPngPath = path.join(terrainRoot, "hypsometric-relief-100m-plus.png");
+  const hypsometricFullLandPngPath = path.join(terrainRoot, "hypsometric-relief-full-land.png");
+  const hypsometricFullTheaterSeaPngPath = path.join(terrainRoot, "hypsometric-relief-full-theater-sea.png");
+  const hypsometricCurrentLayerPath = "terrain/hypsometric-relief-current.png";
+  const hypsometric100mPlusLayerPath = "terrain/hypsometric-relief-100m-plus.png";
+  const hypsometricFullLandLayerPath = "terrain/hypsometric-relief-full-land.png";
+  const hypsometricFullTheaterSeaLayerPath = "terrain/hypsometric-relief-full-theater-sea.png";
 
   const supportsAzimuthBlend = gdalCalcAvailable && hillshadeAzimuthAngles.length > 1;
   const rawHillshadeInputs = supportsAzimuthBlend ? hillshadeRawAzimuthPaths : [hillshadeRawTifPath];
@@ -1632,6 +1743,348 @@ async function ensureElevationOutputs() {
     hillshadePngPath,
   ]);
 
+  const hypsometricRamp = await loadHypsometricRampDefinition();
+  const shallowSeaClass =
+    hypsometricRamp.classes.find((entry) => entry.id === "sea_shallow") ??
+    hypsometricRamp.classes.find((entry) => entry.domain === "sea") ??
+    hypsometricRamp.classes[0];
+  const lowLandClass =
+    hypsometricRamp.classes.find((entry) => entry.id === "land_low_0_50") ??
+    hypsometricRamp.classes.find((entry) => entry.domain === "land") ??
+    hypsometricRamp.classes[hypsometricRamp.classes.length - 1];
+  const shallowSeaRgb = parseHexColorToRgb(shallowSeaClass.colorHex);
+  const lowLandRgb = parseHexColorToRgb(lowLandClass.colorHex);
+  await writeHypsometricColorTableFile(hypsometricColorTablePath, hypsometricRamp);
+
+  await runCommand(gdalTools.dem, [
+    "color-relief",
+    processedElevationPath,
+    hypsometricColorTablePath,
+    hypsometricColorTifPath,
+    "-nearest_color_entry",
+    "-alpha",
+  ]);
+
+  if (gdalCalcAvailable && gdalBuildVrtAvailable) {
+    const hypsometricSeaMaskTifPath = path.join(terrainRoot, "hypsometric-sea-mask.tif");
+    const clippedSeasGeoJsonPath = path.join(processedRoot, "layers", "seas.geojson");
+    const hypsometricReliefBandRPath = path.join(terrainRoot, "hypsometric-relief-band-r.tif");
+    const hypsometricReliefBandGPath = path.join(terrainRoot, "hypsometric-relief-band-g.tif");
+    const hypsometricReliefBandBPath = path.join(terrainRoot, "hypsometric-relief-band-b.tif");
+    const hypsometricReliefBandAlphaPath = path.join(terrainRoot, "hypsometric-relief-band-a.tif");
+    const hypsometricReliefVrtPath = path.join(terrainRoot, "hypsometric-relief-rgb.vrt");
+    const shadeExpression =
+      `${hypsometricReliefMinShadeFactor}+(${hypsometricReliefMaxShadeFactor}-${hypsometricReliefMinShadeFactor})*(D/255.0)`;
+
+    if (gdalRasterizeAvailable && existsSync(clippedSeasGeoJsonPath)) {
+      try {
+        const elevationInfo = await runCommandCapture(gdalTools.info, [
+          "-json",
+          processedElevationPath,
+        ]);
+        const parsedElevationInfo = JSON.parse(elevationInfo.stdout);
+        const width = Number(parsedElevationInfo?.size?.[0]);
+        const height = Number(parsedElevationInfo?.size?.[1]);
+        if (!Number.isFinite(width) || !Number.isFinite(height) || width <= 0 || height <= 0) {
+          throw new Error("Could not read elevation raster dimensions for sea mask rasterization.");
+        }
+
+        await runCommand(gdalTools.rasterize, [
+          "-burn",
+          "1",
+          "-ot",
+          "Byte",
+          "-of",
+          "GTiff",
+          "-a_nodata",
+          "255",
+          "-init",
+          "0",
+          "-te",
+          String(theaterBbox.west),
+          String(theaterBbox.south),
+          String(theaterBbox.east),
+          String(theaterBbox.north),
+          "-ts",
+          String(Math.round(width)),
+          String(Math.round(height)),
+          clippedSeasGeoJsonPath,
+          hypsometricSeaMaskTifPath,
+        ]);
+      } catch (error) {
+        console.warn(`Sea mask rasterization failed; continuing without sea mask override: ${error.message}`);
+        await runCommand(gdalTools.calc, [
+          "-A",
+          processedElevationPath,
+          "--calc",
+          "0*A",
+          "--NoDataValue",
+          "255",
+          "--type",
+          "Byte",
+          "--outfile",
+          hypsometricSeaMaskTifPath,
+          "--overwrite",
+        ]);
+      }
+    } else {
+      console.warn(
+        "Sea mask rasterization is unavailable or missing clipped seas layer; full-theater sea fallback colors may be limited.",
+      );
+      await runCommand(gdalTools.calc, [
+        "-A",
+        processedElevationPath,
+        "--calc",
+        "0*A",
+        "--NoDataValue",
+        "255",
+        "--type",
+        "Byte",
+        "--outfile",
+        hypsometricSeaMaskTifPath,
+        "--overwrite",
+      ]);
+    }
+
+    for (const [bandNumber, outputPath] of [
+      [1, hypsometricReliefBandRPath],
+      [2, hypsometricReliefBandGPath],
+      [3, hypsometricReliefBandBPath],
+    ]) {
+      const seaFallbackValue = [shallowSeaRgb.r, shallowSeaRgb.g, shallowSeaRgb.b][bandNumber - 1];
+      const landFallbackValue = [lowLandRgb.r, lowLandRgb.g, lowLandRgb.b][bandNumber - 1];
+      const reliefExpression = `minimum(255,maximum(0,(E>0.5)*${seaFallbackValue}+(E<=0.5)*((A>0)*(A*(${shadeExpression}))+(A<=0)*${landFallbackValue})))`;
+      await runCommand(gdalTools.calc, [
+        "-A",
+        hypsometricColorTifPath,
+        "--A_band",
+        String(bandNumber),
+        "-D",
+        hillshadeRawTifPath,
+        "-E",
+        hypsometricSeaMaskTifPath,
+        "--calc",
+        reliefExpression,
+        "--NoDataValue",
+        "0",
+        "--type",
+        "Byte",
+        "--outfile",
+        outputPath,
+        "--overwrite",
+      ]);
+    }
+
+    await runCommand(gdalTools.calc, [
+      "-A",
+      processedElevationPath,
+      "--calc",
+      "255",
+      "--NoDataValue",
+      "0",
+      "--type",
+      "Byte",
+      "--outfile",
+      hypsometricReliefBandAlphaPath,
+      "--overwrite",
+    ]);
+
+    await runCommand(gdalTools.buildVrt, [
+      "-separate",
+      hypsometricReliefVrtPath,
+      hypsometricReliefBandRPath,
+      hypsometricReliefBandGPath,
+      hypsometricReliefBandBPath,
+      hypsometricReliefBandAlphaPath,
+    ]);
+
+    await runCommand(gdalTools.translate, [
+      "-b",
+      "1",
+      "-b",
+      "2",
+      "-b",
+      "3",
+      "-b",
+      "4",
+      "-colorinterp",
+      "red,green,blue,alpha",
+      "-a_nodata",
+      "none",
+      "-ot",
+      "Byte",
+      hypsometricReliefVrtPath,
+      hypsometricReliefFullTheaterSeaTifPath,
+    ]);
+
+    const createMaskedHypsometricVariant = async ({
+      alphaExpression,
+      outputTifPath,
+      outputPngPath,
+      alphaTag,
+      includeHillshadeMaskInput = false,
+    }) => {
+      const alphaPath = path.join(terrainRoot, `hypsometric-alpha-${alphaTag}.tif`);
+      const variantVrtPath = path.join(terrainRoot, `hypsometric-relief-${alphaTag}.vrt`);
+      const calcArgs = [
+        "-A",
+        hypsometricReliefBandAlphaPath,
+        "-D",
+        processedElevationPath,
+        "-E",
+        hypsometricSeaMaskTifPath,
+      ];
+      if (includeHillshadeMaskInput) {
+        calcArgs.push("-B", hillshadeMaskTifPath);
+      }
+      calcArgs.push(
+        "--calc",
+        alphaExpression,
+        "--NoDataValue",
+        "0",
+        "--type",
+        "Byte",
+        "--outfile",
+        alphaPath,
+        "--overwrite",
+      );
+
+      await runCommand(gdalTools.calc, calcArgs);
+
+      await runCommand(gdalTools.buildVrt, [
+        "-separate",
+        variantVrtPath,
+        hypsometricReliefBandRPath,
+        hypsometricReliefBandGPath,
+        hypsometricReliefBandBPath,
+        alphaPath,
+      ]);
+
+      await runCommand(gdalTools.translate, [
+        "-b",
+        "1",
+        "-b",
+        "2",
+        "-b",
+        "3",
+        "-b",
+        "4",
+        "-colorinterp",
+        "red,green,blue,alpha",
+        "-a_nodata",
+        "none",
+        "-ot",
+        "Byte",
+        variantVrtPath,
+        outputTifPath,
+      ]);
+
+      await runCommand(gdalTools.translate, [
+        "-b",
+        "1",
+        "-b",
+        "2",
+        "-b",
+        "3",
+        "-b",
+        "4",
+        "-colorinterp",
+        "red,green,blue,alpha",
+        "-a_nodata",
+        "none",
+        "-of",
+        "PNG",
+        "-outsize",
+        "4096",
+        "0",
+        outputTifPath,
+        outputPngPath,
+      ]);
+
+      if (existsSync(alphaPath)) {
+        await unlink(alphaPath);
+      }
+      if (existsSync(variantVrtPath)) {
+        await unlink(variantVrtPath);
+      }
+    };
+
+    await createMaskedHypsometricVariant({
+      alphaExpression: "minimum(A,255*(B>=0.05))",
+      outputTifPath: hypsometricCurrentTifPath,
+      outputPngPath: hypsometricCurrentPngPath,
+      alphaTag: "current",
+      includeHillshadeMaskInput: true,
+    });
+    await createMaskedHypsometricVariant({
+      alphaExpression: "minimum(A,255*(D>=100))",
+      outputTifPath: hypsometric100mPlusTifPath,
+      outputPngPath: hypsometric100mPlusPngPath,
+      alphaTag: "100m-plus",
+    });
+    await createMaskedHypsometricVariant({
+      alphaExpression: "minimum(A,255*(D>=0)*(E<0.5))",
+      outputTifPath: hypsometricFullLandTifPath,
+      outputPngPath: hypsometricFullLandPngPath,
+      alphaTag: "full-land",
+    });
+
+    await runCommand(gdalTools.translate, [
+      "-b",
+      "1",
+      "-b",
+      "2",
+      "-b",
+      "3",
+      "-b",
+      "4",
+      "-colorinterp",
+      "red,green,blue,alpha",
+      "-a_nodata",
+      "none",
+      "-of",
+      "PNG",
+      "-outsize",
+      "4096",
+      "0",
+      hypsometricReliefFullTheaterSeaTifPath,
+      hypsometricFullTheaterSeaPngPath,
+    ]);
+
+    for (const temporaryPath of [
+      hypsometricSeaMaskTifPath,
+      hypsometricReliefBandRPath,
+      hypsometricReliefBandGPath,
+      hypsometricReliefBandBPath,
+      hypsometricReliefBandAlphaPath,
+      hypsometricReliefVrtPath,
+    ]) {
+      if (existsSync(temporaryPath)) {
+        await unlink(temporaryPath);
+      }
+    }
+  } else {
+    console.warn(
+      "gdal_calc.py or gdalbuildvrt is unavailable; all hypsometric variants fall back to full-theater color relief.",
+    );
+    await copyFile(hypsometricColorTifPath, hypsometricReliefFullTheaterSeaTifPath);
+    await runCommand(gdalTools.translate, [
+      "-of",
+      "PNG",
+      "-outsize",
+      "4096",
+      "0",
+      hypsometricReliefFullTheaterSeaTifPath,
+      hypsometricFullTheaterSeaPngPath,
+    ]);
+    await copyFile(hypsometricFullTheaterSeaPngPath, hypsometricCurrentPngPath);
+    await copyFile(hypsometricFullTheaterSeaPngPath, hypsometric100mPlusPngPath);
+    await copyFile(hypsometricFullTheaterSeaPngPath, hypsometricFullLandPngPath);
+  }
+
+  const hypsometricRampCopyPath = path.join(terrainRoot, "hypsometric-ramp.json");
+  await writeFile(hypsometricRampCopyPath, JSON.stringify(hypsometricRamp, null, 2), "utf8");
+
   if (existsSync(hillshadeRawTifPath)) {
     await unlink(hillshadeRawTifPath);
   }
@@ -1645,6 +2098,12 @@ async function ensureElevationOutputs() {
   }
   if (existsSync(hillshadeMaskTifPath)) {
     await unlink(hillshadeMaskTifPath);
+  }
+  if (existsSync(hypsometricColorTablePath)) {
+    await unlink(hypsometricColorTablePath);
+  }
+  if (existsSync(hypsometricColorTifPath)) {
+    await unlink(hypsometricColorTifPath);
   }
 
   await writeCachedJson("elevation/selected-source", {
@@ -1671,6 +2130,11 @@ async function ensureElevationOutputs() {
           cacheRelativePath: selected.relativePath ?? null,
         },
         fallbackOrder: ["fabdem-30m", "copernicus-glo-30"],
+        hypsometricRamp: {
+          version: hypsometricRamp.version,
+          classCount: hypsometricRamp.classes.length,
+          sourcePath: path.relative(repoRoot, hypsometricRampDefinitionPath),
+        },
       },
       null,
       2,
@@ -1680,6 +2144,10 @@ async function ensureElevationOutputs() {
 
   return {
     hillshadeLayerPath,
+    hypsometricCurrentLayerPath,
+    hypsometric100mPlusLayerPath,
+    hypsometricFullLandLayerPath,
+    hypsometricFullTheaterSeaLayerPath,
   };
 }
 
@@ -1696,6 +2164,21 @@ function detectExistingHillshadeLayerPath() {
   }
 
   return pngFallback;
+}
+
+function detectExistingHypsometricReliefVariantLayerPaths() {
+  const variants = {
+    current: "terrain/hypsometric-relief-current.png",
+    e100plus: "terrain/hypsometric-relief-100m-plus.png",
+    fullLand: "terrain/hypsometric-relief-full-land.png",
+    fullTheaterSea: "terrain/hypsometric-relief-full-theater-sea.png",
+  };
+
+  const allExist = Object.values(variants).every((relativePath) =>
+    existsSync(path.join(processedRoot, relativePath))
+  );
+
+  return allExist ? variants : null;
 }
 
 // Try multiple Overpass endpoints until one succeeds, then cache the successful payload.
@@ -8272,10 +8755,12 @@ async function main() {
   const postHydrologyScopeKey = buildPostHydrologyStageScopeKey(hexOnlyScope);
   const buildExtentBbox = hexOnlyScope?.bounds ?? theaterBbox;
   const availableCores = detectCpuParallelism();
-  const availableMemoryGb = os.totalmem() / (1024 ** 3);
+  const totalSystemMemoryGb = os.totalmem() / (1024 ** 3);
+  const currentlyAvailableMemoryGb = os.freemem() / (1024 ** 3);
   console.log(
     `Available cores: ${availableCores}\n` +
-    `Available memory: ${availableMemoryGb.toFixed(1)} GB.\n`,
+    `System memory (total): ${totalSystemMemoryGb.toFixed(1)} GB\n` +
+    `System memory (currently available/free): ${currentlyAvailableMemoryGb.toFixed(1)} GB.\n`,
   );
   console.log(
     `Using fetch worker concurrency ${workerConcurrency} ` +
@@ -8710,12 +9195,24 @@ async function main() {
 
   let elevationAvailable = false;
   let hillshadeLayerPath = "terrain/hillshade-clipped.png";
+  let hypsometricCurrentLayerPath = "terrain/hypsometric-relief-current.png";
+  let hypsometric100mPlusLayerPath = "terrain/hypsometric-relief-100m-plus.png";
+  let hypsometricFullLandLayerPath = "terrain/hypsometric-relief-full-land.png";
+  let hypsometricFullTheaterSeaLayerPath = "terrain/hypsometric-relief-full-theater-sea.png";
   const elevationRasterPath = path.join(processedRoot, "terrain", "elevation-clipped.tif");
 
   if (!skipElevationMode) {
     try {
       const elevationOutputs = await ensureElevationOutputs();
       hillshadeLayerPath = elevationOutputs?.hillshadeLayerPath ?? hillshadeLayerPath;
+      hypsometricCurrentLayerPath =
+        elevationOutputs?.hypsometricCurrentLayerPath ?? hypsometricCurrentLayerPath;
+      hypsometric100mPlusLayerPath =
+        elevationOutputs?.hypsometric100mPlusLayerPath ?? hypsometric100mPlusLayerPath;
+      hypsometricFullLandLayerPath =
+        elevationOutputs?.hypsometricFullLandLayerPath ?? hypsometricFullLandLayerPath;
+      hypsometricFullTheaterSeaLayerPath =
+        elevationOutputs?.hypsometricFullTheaterSeaLayerPath ?? hypsometricFullTheaterSeaLayerPath;
       elevationAvailable = true;
     } catch (error) {
       console.warn(`Skipping elevation/hillshade in public build: ${error.message}`);
@@ -8723,9 +9220,14 @@ async function main() {
   } else {
     console.log("Skipping elevation/hillshade in public build due to --skip-elevation.");
     const existingHillshadePath = detectExistingHillshadeLayerPath();
-    if (existsSync(elevationRasterPath) && existingHillshadePath) {
+    const existingHypsometricVariantPaths = detectExistingHypsometricReliefVariantLayerPaths();
+    if (existsSync(elevationRasterPath) && existingHillshadePath && existingHypsometricVariantPaths) {
       elevationAvailable = true;
       hillshadeLayerPath = existingHillshadePath;
+      hypsometricCurrentLayerPath = existingHypsometricVariantPaths.current;
+      hypsometric100mPlusLayerPath = existingHypsometricVariantPaths.e100plus;
+      hypsometricFullLandLayerPath = existingHypsometricVariantPaths.fullLand;
+      hypsometricFullTheaterSeaLayerPath = existingHypsometricVariantPaths.fullTheaterSea;
     }
   }
 
@@ -9281,11 +9783,11 @@ async function main() {
             path: "terrain/elevation-clipped.tif",
           },
           {
-            id: "terrain-hillshade",
-            label: "Terrain Hillshade",
+            id: "terrain-hypsometric-relief-full-land",
+            label: "Terrain Hypsometric Relief (100% Land Coverage)",
             category: "terrain",
             geometryKind: "raster",
-            path: hillshadeLayerPath,
+            path: hypsometricFullLandLayerPath,
           },
         ]
       : []),

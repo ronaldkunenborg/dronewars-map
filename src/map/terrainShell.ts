@@ -232,15 +232,12 @@ function placeRiversBelowWaterBodies(map: Map) {
   }
 }
 
-function raiseHillshadeLayer(map: Map) {
-  if (map.getLayer("hillshade-raster")) {
-    map.moveLayer("hillshade-raster");
-  }
-}
-
 function mountManifestLayer(map: Map, layer: LayerManifest) {
   const sourceId = `processed-${layer.id}`;
-  if (layer.id === "terrain-hillshade" && layer.geometryKind === "raster") {
+  if (
+    layer.geometryKind === "raster" &&
+    layer.id === "terrain-hypsometric-relief-full-land"
+  ) {
     if (layer.sourcePath.includes("{z}/{x}/{y}")) {
       addRasterTileSourceIfMissing(map, sourceId, layer.sourcePath);
     } else {
@@ -301,8 +298,6 @@ export function mountTerrainShell(
   );
   mountOperationalHexLayer(map);
   placeRiversBelowWaterBodies(map);
-  // Keep hillshade visible over terrain/hex fills while leaving labels above it.
-  raiseHillshadeLayer(map);
   raiseCountryBoundaryLayer(map);
   raiseCountryLabelLayers(map);
   raiseSettlementLayers(map);
