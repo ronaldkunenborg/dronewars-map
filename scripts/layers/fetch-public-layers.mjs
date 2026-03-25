@@ -169,8 +169,16 @@ const gdalTools = {
 };
 const hillshadeTileSize = 1024;
 const hillshadeTileZoomRange = "4-10";
+const hillshadeAzimuthAngles = [315, 45, 270];
+const hillshadeAltitudeDegrees = 45;
 const hillshadeFadeStartElevationMeters = 180;
 const hillshadeFadeEndElevationMeters = 900;
+const hillshadeToneLiftAtLowElevation = 1.05;
+const hillshadeToneLiftAtHighElevation = 0.95;
+const hillshadeMultiAzimuthShadowWeight = 0.7;
+const hillshadeIntensityGain = 2.0;
+const hillshadePostCurveContrast = 1.35;
+const hillshadePostCurveGamma = 0.85;
 const assumedComputeWorkerMemoryBytes = 2 * 1024 * 1024 * 1024;
 
 const gdalCommandNames = new Set(Object.values(gdalTools));
@@ -1357,6 +1365,8 @@ async function ensureFabdemElevationCache() {
     "0",
     "-overwrite",
     "-multi",
+    "-wo",
+    `NUM_THREADS=${computeWorkerConcurrency}`,
   ]);
 
   await writeCachedBinary(cacheKey, relativePath, {
@@ -1407,6 +1417,8 @@ async function ensureCopernicusElevationCache() {
     "0",
     "-overwrite",
     "-multi",
+    "-wo",
+    `NUM_THREADS=${computeWorkerConcurrency}`,
   ]);
 
   await writeCachedBinary(cacheKey, relativePath, {
@@ -1471,6 +1483,9 @@ async function ensureElevationOutputs() {
   }
 
   const hillshadeRawTifPath = path.join(terrainRoot, "hillshade-raw.tif");
+  const hillshadeRawAzimuthPaths = hillshadeAzimuthAngles.map((azimuth) =>
+    path.join(terrainRoot, `hillshade-raw-az${azimuth}.tif`)
+  );
   const hillshadeMaskedFloatTifPath = path.join(terrainRoot, "hillshade-masked-float.tif");
   const hillshadeTifPath = path.join(terrainRoot, "hillshade-clipped.tif");
   const hillshadeMaskTifPath = path.join(terrainRoot, "hillshade-elevation-mask.tif");
@@ -1478,20 +1493,47 @@ async function ensureElevationOutputs() {
   const hillshadeTilesPath = path.join(terrainRoot, "hillshade-tiles");
   let hillshadeLayerPath = "terrain/hillshade-clipped.png";
 
-  await runCommand(gdalTools.dem, [
-    "hillshade",
-    processedElevationPath,
-    hillshadeRawTifPath,
-    "-z",
-    "1.0",
-    "-s",
-    "111120",
-    "-alt",
-    "45",
-    "-az",
-    "315",
-    "-compute_edges",
-  ]);
+  const supportsAzimuthBlend = gdalCalcAvailable && hillshadeAzimuthAngles.length > 1;
+  const rawHillshadeInputs = supportsAzimuthBlend ? hillshadeRawAzimuthPaths : [hillshadeRawTifPath];
+
+  for (let index = 0; index < rawHillshadeInputs.length; index += 1) {
+    const outputPath = rawHillshadeInputs[index];
+    const azimuth = supportsAzimuthBlend ? hillshadeAzimuthAngles[index] : hillshadeAzimuthAngles[0];
+    await runCommand(gdalTools.dem, [
+      "hillshade",
+      processedElevationPath,
+      outputPath,
+      "-z",
+      "1.0",
+      "-s",
+      "111120",
+      "-alt",
+      String(hillshadeAltitudeDegrees),
+      "-az",
+      String(azimuth),
+      "-compute_edges",
+    ]);
+  }
+
+  if (supportsAzimuthBlend) {
+    await runCommand(gdalTools.calc, [
+      "-A",
+      hillshadeRawAzimuthPaths[0],
+      "-B",
+      hillshadeRawAzimuthPaths[1],
+      "-C",
+      hillshadeRawAzimuthPaths[2],
+      "--calc",
+      `${hillshadeMultiAzimuthShadowWeight}*minimum(minimum(A,B),C)+(1-${hillshadeMultiAzimuthShadowWeight})*((A+B+C)/3)`,
+      "--NoDataValue",
+      "0",
+      "--type",
+      "Float32",
+      "--outfile",
+      hillshadeRawTifPath,
+      "--overwrite",
+    ]);
+  }
 
   if (gdalCalcAvailable) {
     const elevationRangeMeters = Math.max(
@@ -1499,7 +1541,7 @@ async function ensureElevationOutputs() {
       hillshadeFadeEndElevationMeters - hillshadeFadeStartElevationMeters,
     );
     const maskExpression =
-      `maximum(minimum((A-${hillshadeFadeStartElevationMeters})/${elevationRangeMeters},1),0)`;
+      `power(maximum(minimum((A-${hillshadeFadeStartElevationMeters})/${elevationRangeMeters},1),0),0.7)`;
 
     await runCommand(gdalTools.calc, [
       "-A",
@@ -1520,8 +1562,10 @@ async function ensureElevationOutputs() {
       hillshadeRawTifPath,
       "-B",
       hillshadeMaskTifPath,
+      "-C",
+      processedElevationPath,
       "--calc",
-      "A*B",
+      `255*power(maximum(minimum(0.5+((minimum(255,A*B*(${hillshadeToneLiftAtLowElevation}-(${hillshadeToneLiftAtLowElevation}-${hillshadeToneLiftAtHighElevation})*maximum(minimum((C-${hillshadeFadeStartElevationMeters})/${elevationRangeMeters},1),0))*${hillshadeIntensityGain})/255)-0.5)*${hillshadePostCurveContrast},1),0),${hillshadePostCurveGamma})`,
       "--NoDataValue",
       "0",
       "--type",
@@ -1538,7 +1582,13 @@ async function ensureElevationOutputs() {
   await runCommand(gdalTools.translate, [
     "-ot",
     "Byte",
+    "-a_nodata",
+    "0",
     "-scale",
+    "0",
+    "255",
+    "0",
+    "255",
     hillshadeMaskedFloatTifPath,
     hillshadeTifPath,
   ]);
@@ -1555,6 +1605,8 @@ async function ensureElevationOutputs() {
     try {
       await runCommand(gdalTools.tiles, [
         "--xyz",
+        "--processes",
+        String(computeWorkerConcurrency),
         "--tilesize",
         String(hillshadeTileSize),
         "-z",
@@ -1582,6 +1634,11 @@ async function ensureElevationOutputs() {
 
   if (existsSync(hillshadeRawTifPath)) {
     await unlink(hillshadeRawTifPath);
+  }
+  for (const azimuthPath of hillshadeRawAzimuthPaths) {
+    if (existsSync(azimuthPath)) {
+      await unlink(azimuthPath);
+    }
   }
   if (existsSync(hillshadeMaskedFloatTifPath)) {
     await unlink(hillshadeMaskedFloatTifPath);

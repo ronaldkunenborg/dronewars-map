@@ -17,7 +17,7 @@ Pending tasks are listed under ## Pending tasks.
 
 ## Pending Tasks
 
-82. [pending] Rework elevation hillshade visual balance: current terrain appears too shadowed while mountain forms remain insufficiently legible. Current approach implemented: generate elevation-gated hillshade (low-elevation suppression ramp, stronger contribution on higher terrain), then normalize masked hillshade to 8-bit (`Byte`) before tile/PNG output to recover useful source contrast. First-pass style/raster adjustments are working, but the result still needs additional tuning (opacity/contrast/brightness and threshold calibration) before theater-wide finalization.
+82. [pending] Rework elevation hillshade visual balance: current terrain appears too shadowed while mountain forms remain insufficiently legible. Coverage is currently in a good/acceptable range and should be preserved; remaining work is tonal tuning. Current approach implemented: generate elevation-gated hillshade (low-elevation suppression ramp, stronger contribution on higher terrain), blend multi-azimuth hillshades (Option 2) for orientation-robust relief readability, apply a post-mask tonal/contrast curve in hillshade generation (Option 1), then normalize masked hillshade to 8-bit (`Byte`) before tile/PNG output to recover useful source contrast. Option 4 (style-only raster paint tuning in app render config) is completed. Next implementation step is Option 3: blend a modest slope-derived component into hillshade for ridge/valley separation (terrain rebuild required), then retune the post-mask curve to reduce low-zoom dark mass while preserving high-zoom landform contrast. First-pass style/raster adjustments are working, but the result still needs additional tuning (opacity/contrast/brightness and threshold calibration) before theater-wide finalization.
 
 ## Refinements
 
@@ -26,6 +26,7 @@ Pending tasks are listed under ## Pending tasks.
 85. [pending] Investigate and fix zoom-dependent polygon shape shifts where water/body geometries appear to drop vertices when zooming out (visible geometry changes between zoom levels in some hexes). Scope should include geometry hygiene, simplification/tolerance behavior, and renderer/source settings so polygon silhouettes remain stable across operational zoom transitions. Include current clipping examples `HX-E58-N8`, `HX-E51-N13` and `HX-E68-N10` in the investigation set.
 
 90. [pending] Research whether dams should be represented as a dedicated map layer instead of POI markers: compare map readability, operational usefulness, and overlap with hydro/power semantics; propose source mapping, style behavior, and toggle strategy if split into a separate layer.
+92. [pending] Investigate runtime memory reporting accuracy in `data:layers:public`: current preflight log reports total system memory, which can overstate practically available memory. Update reporting to include truly available/free memory (and clear labeling for total vs available) so operator-facing capacity signals are actionable.
 
 ## Possible Future Tasks
 
